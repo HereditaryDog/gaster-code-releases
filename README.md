@@ -211,7 +211,7 @@ sudo xattr -cr /Applications/Gaster\ Code.app
 .github/workflows/release-desktop.yml
 ```
 
-它会根据 tag 版本构建 macOS ARM64、macOS x64、Windows x64 和 Linux x64 桌面产物，主仓库保持私有，最终安装包和 `latest.json` 会同步到公开的 `HereditaryDog/gaster-code-releases` release-only 仓库，供桌面端 updater 访问。Linux ARM64 可以在手动发布工作流中按需启用。当前版本发布说明见 [release-notes/v0.2.8-gastercode.2.md](release-notes/v0.2.8-gastercode.2.md)。
+它会根据 tag 版本构建 macOS ARM64、macOS x64、Windows x64 和 Linux x64 桌面产物，主仓库保持私有，最终安装包和 `latest.json` 会同步到公开的 `HereditaryDog/gaster-code-releases` release-only 仓库，供桌面端 updater 访问。Linux ARM64 可以在手动发布工作流中按需启用。当前版本发布说明见 [最新版 Release 页面](https://github.com/HereditaryDog/gaster-code-releases/releases/latest)。
 
 ---
 
