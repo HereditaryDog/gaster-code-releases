@@ -6,14 +6,12 @@
 
 <div align="center">
 
-[![GitHub Stars](https://img.shields.io/github/stars/HereditaryDog/gaster-code?style=social)](https://github.com/HereditaryDog/gaster-code/stargazers)
-[![GitHub Forks](https://img.shields.io/github/forks/HereditaryDog/gaster-code?style=social)](https://github.com/HereditaryDog/gaster-code/network/members)
-[![GitHub Issues](https://img.shields.io/github/issues/HereditaryDog/gaster-code)](https://github.com/HereditaryDog/gaster-code/issues)
-[![GitHub Pull Requests](https://img.shields.io/github/issues-pr/HereditaryDog/gaster-code)](https://github.com/HereditaryDog/gaster-code/pulls)
-[![License](https://img.shields.io/github/license/HereditaryDog/gaster-code)](https://github.com/HereditaryDog/gaster-code/blob/main/LICENSE)
-[![Current Version](https://img.shields.io/badge/version-V%200.2.8--gastercode.2-blue)](release-notes/v0.2.8-gastercode.2.md)
-[![中文](https://img.shields.io/badge/中文-当前-blue)](README.md)
-[![English](https://img.shields.io/badge/English-Available-green)](README.en.md)
+[![Latest Release](https://img.shields.io/github/v/release/HereditaryDog/gaster-code-releases?label=Latest%20Release&color=2563eb)](https://github.com/HereditaryDog/gaster-code-releases/releases/latest)
+[![Download](https://img.shields.io/badge/Download-Installers-22c55e)](https://github.com/HereditaryDog/gaster-code-releases/releases/latest)
+[![Platforms](https://img.shields.io/badge/Platforms-macOS%20%7C%20Windows%20%7C%20Linux-111827)](https://github.com/HereditaryDog/gaster-code-releases/releases/latest)
+[![Auto Update](https://img.shields.io/badge/Updater-latest.json-2563eb)](https://github.com/HereditaryDog/gaster-code-releases/releases/latest/download/latest.json)
+[![macOS First Run](https://img.shields.io/badge/macOS%20First%20Run-xattr%20fix-f97316)](#macos)
+[![README](https://img.shields.io/badge/README-中文-blue)](README.md)
 
 </div>
 
