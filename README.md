@@ -1,168 +1,245 @@
 # Gaster Code
 
 <p align="center">
-  <strong>面向 G-Master API 用户的本地编程助手桌面端</strong>
+  <img src="docs/images/gaster-code-readme-logo.svg" alt="Gaster Code" width="220">
 </p>
+
+<div align="center">
+
+[![GitHub Stars](https://img.shields.io/github/stars/HereditaryDog/gaster-code?style=social)](https://github.com/HereditaryDog/gaster-code/stargazers)
+[![GitHub Forks](https://img.shields.io/github/forks/HereditaryDog/gaster-code?style=social)](https://github.com/HereditaryDog/gaster-code/network/members)
+[![GitHub Issues](https://img.shields.io/github/issues/HereditaryDog/gaster-code)](https://github.com/HereditaryDog/gaster-code/issues)
+[![GitHub Pull Requests](https://img.shields.io/github/issues-pr/HereditaryDog/gaster-code)](https://github.com/HereditaryDog/gaster-code/pulls)
+[![License](https://img.shields.io/github/license/HereditaryDog/gaster-code)](https://github.com/HereditaryDog/gaster-code/blob/main/LICENSE)
+[![Current Version](https://img.shields.io/badge/version-V%200.2.8--gastercode.2-blue)](release-notes/v0.2.8-gastercode.2.md)
+[![中文](https://img.shields.io/badge/中文-当前-blue)](README.md)
+[![English](https://img.shields.io/badge/English-Available-green)](README.en.md)
+
+</div>
+
+Gaster Code 是一个面向本地开发场景的 AI 编码助手，提供命令行/TUI、图形化桌面端、多会话工作区、MCP 集成、自动化任务和远程适配能力，适合在真实代码仓库里完成修改、调试、审查和日常开发协作。
+
+> 当前稳定版本：**V 0.2.8-gastercode.2**。这个版本在 0.2.8 功能基础上优化会话切换性能，减少历史会话切回时的重复任务列表、变更卡片和工作区状态请求，让多会话切换更轻快。
 
 <p align="center">
-  <a href="https://github.com/HereditaryDog/gaster-code-releases/releases/latest"><strong>下载最新版</strong></a>
-  ·
-  <a href="https://github.com/HereditaryDog/gaster-code-releases/releases/latest/download/latest.json">更新元数据</a>
-  ·
-  <a href="#常见问题">常见问题</a>
+  <a href="#功能">功能</a> ·
+  <a href="#快速开始">快速开始</a> ·
+  <a href="#桌面端联调">桌面端联调</a> ·
+  <a href="#打包与发布">打包与发布</a> ·
+  <a href="#文档索引">文档索引</a>
 </p>
 
-<p align="center">
-  <img alt="Latest release" src="https://img.shields.io/github/v/release/HereditaryDog/gaster-code-releases?label=latest&color=2563eb">
-  <img alt="Platform" src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-111827?color=111827">
-  <img alt="Updater" src="https://img.shields.io/badge/updater-enabled-2563eb">
-</p>
+---
 
-Gaster Code 是一个运行在你电脑上的本地编程助手。它把代码编辑、终端执行、项目理解、绘图生成、远程控制和 IM 入口放在同一个桌面工作流里，并通过 G-Master API 接入你配置好的模型服务。
+## 功能
 
-这个仓库是 Gaster Code 的公开下载仓库。主项目代码仓库保持私有，这里只发布安装包、签名文件和自动更新所需的 `latest.json`。
+- CLI / TUI 交互界面，适合终端内直接完成编码任务
+- Tauri 2 + React 桌面端，支持多标签、多会话、工作区文件面板和多工作区管理
+- Codex 风格深色界面，使用蓝色作为品牌强调色
+- G-Master API 网页授权登录，登录后自动写入官方默认服务商
+- 通过 G-Master API 接入 GPT Image 2 绘图
+- 自定义模型提供商、鉴权变量、模型上下文窗口和端点映射
+- 插件、Skills、Agents 支持刷新后重新扫描用户、项目、外部安装区域
+- H5 手机浏览器访问，可通过局域网或自有反向代理连接桌面端服务，并支持 Token 与允许来源控制
+- 会话批量整理，支持选择多个历史会话后统一确认删除
+- `@` 文件和目录引用，优先使用 Git 感知搜索并遵守 ignore 规则
+- 可调整侧边栏宽度，桌面端字体和导航层级针对长期开发使用优化
+- Project Memory 可视化管理，支持在设置页查看、编辑和预览项目记忆文件
+- 侧边栏可直接用可用 IDE 或文件管理器打开当前项目
+- 本地 Token 用量 / 活动统计，便于查看会话、模型和工具使用趋势
+- 回复语言设置，可独立于界面语言指定模型回复语言
+- MCP、插件、Skills 扩展机制，支持识别斜杠命令包装的外部 Skill
+- 多 Agent / Teams 协作能力，支持刷新显示用户安装的 Agent
+- 定时任务、桌面通知、自动化执行与任务跟踪
+- Computer Use 桌面控制能力，支持自定义 Python 解释器
+- Telegram、飞书、微信、钉钉远程控制适配器
+- 诊断导出、最近错误、日志目录打开和上下文用量显示
 
-## 立即下载
+---
 
-进入 [最新版 Release 页面](https://github.com/HereditaryDog/gaster-code-releases/releases/latest)，在 Assets 区域选择适合你系统的安装包。
+## 快速开始
 
-| 系统 | 下载哪个文件 | 适合设备 |
-| --- | --- | --- |
-| macOS Apple Silicon | `Gaster-Code_*_macos_arm64_dmg.dmg` | M1、M2、M3、M4 等 Apple 芯片 Mac |
-| macOS Intel | `Gaster-Code_*_macos_x64_dmg.dmg` | Intel 芯片 Mac |
-| Windows x64 | `Gaster-Code_*_windows_x64_nsis.exe` | Windows 10 / 11 x64 |
-| Linux x64 | `Gaster-Code_*_linux_x64_deb.deb` | Ubuntu、Debian 及兼容发行版 |
+### 1. 安装 Bun
 
-如果你已经安装过 Gaster Code，也可以直接在应用内使用「检查更新」。桌面端会从本仓库公开 release 读取更新信息，不需要访问私有主仓库。
+```bash
+# macOS / Linux
+curl -fsSL https://bun.sh/install | bash
 
-## macOS 安装后打不开？
+# macOS (Homebrew)
+brew install bun
 
-macOS 用户如果首次打开时看到「已损坏，无法打开」「无法验证开发者」或应用没有反应，请先确认已经把 Gaster Code 拖到「应用程序」文件夹，然后打开「终端」执行：
+# Windows (PowerShell)
+powershell -c "irm bun.sh/install.ps1 | iex"
+```
+
+### 2. 安装依赖
+
+```bash
+bun install
+```
+
+如果你会使用桌面端或适配器，建议一并安装：
+
+```bash
+cd desktop && bun install
+cd ../adapters && bun install
+cd ..
+```
+
+### 3. 配置环境变量
+
+```bash
+cp .env.example .env
+```
+
+然后按需编辑 `.env`，填入模型服务、鉴权和本地运行需要的配置。
+
+### 4. 启动 CLI
+
+```bash
+bun run start
+```
+
+无头模式示例：
+
+```bash
+bun run start -- -p "summarize this repository"
+```
+
+---
+
+## 桌面端联调
+
+桌面端开发时，需要同时启动本地 API 服务和前端。
+
+### 启动本地 API 服务
+
+```bash
+SERVER_PORT=3456 bun run src/server/index.ts
+```
+
+Windows PowerShell:
+
+```powershell
+$env:SERVER_PORT = "3456"
+bun run src/server/index.ts
+```
+
+健康检查：
+
+```bash
+curl http://127.0.0.1:3456/health
+```
+
+### 启动桌面前端
+
+```bash
+cd desktop
+bun run dev --host 127.0.0.1 --port 2024
+```
+
+浏览器访问：
+
+```text
+http://127.0.0.1:2024
+```
+
+---
+
+## 打包与发布
+
+当前桌面版本：`V 0.2.8-gastercode.2`。
+
+### Windows
+
+本地脚本：
+
+```powershell
+cd desktop
+powershell -ExecutionPolicy Bypass -File .\scripts\build-windows-x64.ps1
+```
+
+当前仓库也提供 GitHub Actions 开发构建：
+
+- Workflow: `.github/workflows/build-desktop-dev.yml`
+- Windows 产物：MSI 安装包
+
+### 公开安装包
+
+下载公开安装包：
+
+- GitHub Releases: https://github.com/HereditaryDog/gaster-code-releases/releases
+
+| 平台 | 安装包 |
+|------|--------|
+| macOS Apple Silicon | `Gaster-Code_0.2.8-gastercode.2_macos_arm64_dmg.dmg` |
+| macOS Intel | `Gaster-Code_0.2.8-gastercode.2_macos_x64_dmg.dmg` |
+| Windows x64 | `Gaster-Code_0.2.8-gastercode.2_windows_x64_nsis.exe` |
+| Linux x64 | `Gaster-Code_0.2.8-gastercode.2_linux_x64_deb.deb` |
+
+### macOS
+
+安装步骤：
+
+1. 双击 `.dmg` 文件，将 `Gaster Code.app` 拖入 `Applications`
+2. 首次打开时，进入 `Applications`，右键点击 `Gaster Code.app`，选择「打开」，在弹窗中点击「打开」，仅需操作一次
+3. 如果提示「已损坏，无法打开」，在终端执行：
 
 ```bash
 xattr -cr /Applications/Gaster\ Code.app
 ```
 
-执行后重新打开 Gaster Code。如果终端提示权限不足，再执行：
+如果仍然打不开，可以再执行一次带管理员权限的命令：
 
 ```bash
 sudo xattr -cr /Applications/Gaster\ Code.app
 ```
 
-请只对从本仓库 [最新版 Release 页面](https://github.com/HereditaryDog/gaster-code-releases/releases/latest) 下载的安装包执行这一步。
+> 当前内部测试包暂未进行 Apple Developer ID 公证，macOS 可能会阻止首次运行。右键打开或移除隔离属性后即可正常使用。
 
-## Gaster Code 能做什么
-
-### 本地编程助手
-
-Gaster Code 可以读取你的项目上下文，帮你解释代码、修改文件、定位 bug、补测试、跑命令和整理实现方案。它面向真实本地项目工作，而不是只做单次问答。
-
-### 桌面端工作流
-
-桌面端提供会话、设置、终端、绘图和本地服务能力。你可以在一个应用里完成从提问、改代码、运行验证到继续追踪任务的完整流程。
-
-### G-Master API 接入
-
-Gaster Code 通过 G-Master API 使用模型。你可以在 G-Master API 中配置可用 provider 和模型，然后在 Gaster Code 中选择对应模型处理不同任务。
-
-### 项目级上下文
-
-它可以围绕当前项目进行连续对话，理解文件结构、命令输出、构建结果和历史会话，让复杂任务不必每次从零开始描述。
-
-### 终端和工具调用
-
-Gaster Code 可以在本地执行开发命令，例如安装依赖、启动服务、运行测试、查看 Git 状态和分析构建错误。你仍然可以控制关键操作，避免盲目执行。
-
-### 绘图与多模态入口
-
-桌面端包含绘图页面，可用于通过模型生成图像。它也会逐步整合更多适合开发、设计和内容生产的本地能力。
-
-### IM 远程入口
-
-Gaster Code 支持通过 IM adapter 连接微信等入口。完成配对后，你可以在移动端发送消息，让本地桌面端继续处理任务。
-
-## 适合谁使用
-
-- 已经在使用 G-Master API，希望有一个桌面端编程助手的用户。
-- 想把 AI 助手接入本地项目、终端和文件系统的开发者。
-- 经常需要调试、重构、写文档、跑测试或处理多步骤开发任务的人。
-- 希望通过微信等 IM 入口远程触发本地编程助手的用户。
-
-## 使用方式
-
-1. 在 [最新版 Release 页面](https://github.com/HereditaryDog/gaster-code-releases/releases/latest) 下载适合你系统的安装包。
-2. 安装并启动 Gaster Code。
-3. 在设置中配置或确认 G-Master API 服务。
-4. 打开项目目录，开始与 Gaster Code 对话。
-5. 需要移动端入口时，在桌面端完成 IM 配对后再使用。
-
-## 自动更新
-
-Gaster Code 的桌面端 updater 使用本仓库的公开 release 资产：
-
-```text
-https://github.com/HereditaryDog/gaster-code-releases/releases/latest/download/latest.json
-```
-
-更新流程只需要读取公开的 `latest.json` 和安装包文件。主代码仓库可以保持私有，不会影响普通用户检查更新。
-
-## 隐私和本地工作
-
-Gaster Code 是本地桌面端应用。它需要访问你选择打开的项目文件，并会根据你的操作执行本地命令。模型请求会通过你配置的 G-Master API 服务发送。请只在你信任的项目目录中使用，并在执行高风险命令前仔细确认。
-
-## 常见问题
-
-### 这个仓库为什么没有源码？
-
-这是公开 release-only 仓库，只用于分发安装包和 updater 元数据。Gaster Code 的主项目仓库目前保持私有。
-
-### 应该下载 `.dmg` 还是 `.app.tar.gz`？
-
-普通用户下载 `.dmg`。`.app.tar.gz` 和对应 `.sig` 主要用于桌面端自动更新。
-
-### macOS 提示无法打开怎么办？
-
-如果 macOS 提示应用无法打开，通常是系统给新下载的应用加了隔离标记。请先把 Gaster Code 拖到「应用程序」文件夹，然后打开「终端」，运行下面的命令：
+本地 Apple Silicon 打包脚本：
 
 ```bash
-xattr -cr /Applications/Gaster\ Code.app
+./desktop/scripts/build-macos-arm64.sh
 ```
 
-如果终端提示权限不足，再执行：
+该脚本需要在 macOS arm64 主机上运行。
 
-```bash
-sudo xattr -cr /Applications/Gaster\ Code.app
-```
+### 正式发布
 
-运行后重新打开 Gaster Code。如果仍然被拦截，再到「系统设置」的安全与隐私相关位置允许打开。请只从本仓库 Release 页面下载最新安装包。
-
-### 检查更新失败怎么办？
-
-先确认你能访问 GitHub，并检查这个地址是否可打开：
+正式桌面发布走：
 
 ```text
-https://github.com/HereditaryDog/gaster-code-releases/releases/latest/download/latest.json
+.github/workflows/release-desktop.yml
 ```
 
-如果该地址能打开但应用仍失败，请保留错误提示和当前版本号，再反馈给维护者。
+它会根据 tag 版本构建 macOS ARM64、macOS x64、Windows x64 和 Linux x64 桌面产物，主仓库保持私有，最终安装包和 `latest.json` 会同步到公开的 `HereditaryDog/gaster-code-releases` release-only 仓库，供桌面端 updater 访问。Linux ARM64 可以在手动发布工作流中按需启用。当前版本发布说明见 [release-notes/v0.2.8-gastercode.2.md](release-notes/v0.2.8-gastercode.2.md)。
 
-### Windows 支持吗？
+---
 
-支持。当前公开版本提供 Windows x64 NSIS 安装包。如果首次运行时出现 SmartScreen 提示，请确认文件来自本仓库 Release 页面，再选择「更多信息」和「仍要运行」。
+## 文档索引
 
-## 版本发布
+- [环境变量](docs/guide/env-vars.md)
+- [FAQ](docs/guide/faq.md)
+- [全局使用](docs/guide/global-usage.md)
+- [桌面端文档](docs/desktop/)
+- [前端开发规范](docs/frontend-development-guidelines.md)
+- [IM 接入](docs/im/)
+- [MCP 与扩展能力](docs/skills/01-usage-guide.md)
+- [多 Agent / Teams](docs/agent/01-usage-guide.md)
+- [Computer Use](docs/features/computer-use.md)
+- [项目结构](docs/reference/project-structure.md)
 
-所有公开版本都在 [Releases](https://github.com/HereditaryDog/gaster-code-releases/releases) 页面查看。每个版本会包含：
+## 仓库结构
 
-- 用户安装包，例如 `.dmg`、`.deb`。
-- 自动更新包，例如 `.app.tar.gz`。
-- 签名文件，例如 `.sig`。
-- updater 元数据 `latest.json`。
+- `src/`: CLI、TUI、服务端、工具与核心逻辑
+- `desktop/`: 桌面端前端与 Tauri 打包工程
+- `adapters/`: 远程适配器
+- `docs/`: 使用文档与设计说明
+- `scripts/`: 发布和辅助脚本
 
-## 项目关系
+---
 
-- Gaster Code：本地编程助手桌面端。
-- G-Master API：模型服务和 provider 配置入口。
-- 本仓库：公开安装包和自动更新分发仓库。
+## 说明
 
-主仓库保持私有时，请始终把用户下载链接指向本仓库的 [latest release](https://github.com/HereditaryDog/gaster-code-releases/releases/latest)。
+本仓库当前以实际可运行、可打包、可继续二次开发为目标维护。若你在使用中发现界面文案、打包元数据或工作流仍有残留不一致，可以直接提 issue 或提交修复。
