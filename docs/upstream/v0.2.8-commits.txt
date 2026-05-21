@@ -1,0 +1,57 @@
+55d4c808 Center v0.2.8 notes on /goal and Agent readability
+c6bc51a9 fix: Keep agent group label formatting type-safe
+3ce7b02f fix: Normalize text-wrapped agent result JSON
+3433be18 fix: Render structured agent fallbacks readably
+430edc43 fix: Preserve readable agent result reports
+2323e6ec Keep subagent progress readable in desktop sessions
+f2e3a310 Prepare the v0.2.8 release boundary
+562c1e1b Carry Bun compile cache into Tauri packaging
+1886d9c2 Keep Windows sidecar builds on the runner work drive
+dbe72e96 Prevent empty provider model slots from reaching runtime
+611ebd06 Stabilize adapter coverage after main sync
+5f97f9ac Prevent bulk tab closing from silently abandoning running sessions
+82609f6d Merge Feishu IM setup guidance into local main
+00daab5a Make local Web UI startup repeatable
+51e67f20 fix: reduce Feishu IM setup dead ends
+d7315df1 Keep agent background progress inside agent cards
+11f83a76 Prevent stale worktree startup labels in chat
+3c23788f fix: preserve notification plugin listener context
+47cc63c4 fix: make portable storage mode understandable and selectable
+71ce980f fix: make goal completion durable through stop hooks
+8ee4bf68 fix: restore local main fixes stranded in worktrees
+8a5b3467 Merge origin/main into local post-0.2.7 main
+8cd8ed16 Merge terminal shell env fix into main
+4b763197 Merge background task UI state fix into main
+af5175aa fix: Align desktop subprocesses with terminal shell env
+3511f309 fix(desktop): prevent completed turns from hiding active background work
+41338898 Land desktop update proxy support from worktree
+15e1cbca Let desktop updates use user proxy settings
+0506452a Merge commit '2b5bf56475c5a8afd2ccd40df4e63e58d4d88c87'
+2b5bf564 Make selection actions track selected text instead of the cursor
+6ff76171 fix: preserve unsent desktop prompts across tab switches
+f5ce69ba Merge custom slash command visibility fix
+010a4bf9 fix: preserve custom slash commands after live updates
+331372e8 Keep multi-question replies isolated in AskUserQuestion
+3c3030fd fix: recover legacy Windows session workdirs
+8ff53534 Let Windows users choose a usable desktop terminal shell
+cf7c4487 Merge pull request #447 from 1506086927/main
+e8c04587 Stabilize portable mode PR before merge
+700832c5 Merge branch 'main' into main
+0eed3558 Update skills.ts
+541b7ee0 Update skills.ts
+4edbee9f Merge branch 'main' into main
+78192901 Update main.rs
+547927da Update lib.rs
+f3b96553 Update settings.ts
+415f0057 Update settingsStore.ts
+93e55f8f Update Settings.tsx
+2623cc12 Update en.ts
+4aade164 Update zh.ts
+a6998725 Update lib.rs
+9d51a16a Update main.rs
+40a76948 Update cachePaths.ts
+743769f7 Update zh.ts
+ad367c4b Update en.ts
+e4a487dd Update TerminalSettings.tsx
+2a505917 Update lib.rs
+d02cb9a7 Update terminal.ts

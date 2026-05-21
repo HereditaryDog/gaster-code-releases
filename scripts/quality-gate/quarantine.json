@@ -1,0 +1,39 @@
+{
+  "quarantined": [
+    {
+      "id": "server:cron-scheduler",
+      "path": "src/server/__tests__/cron-scheduler.test.ts",
+      "reason": "Known unstable scheduler timing assertions; keep out of default server gate until fixed.",
+      "owner": "maintainers",
+      "reviewAfter": "2026-06-01"
+    },
+    {
+      "id": "server:providers-real",
+      "path": "src/server/__tests__/providers-real.test.ts",
+      "reason": "Live provider coverage belongs in maintainer baseline or release mode, not the default PR gate.",
+      "owner": "maintainers",
+      "reviewAfter": "2026-06-01"
+    },
+    {
+      "id": "server:tasks",
+      "path": "src/server/__tests__/tasks.test.ts",
+      "reason": "Known default-gate instability; keep quarantined until task timing is hardened.",
+      "owner": "maintainers",
+      "reviewAfter": "2026-06-01"
+    },
+    {
+      "id": "server:e2e:business-flow",
+      "path": "src/server/__tests__/e2e/business-flow.test.ts",
+      "reason": "Broad e2e flow is not deterministic enough for default PR checks.",
+      "owner": "maintainers",
+      "reviewAfter": "2026-06-01"
+    },
+    {
+      "id": "server:e2e:full-flow",
+      "path": "src/server/__tests__/e2e/full-flow.test.ts",
+      "reason": "Broad e2e flow is not deterministic enough for default PR checks.",
+      "owner": "maintainers",
+      "reviewAfter": "2026-06-01"
+    }
+  ]
+}

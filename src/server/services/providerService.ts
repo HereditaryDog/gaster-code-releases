@@ -1,0 +1,949 @@
+/**
+ * Provider Service — preset-based provider configuration
+ *
+ * Storage: ~/.claude/gaster-code/providers.json (lightweight index)
+ * Active provider env vars written to ~/.claude/gaster-code/settings.json
+ * (isolated from the original Claude Code's ~/.claude/settings.json)
+ */
+
+import * as fs from 'fs/promises'
+import * as path from 'path'
+import { ApiError } from '../middleware/errorHandler.js'
+import { readRecoverableJsonFile } from './recoverableJsonFile.js'
+import { ManagedSettingsService } from './managedSettingsService.js'
+import { anthropicToOpenaiChat } from '../proxy/transform/anthropicToOpenaiChat.js'
+import { anthropicToOpenaiResponses } from '../proxy/transform/anthropicToOpenaiResponses.js'
+import { openaiChatToAnthropic } from '../proxy/transform/openaiChatToAnthropic.js'
+import { openaiResponsesToAnthropic } from '../proxy/transform/openaiResponsesToAnthropic.js'
+import type { AnthropicRequest, AnthropicResponse } from '../proxy/transform/types.js'
+import { PROVIDER_PRESETS } from '../config/providerPresets.js'
+import { MODEL_CONTEXT_WINDOWS_ENV_KEY } from '../../utils/model/modelContextWindows.js'
+import type {
+  SavedProvider,
+  ProvidersIndex,
+  CreateProviderInput,
+  UpdateProviderInput,
+  TestProviderInput,
+  ProviderTestResult,
+  ProviderTestStepResult,
+  ApiFormat,
+  ProviderAuthStrategy,
+} from '../types/provider.js'
+import {
+  getClaudeConfigDir,
+  getGasterConfigPath,
+} from '../../utils/gasterConfig.js'
+import { getGasterManagedEnvKeys } from '../../utils/gasterEnv.js'
+import {
+  CURRENT_PROVIDER_INDEX_SCHEMA_VERSION,
+  ensurePersistentStorageUpgraded,
+} from './persistentStorageMigrations.js'
+
+const MANAGED_ENV_KEYS = [
+  'ANTHROPIC_BASE_URL',
+  'ANTHROPIC_API_KEY',
+  'ANTHROPIC_AUTH_TOKEN',
+  'ANTHROPIC_MODEL',
+  'ANTHROPIC_DEFAULT_HAIKU_MODEL',
+  'ANTHROPIC_DEFAULT_HAIKU_MODEL_SUPPORTED_CAPABILITIES',
+  'ANTHROPIC_DEFAULT_SONNET_MODEL',
+  'ANTHROPIC_DEFAULT_SONNET_MODEL_SUPPORTED_CAPABILITIES',
+  'ANTHROPIC_DEFAULT_OPUS_MODEL',
+  'ANTHROPIC_DEFAULT_OPUS_MODEL_SUPPORTED_CAPABILITIES',
+  'CLAUDE_CODE_AUTO_COMPACT_WINDOW',
+  MODEL_CONTEXT_WINDOWS_ENV_KEY,
+  ...getGasterManagedEnvKeys(),
+] as const
+
+const GMASTER_MANAGED_PROVIDER_ID = 'managed-gmaster-api'
+const GMASTER_API_BASE_URL = 'https://gmapi.fun'
+const GMASTER_MANAGED_PROVIDER_NOTES = 'Official Gaster Code provider. Credentials are managed by G-Master API login.'
+const GMASTER_MODEL_CATALOG_TTL_MS = 60 * 60 * 1000
+const AUTO_ACTIVATION_SOURCE = 'auto'
+const MANUAL_ACTIVATION_SOURCE = 'manual'
+const CUSTOM_PROVIDER_MODEL_CAPABILITIES = 'thinking,effort,adaptive_thinking,max_effort'
+
+const DEFAULT_INDEX: ProvidersIndex = {
+  schemaVersion: CURRENT_PROVIDER_INDEX_SCHEMA_VERSION,
+  activeId: null,
+  providers: [],
+}
+const AUTH_ENV_KEYS = new Set(['ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN'])
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value)
+}
+
+function isProviderModels(value: unknown): value is SavedProvider['models'] {
+  return (
+    isRecord(value) &&
+    typeof value.main === 'string' &&
+    typeof value.haiku === 'string' &&
+    typeof value.sonnet === 'string' &&
+    typeof value.opus === 'string'
+  )
+}
+
+function normalizeAvailableModels(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  return Array.from(new Set(
+    value
+      .map((model) => typeof model === 'string' ? model.trim() : '')
+      .filter(Boolean),
+  ))
+}
+
+function normalizeProvider(value: unknown): SavedProvider | null {
+  if (
+    !isRecord(value) ||
+    typeof value.id !== 'string' ||
+    typeof value.presetId !== 'string' ||
+    typeof value.name !== 'string' ||
+    typeof value.apiKey !== 'string' ||
+    typeof value.baseUrl !== 'string' ||
+    !isProviderModels(value.models)
+  ) {
+    return null
+  }
+
+  const provider: SavedProvider = {
+    ...(value as unknown as SavedProvider),
+    apiFormat: typeof value.apiFormat === 'string' ? (value.apiFormat as ApiFormat) : 'anthropic',
+  }
+  const availableModels = normalizeAvailableModels(value.availableModels)
+  if (availableModels.length > 0) {
+    provider.availableModels = availableModels
+  } else {
+    delete provider.availableModels
+  }
+  if (typeof value.modelCatalogUpdatedAt !== 'number' || value.modelCatalogUpdatedAt <= 0) {
+    delete provider.modelCatalogUpdatedAt
+  }
+  return provider
+}
+
+function normalizeModelMapping(models: SavedProvider['models']): SavedProvider['models'] {
+  const main = models.main.trim()
+  return {
+    main,
+    haiku: models.haiku.trim() || main,
+    sonnet: models.sonnet.trim() || main,
+    opus: models.opus.trim() || main,
+  }
+}
+
+function normalizeProvidersIndex(value: unknown): ProvidersIndex | null {
+  if (!isRecord(value) || !Array.isArray(value.providers)) {
+    return null
+  }
+
+  const { activeProviderId: legacyActiveProviderId, ...rest } = value
+  const providers = value.providers
+    .map(normalizeProvider)
+    .filter((provider): provider is SavedProvider => provider !== null)
+  const rawActiveId =
+    typeof value.activeId === 'string'
+      ? value.activeId
+      : typeof legacyActiveProviderId === 'string'
+        ? legacyActiveProviderId
+        : null
+  const activeId = rawActiveId && providers.some((provider) => provider.id === rawActiveId)
+    ? rawActiveId
+    : null
+
+  return {
+    ...rest,
+    schemaVersion: CURRENT_PROVIDER_INDEX_SCHEMA_VERSION,
+    activeId,
+    providers,
+  } as ProvidersIndex
+}
+
+function getPresetDefaultEnv(presetId: string): Record<string, string> {
+  return PROVIDER_PRESETS.find((preset) => preset.id === presetId)?.defaultEnv ?? {}
+}
+
+function omitAuthEnv(env: Record<string, string>): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(env).filter(([key]) => !AUTH_ENV_KEYS.has(key.toUpperCase())),
+  )
+}
+
+function getPresetAuthStrategy(presetId: string): ProviderAuthStrategy {
+  return PROVIDER_PRESETS.find((preset) => preset.id === presetId)?.authStrategy ?? 'auth_token'
+}
+
+function getPresetModelContextWindows(presetId: string): Record<string, number> {
+  return PROVIDER_PRESETS.find((preset) => preset.id === presetId)?.modelContextWindows ?? {}
+}
+
+function buildProviderAuthEnv(
+  provider: SavedProvider,
+  presetDefaultEnv: Record<string, string>,
+  needsProxy: boolean,
+): Record<string, string> {
+  if (needsProxy) {
+    return { ANTHROPIC_API_KEY: 'proxy-managed' }
+  }
+
+  const strategy = provider.authStrategy ?? getPresetAuthStrategy(provider.presetId)
+  const key = provider.apiKey || presetDefaultEnv.ANTHROPIC_AUTH_TOKEN || presetDefaultEnv.ANTHROPIC_API_KEY || ''
+
+  switch (strategy) {
+    case 'api_key':
+      return key ? { ANTHROPIC_API_KEY: key } : {}
+    case 'auth_token':
+      return {
+        ANTHROPIC_API_KEY: '',
+        ...(key ? { ANTHROPIC_AUTH_TOKEN: key } : {}),
+      }
+    case 'auth_token_empty_api_key':
+      return {
+        ANTHROPIC_API_KEY: '',
+        ...(key ? { ANTHROPIC_AUTH_TOKEN: key } : {}),
+      }
+    case 'dual_same_token':
+      return key ? { ANTHROPIC_API_KEY: key, ANTHROPIC_AUTH_TOKEN: key } : {}
+    case 'dual_dummy':
+      return { ANTHROPIC_API_KEY: 'dummy', ANTHROPIC_AUTH_TOKEN: 'dummy' }
+  }
+}
+
+function getManagedEnvKeys(): string[] {
+  const keys = new Set<string>(MANAGED_ENV_KEYS)
+  for (const preset of PROVIDER_PRESETS) {
+    for (const key of Object.keys(preset.defaultEnv ?? {})) {
+      keys.add(key)
+    }
+  }
+  return [...keys]
+}
+
+export class ProviderService {
+  private static serverPort = 3456
+  private managedSettingsService = new ManagedSettingsService()
+
+  static setServerPort(port: number): void {
+    ProviderService.serverPort = port
+  }
+
+  static getServerPort(): number {
+    return ProviderService.serverPort
+  }
+  private getConfigDir(): string {
+    return getClaudeConfigDir()
+  }
+
+  private getIndexPath(): string {
+    return getGasterConfigPath(this.getConfigDir(), 'providers.json')
+  }
+
+  private async readIndex(): Promise<ProvidersIndex> {
+    await ensurePersistentStorageUpgraded()
+    return readRecoverableJsonFile({
+      filePath: this.getIndexPath(),
+      label: 'Gaster Code providers index',
+      defaultValue: DEFAULT_INDEX,
+      normalize: normalizeProvidersIndex,
+    })
+  }
+
+  private async writeIndex(index: ProvidersIndex): Promise<void> {
+    const filePath = this.getIndexPath()
+    const dir = path.dirname(filePath)
+    await fs.mkdir(dir, { recursive: true })
+
+    const tmpFile = `${filePath}.tmp.${process.pid}.${crypto.randomUUID()}`
+    try {
+      await fs.writeFile(tmpFile, JSON.stringify(index, null, 2) + '\n', 'utf-8')
+      await fs.rename(tmpFile, filePath)
+    } catch (err) {
+      await fs.unlink(tmpFile).catch(() => {})
+      throw ApiError.internal(`Failed to write providers index: ${err}`)
+    }
+  }
+
+  private async readSettings(): Promise<Record<string, unknown>> {
+    return this.managedSettingsService.readSettings()
+  }
+
+  async getManagedSettings(): Promise<Record<string, unknown>> {
+    return this.readSettings()
+  }
+
+  async updateManagedSettings(settings: Record<string, unknown>): Promise<void> {
+    await this.managedSettingsService.updateSettings((current) => ({
+      settings: Object.assign({}, current, settings),
+      result: undefined,
+    }))
+  }
+
+  // --- CRUD ---
+
+  async listProviders(): Promise<{ providers: SavedProvider[]; activeId: string | null }> {
+    const index = await this.readIndex()
+    return { providers: index.providers, activeId: index.activeId }
+  }
+
+  async getProvider(id: string): Promise<SavedProvider> {
+    const index = await this.readIndex()
+    const provider = index.providers.find((p) => p.id === id)
+    if (!provider) throw ApiError.notFound(`Provider not found: ${id}`)
+    return provider
+  }
+
+  async addProvider(input: CreateProviderInput): Promise<SavedProvider> {
+    const index = await this.readIndex()
+
+    const provider: SavedProvider = {
+      id: crypto.randomUUID(),
+      presetId: input.presetId,
+      name: input.name,
+      apiKey: input.apiKey,
+      ...(input.authStrategy !== undefined && { authStrategy: input.authStrategy }),
+      baseUrl: input.baseUrl,
+      apiFormat: input.apiFormat ?? 'anthropic',
+      models: normalizeModelMapping(input.models),
+      ...(input.availableModels !== undefined && { availableModels: normalizeAvailableModels(input.availableModels) }),
+      ...(input.modelCatalogUpdatedAt !== undefined && { modelCatalogUpdatedAt: input.modelCatalogUpdatedAt }),
+      ...(input.autoCompactWindow !== undefined && { autoCompactWindow: input.autoCompactWindow }),
+      ...(input.modelContextWindows !== undefined && { modelContextWindows: input.modelContextWindows }),
+      ...(input.notes !== undefined && { notes: input.notes }),
+    }
+
+    index.providers.push(provider)
+    await this.writeIndex(index)
+    return provider
+  }
+
+  async upsertManagedGMasterProvider(input: {
+    name: string
+    baseUrl: string
+    apiFormat: ApiFormat
+    apiKey: string
+    models: {
+      main: string
+      haiku: string
+      sonnet: string
+      opus: string
+    }
+    availableModels?: string[]
+  }): Promise<SavedProvider> {
+    const index = await this.readIndex()
+    const existingIndex = index.providers.findIndex(isGMasterOfficialProvider)
+    const existingProvider = existingIndex >= 0 ? index.providers[existingIndex] : undefined
+    const wasManagedProviderActive = existingProvider
+      ? index.activeId === existingProvider.id
+      : index.activeId === GMASTER_MANAGED_PROVIDER_ID
+    const availableModels = input.availableModels !== undefined
+      ? normalizeAvailableModels(input.availableModels)
+      : existingProvider?.availableModels ?? []
+    const modelCatalogUpdatedAt = input.availableModels !== undefined
+      ? Date.now()
+      : existingProvider?.modelCatalogUpdatedAt
+    const provider: SavedProvider = {
+      id: GMASTER_MANAGED_PROVIDER_ID,
+      presetId: 'gmaster',
+      name: input.name,
+      apiKey: input.apiKey,
+      authStrategy: 'api_key',
+      baseUrl: input.baseUrl,
+      apiFormat: input.apiFormat,
+      models: normalizeModelMapping(existingProvider?.models ?? input.models),
+      ...(availableModels.length > 0 && { availableModels }),
+      ...(modelCatalogUpdatedAt !== undefined && { modelCatalogUpdatedAt }),
+      notes: GMASTER_MANAGED_PROVIDER_NOTES,
+      managed: { type: 'gmaster' },
+    }
+
+    if (existingIndex >= 0) index.providers[existingIndex] = provider
+    else index.providers.unshift(provider)
+
+    const shouldActivate = wasManagedProviderActive || this.shouldAutoActivateManagedProvider(index, provider.id)
+    if (shouldActivate) {
+      index.activeId = provider.id
+      if (index.activeSource !== MANUAL_ACTIVATION_SOURCE) {
+        index.activeSource = AUTO_ACTIVATION_SOURCE
+      }
+    }
+    await this.writeIndex(index)
+    if (index.activeId === provider.id) {
+      await this.syncToSettings(provider)
+    }
+    return provider
+  }
+
+  async needsManagedGMasterProviderSync(): Promise<boolean> {
+    const index = await this.readIndex()
+    const provider = index.providers.find(isGMasterOfficialProvider)
+    if (!provider) return true
+    if (!provider.apiKey.trim()) return true
+    if (!provider.availableModels?.length) return true
+    if (!provider.modelCatalogUpdatedAt) return true
+    if (Date.now() - provider.modelCatalogUpdatedAt > GMASTER_MODEL_CATALOG_TTL_MS) return true
+    return this.shouldAutoActivateManagedProvider(index, provider.id) && index.activeId !== provider.id
+  }
+
+  async deactivateManagedGMasterProvider(): Promise<void> {
+    const index = await this.readIndex()
+    const existingIndex = index.providers.findIndex(isGMasterOfficialProvider)
+    const existingProvider = existingIndex >= 0 ? index.providers[existingIndex] : undefined
+    const activeManagedProvider = existingProvider
+      ? index.activeId === existingProvider.id
+      : index.activeId === GMASTER_MANAGED_PROVIDER_ID
+    let changed = false
+
+    if (existingProvider?.apiKey) {
+      index.providers[existingIndex] = {
+        ...existingProvider,
+        apiKey: '',
+      }
+      changed = true
+    }
+
+    if (activeManagedProvider) {
+      index.activeId = null
+      delete index.activeSource
+      changed = true
+    }
+
+    if (changed) {
+      await this.writeIndex(index)
+    }
+    if (activeManagedProvider) {
+      await this.clearProviderFromSettings()
+    }
+  }
+
+  async updateProvider(id: string, input: UpdateProviderInput): Promise<SavedProvider> {
+    const index = await this.readIndex()
+    const idx = index.providers.findIndex((p) => p.id === id)
+    if (idx === -1) throw ApiError.notFound(`Provider not found: ${id}`)
+
+    const existing = index.providers[idx]
+    const updated: SavedProvider = {
+      ...existing,
+      ...(input.name !== undefined && { name: input.name }),
+      ...(input.apiKey !== undefined && { apiKey: input.apiKey }),
+      ...(input.authStrategy !== undefined && { authStrategy: input.authStrategy }),
+      ...(input.baseUrl !== undefined && { baseUrl: input.baseUrl }),
+      ...(input.apiFormat !== undefined && { apiFormat: input.apiFormat }),
+      ...(input.models !== undefined && { models: normalizeModelMapping(input.models) }),
+      ...(input.availableModels !== undefined && { availableModels: normalizeAvailableModels(input.availableModels) }),
+      ...(typeof input.modelCatalogUpdatedAt === 'number' && { modelCatalogUpdatedAt: input.modelCatalogUpdatedAt }),
+      ...(typeof input.autoCompactWindow === 'number' && { autoCompactWindow: input.autoCompactWindow }),
+      ...(input.modelContextWindows !== undefined && input.modelContextWindows !== null && { modelContextWindows: input.modelContextWindows }),
+      ...(input.notes !== undefined && { notes: input.notes }),
+    }
+    if (input.autoCompactWindow === null) {
+      delete updated.autoCompactWindow
+    }
+    if (input.modelContextWindows === null) {
+      delete updated.modelContextWindows
+    }
+    if (input.modelCatalogUpdatedAt === null) {
+      delete updated.modelCatalogUpdatedAt
+    }
+
+    index.providers[idx] = updated
+    await this.writeIndex(index)
+
+    if (index.activeId === id) {
+      await this.syncToSettings(updated)
+    }
+
+    return updated
+  }
+
+  async deleteProvider(id: string): Promise<void> {
+    const index = await this.readIndex()
+    const idx = index.providers.findIndex((p) => p.id === id)
+    if (idx === -1) throw ApiError.notFound(`Provider not found: ${id}`)
+
+    if (index.providers[idx]?.managed?.type === 'gmaster') {
+      throw ApiError.conflict('Cannot delete managed G-Master provider. Sign out of G-Master API first.')
+    }
+
+    if (index.activeId === id) {
+      throw ApiError.conflict('Cannot delete the active provider. Switch to another provider first.')
+    }
+
+    index.providers.splice(idx, 1)
+    await this.writeIndex(index)
+  }
+
+  // --- Activation ---
+
+  async activateProvider(id: string): Promise<void> {
+    const index = await this.readIndex()
+    const provider = index.providers.find((p) => p.id === id)
+    if (!provider) throw ApiError.notFound(`Provider not found: ${id}`)
+    if (provider.managed?.type === 'gmaster' && !provider.apiKey.trim()) {
+      throw ApiError.conflict('Sign in to G-Master API before activating the managed provider.')
+    }
+
+    index.activeId = id
+    index.activeSource = MANUAL_ACTIVATION_SOURCE
+    await this.writeIndex(index)
+
+    if (provider.presetId === 'official') {
+      await this.clearProviderFromSettings()
+    } else {
+      await this.syncToSettings(provider)
+    }
+  }
+
+  async activateOfficial(): Promise<void> {
+    const index = await this.readIndex()
+    index.activeId = null
+    index.activeSource = MANUAL_ACTIVATION_SOURCE
+    await this.writeIndex(index)
+    await this.clearProviderFromSettings()
+  }
+
+  private shouldAutoActivateManagedProvider(index: ProvidersIndex, providerId: string): boolean {
+    if (index.activeId === providerId) return true
+    if (index.activeSource === MANUAL_ACTIVATION_SOURCE) return false
+    if (index.activeId && index.activeId !== providerId) return false
+    return true
+  }
+
+  // --- Settings sync ---
+
+  private buildManagedEnv(
+    provider: SavedProvider,
+    options?: { proxyPath?: string },
+  ): Record<string, string> {
+    const needsProxy = provider.apiFormat != null && provider.apiFormat !== 'anthropic'
+    const proxyPath = options?.proxyPath ?? '/proxy'
+    const baseUrl = needsProxy
+      ? `http://127.0.0.1:${ProviderService.serverPort}${proxyPath}`
+      : provider.baseUrl
+
+    const modelContextWindows = {
+      ...getPresetModelContextWindows(provider.presetId),
+      ...(provider.modelContextWindows ?? {}),
+    }
+
+    const presetDefaultEnv = getPresetDefaultEnv(provider.presetId)
+    const customProviderCapabilityEnv =
+      provider.presetId === 'custom'
+        ? {
+            ANTHROPIC_DEFAULT_HAIKU_MODEL_SUPPORTED_CAPABILITIES: CUSTOM_PROVIDER_MODEL_CAPABILITIES,
+            ANTHROPIC_DEFAULT_SONNET_MODEL_SUPPORTED_CAPABILITIES: CUSTOM_PROVIDER_MODEL_CAPABILITIES,
+            ANTHROPIC_DEFAULT_OPUS_MODEL_SUPPORTED_CAPABILITIES: CUSTOM_PROVIDER_MODEL_CAPABILITIES,
+          }
+        : {}
+
+    return {
+      ...omitAuthEnv(presetDefaultEnv),
+      ...customProviderCapabilityEnv,
+      ...(provider.autoCompactWindow !== undefined && {
+        CLAUDE_CODE_AUTO_COMPACT_WINDOW: String(provider.autoCompactWindow),
+      }),
+      ...(Object.keys(modelContextWindows).length > 0 && {
+        [MODEL_CONTEXT_WINDOWS_ENV_KEY]: JSON.stringify(modelContextWindows),
+      }),
+      ANTHROPIC_BASE_URL: baseUrl,
+      ...buildProviderAuthEnv(provider, presetDefaultEnv, needsProxy),
+      ANTHROPIC_MODEL: provider.models.main,
+      ANTHROPIC_DEFAULT_HAIKU_MODEL: provider.models.haiku,
+      ANTHROPIC_DEFAULT_SONNET_MODEL: provider.models.sonnet,
+      ANTHROPIC_DEFAULT_OPUS_MODEL: provider.models.opus,
+    }
+  }
+
+  async getProviderRuntimeEnv(id: string): Promise<Record<string, string>> {
+    const provider = await this.getProvider(id)
+    return this.buildManagedEnv(provider, {
+      proxyPath: `/proxy/providers/${provider.id}`,
+    })
+  }
+
+  private async syncToSettings(provider: SavedProvider): Promise<void> {
+    await this.managedSettingsService.updateSettings((settings) => {
+      const existingEnv = (settings.env as Record<string, string>) || {}
+      const cleanedEnv = { ...existingEnv }
+
+      for (const key of getManagedEnvKeys()) {
+        delete cleanedEnv[key]
+      }
+
+      return {
+        settings: {
+          ...settings,
+          env: {
+            ...cleanedEnv,
+            ...this.buildManagedEnv(provider),
+          },
+        },
+        result: undefined,
+      }
+    })
+
+  }
+
+  private async clearProviderFromSettings(): Promise<void> {
+    await this.managedSettingsService.updateSettings((settings) => {
+      const env = { ...((settings.env as Record<string, string>) || {}) }
+
+      for (const key of getManagedEnvKeys()) {
+        delete env[key]
+      }
+
+      const nextSettings = { ...settings }
+      if (Object.keys(env).length === 0) {
+        delete nextSettings.env
+      } else {
+        nextSettings.env = env
+      }
+
+      return {
+        settings: nextSettings,
+        result: undefined,
+      }
+    })
+  }
+
+  // --- Auth status ---
+
+  /**
+   * Check whether any usable auth exists:
+   *  1. A Gaster Code provider is active → has auth
+   *  2. Original ~/.claude/settings.json has ANTHROPIC_AUTH_TOKEN or ANTHROPIC_API_KEY → has auth
+   *  3. process.env already has ANTHROPIC_API_KEY / ANTHROPIC_AUTH_TOKEN → has auth
+   *  4. None of the above → needs setup
+   */
+  async checkAuthStatus(): Promise<{
+    hasAuth: boolean
+    source: 'gaster-code-provider' | 'original-settings' | 'env' | 'none'
+    activeProvider?: string
+  }> {
+    // 1. Check Gaster Code active provider
+    const index = await this.readIndex()
+    if (index.activeId) {
+      const provider = index.providers.find(p => p.id === index.activeId)
+      if (provider) {
+        const presetDefaultEnv = getPresetDefaultEnv(provider.presetId)
+        const needsProxy = provider.apiFormat != null && provider.apiFormat !== 'anthropic'
+        const authEnv = buildProviderAuthEnv(provider, presetDefaultEnv, needsProxy)
+        if (Object.values(authEnv).some(value => value.length > 0)) {
+          return { hasAuth: true, source: 'gaster-code-provider', activeProvider: provider.name }
+        }
+      }
+    }
+
+    // 2. Check process.env (covers .env file + inherited env)
+    if (process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN) {
+      return { hasAuth: true, source: 'env' }
+    }
+
+    // 3. Check original ~/.claude/settings.json
+    try {
+      const originalPath = path.join(this.getConfigDir(), 'settings.json')
+      const raw = await fs.readFile(originalPath, 'utf-8')
+      const settings = JSON.parse(raw) as { env?: Record<string, string> }
+      const env = settings.env ?? {}
+      if (env.ANTHROPIC_AUTH_TOKEN || env.ANTHROPIC_API_KEY) {
+        return { hasAuth: true, source: 'original-settings' }
+      }
+    } catch {
+      // File doesn't exist or invalid
+    }
+
+    return { hasAuth: false, source: 'none' }
+  }
+
+  // --- Proxy support ---
+
+  async getProviderForProxy(providerId?: string): Promise<{
+    baseUrl: string
+    apiKey: string
+    apiFormat: ApiFormat
+  } | null> {
+    if (providerId) {
+      const provider = await this.getProvider(providerId)
+      return {
+        baseUrl: provider.baseUrl,
+        apiKey: provider.apiKey,
+        apiFormat: provider.apiFormat ?? 'anthropic',
+      }
+    }
+
+    const index = await this.readIndex()
+    if (!index.activeId) return null
+    const provider = index.providers.find((p) => p.id === index.activeId)
+    if (!provider) return null
+    return {
+      baseUrl: provider.baseUrl,
+      apiKey: provider.apiKey,
+      apiFormat: provider.apiFormat ?? 'anthropic',
+    }
+  }
+
+  async getActiveProviderForProxy(): Promise<{
+    baseUrl: string
+    apiKey: string
+    apiFormat: ApiFormat
+  } | null> {
+    return this.getProviderForProxy()
+  }
+
+  // --- Test ---
+
+  async testProvider(
+    id: string,
+    overrides?: { baseUrl?: string; modelId?: string; apiFormat?: ApiFormat; authStrategy?: ProviderAuthStrategy },
+  ): Promise<ProviderTestResult> {
+    const provider = await this.getProvider(id)
+    const baseUrl = overrides?.baseUrl || provider.baseUrl
+    const modelId = overrides?.modelId || provider.models.main
+    const apiFormat = overrides?.apiFormat ?? provider.apiFormat ?? 'anthropic'
+    const authStrategy = overrides?.authStrategy ?? provider.authStrategy ?? getPresetAuthStrategy(provider.presetId)
+    const presetDefaultEnv = getPresetDefaultEnv(provider.presetId)
+    const apiKey = provider.apiKey
+      || presetDefaultEnv.ANTHROPIC_AUTH_TOKEN
+      || presetDefaultEnv.ANTHROPIC_API_KEY
+      || (authStrategy === 'dual_dummy' ? 'dummy' : '')
+
+    if (!baseUrl || !apiKey) {
+      return { connectivity: { success: false, latencyMs: 0, error: 'Missing baseUrl or apiKey' } }
+    }
+    return this.testProviderConfig({
+      baseUrl,
+      apiKey,
+      modelId,
+      authStrategy,
+      apiFormat,
+    })
+  }
+
+  async testProviderConfig(input: TestProviderInput): Promise<ProviderTestResult> {
+    const format: ApiFormat = input.apiFormat ?? 'anthropic'
+    const authStrategy = input.authStrategy ?? 'api_key'
+    const base = input.baseUrl.replace(/\/+$/, '')
+
+    // ── Step 1: Basic connectivity ───────────────────────────
+    // Directly call the upstream API to verify URL, key, and model.
+    const step1 = await this.testConnectivity(base, input.apiKey, input.modelId, format, authStrategy)
+
+    // If connectivity failed, no point running step 2
+    if (!step1.success) {
+      return { connectivity: step1 }
+    }
+
+    // For native Anthropic format, no proxy pipeline to test
+    if (format === 'anthropic') {
+      return { connectivity: step1 }
+    }
+
+    // ── Step 2: Full proxy pipeline ──────────────────────────
+    // Anthropic request → transform → upstream → transform back → validate
+    const step2 = await this.testProxyPipeline(base, input.apiKey, input.modelId, format)
+
+    return { connectivity: step1, proxy: step2 }
+  }
+
+  /** Step 1: Direct upstream call to verify connectivity, auth, and model. */
+  private async testConnectivity(
+    base: string,
+    apiKey: string,
+    modelId: string,
+    format: ApiFormat,
+    authStrategy: ProviderAuthStrategy,
+  ): Promise<ProviderTestStepResult> {
+    const start = Date.now()
+    try {
+      const { url, headers, body } = buildDirectTestRequest(base, apiKey, modelId, format, authStrategy)
+      const response = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(30000),
+      })
+
+      const latencyMs = Date.now() - start
+      const resBody = await response.json().catch(() => null) as Record<string, unknown> | null
+
+      if (!response.ok) {
+        let error = `HTTP ${response.status}`
+        if (resBody?.error && typeof resBody.error === 'object') {
+          error = ((resBody.error as Record<string, unknown>).message as string) || error
+        }
+        return { success: false, latencyMs, error, modelUsed: modelId, httpStatus: response.status }
+      }
+
+      // Validate response structure
+      const valid = validateResponseBody(resBody, format)
+      if (!valid.ok) {
+        return { success: false, latencyMs, error: valid.error, modelUsed: modelId, httpStatus: response.status }
+      }
+
+      return { success: true, latencyMs, modelUsed: valid.model || modelId, httpStatus: response.status }
+    } catch (err: unknown) {
+      const latencyMs = Date.now() - start
+      if (err instanceof DOMException && err.name === 'TimeoutError') {
+        return { success: false, latencyMs, error: 'Request timed out (30s)', modelUsed: modelId }
+      }
+      return { success: false, latencyMs, error: err instanceof Error ? err.message : String(err), modelUsed: modelId }
+    }
+  }
+
+  /** Step 2: Full proxy pipeline — Anthropic → transform → upstream → transform back → validate. */
+  private async testProxyPipeline(
+    base: string,
+    apiKey: string,
+    modelId: string,
+    format: 'openai_chat' | 'openai_responses',
+  ): Promise<ProviderTestStepResult> {
+    const start = Date.now()
+    try {
+      // Build an Anthropic Messages API request (same shape as what CLI sends)
+      const anthropicReq: AnthropicRequest = {
+        model: modelId,
+        max_tokens: 64,
+        messages: [{ role: 'user', content: 'Say "ok" and nothing else.' }],
+      }
+
+      // Transform to OpenAI format
+      let upstreamUrl: string
+      let transformedBody: unknown
+      if (format === 'openai_chat') {
+        transformedBody = anthropicToOpenaiChat(anthropicReq)
+        upstreamUrl = `${base}/v1/chat/completions`
+      } else {
+        transformedBody = anthropicToOpenaiResponses(anthropicReq)
+        upstreamUrl = `${base}/v1/responses`
+      }
+
+      // Call upstream with transformed request
+      const response = await fetch(upstreamUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify(transformedBody),
+        signal: AbortSignal.timeout(30000),
+      })
+
+      if (!response.ok) {
+        const latencyMs = Date.now() - start
+        const errText = await response.text().catch(() => '')
+        return { success: false, latencyMs, modelUsed: modelId, httpStatus: response.status,
+          error: `Upstream HTTP ${response.status}: ${errText.slice(0, 200)}` }
+      }
+
+      // Transform response back to Anthropic format
+      const responseBody = await response.json()
+      const anthropicRes = format === 'openai_chat'
+        ? openaiChatToAnthropic(responseBody, modelId)
+        : openaiResponsesToAnthropic(responseBody, modelId)
+
+      const latencyMs = Date.now() - start
+
+      // Validate the final Anthropic response
+      if (anthropicRes.type !== 'message' || !Array.isArray(anthropicRes.content)) {
+        return { success: false, latencyMs, modelUsed: modelId,
+          error: 'Proxy transform produced invalid Anthropic response' }
+      }
+
+      return { success: true, latencyMs, modelUsed: anthropicRes.model || modelId, httpStatus: response.status }
+    } catch (err: unknown) {
+      const latencyMs = Date.now() - start
+      if (err instanceof DOMException && err.name === 'TimeoutError') {
+        return { success: false, latencyMs, error: 'Proxy pipeline timed out (30s)', modelUsed: modelId }
+      }
+      return { success: false, latencyMs, error: err instanceof Error ? err.message : String(err), modelUsed: modelId }
+    }
+  }
+}
+
+// ─── Helpers ───────────────────────────────────────────────
+
+function buildDirectTestRequest(
+  base: string,
+  apiKey: string,
+  modelId: string,
+  format: ApiFormat,
+  authStrategy: ProviderAuthStrategy,
+): { url: string; headers: Record<string, string>; body: Record<string, unknown> } {
+  const prompt = 'Say "ok" and nothing else.'
+
+  if (format === 'openai_chat') {
+    return {
+      url: `${base}/v1/chat/completions`,
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      body: { model: modelId, max_tokens: 16, messages: [{ role: 'user', content: prompt }] },
+    }
+  }
+  if (format === 'openai_responses') {
+    return {
+      url: `${base}/v1/responses`,
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      body: { model: modelId, max_output_tokens: 16, input: [{ type: 'message', role: 'user', content: prompt }] },
+    }
+  }
+  // anthropic
+  return {
+    url: `${base}/v1/messages`,
+    headers: {
+      'Content-Type': 'application/json',
+      'anthropic-version': '2023-06-01',
+      ...buildAnthropicAuthHeaders(apiKey, authStrategy),
+    },
+    body: { model: modelId, max_tokens: 16, messages: [{ role: 'user', content: prompt }] },
+  }
+}
+
+function buildAnthropicAuthHeaders(apiKey: string, authStrategy: ProviderAuthStrategy): Record<string, string> {
+  switch (authStrategy) {
+    case 'api_key':
+      return { 'x-api-key': apiKey }
+    case 'auth_token':
+    case 'auth_token_empty_api_key':
+      return { Authorization: `Bearer ${apiKey}` }
+    case 'dual_same_token':
+      return { 'x-api-key': apiKey, Authorization: `Bearer ${apiKey}` }
+    case 'dual_dummy':
+      return { 'x-api-key': 'dummy', Authorization: 'Bearer dummy' }
+  }
+}
+
+function validateResponseBody(
+  body: Record<string, unknown> | null,
+  format: ApiFormat,
+): { ok: true; model?: string } | { ok: false; error: string } {
+  if (!body) return { ok: false, error: 'Empty response — not a valid API endpoint' }
+  if (body.error && typeof body.error === 'object') {
+    return { ok: false, error: ((body.error as Record<string, unknown>).message as string) || 'Error in response body' }
+  }
+
+  if (format === 'openai_chat') {
+    if (!Array.isArray(body.choices) || body.choices.length === 0) {
+      return { ok: false, error: 'Response missing choices — not a valid Chat Completions endpoint' }
+    }
+    return { ok: true, model: (body.model as string) || undefined }
+  }
+  if (format === 'openai_responses') {
+    if (!Array.isArray(body.output)) {
+      return { ok: false, error: 'Response missing output — not a valid Responses API endpoint' }
+    }
+    return { ok: true, model: (body.model as string) || undefined }
+  }
+  // anthropic
+  if (body.type !== 'message' || !Array.isArray(body.content)) {
+    return { ok: false, error: 'Not a valid Anthropic Messages endpoint' }
+  }
+  return { ok: true, model: (body.model as string) || undefined }
+}
+
+function isGMasterOfficialProvider(provider: SavedProvider): boolean {
+  return (
+    provider.id === GMASTER_MANAGED_PROVIDER_ID ||
+    provider.managed?.type === 'gmaster' ||
+    provider.presetId === 'gmaster' ||
+    normalizeBaseUrl(provider.baseUrl) === normalizeBaseUrl(GMASTER_API_BASE_URL)
+  )
+}
+
+function normalizeBaseUrl(url: string): string {
+  return url.trim().replace(/\/+$/, '').toLowerCase()
+}

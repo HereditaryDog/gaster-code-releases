@@ -1,0 +1,73 @@
+name: Deploy VitePress Docs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/deploy-docs.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    outputs:
+      pages-ready: ${{ steps.setup-pages.outcome == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Setup Pages
+        id: setup-pages
+        uses: actions/configure-pages@v4
+        continue-on-error: true
+        with:
+          enablement: true
+
+      - name: Report skipped Pages deploy
+        if: steps.setup-pages.outcome != 'success'
+        run: |
+          echo "::notice::GitHub Pages is not enabled or is unavailable for this repository plan. Docs will be built, but deployment will be skipped."
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build with VitePress
+        run: npm run docs:build
+
+      - name: Upload artifact
+        if: steps.setup-pages.outcome == 'success'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/.vitepress/dist
+
+  deploy:
+    if: needs.build.outputs.pages-ready == 'true'
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

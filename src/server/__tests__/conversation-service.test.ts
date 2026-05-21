@@ -1,0 +1,541 @@
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import * as fs from 'node:fs/promises'
+import * as os from 'node:os'
+import * as path from 'node:path'
+import { ConversationService } from '../services/conversationService.js'
+import { ProviderService } from '../services/providerService.js'
+import { GASTER_ENV } from '../../utils/gasterEnv.js'
+import { sanitizePath } from '../../utils/path.js'
+import { resetTerminalShellEnvironmentCacheForTests } from '../../utils/terminalShellEnvironment.js'
+
+describe('ConversationService', () => {
+  let tmpDir: string
+  let originalConfigDir: string | undefined
+  let originalApiKey: string | undefined
+  let originalAuthToken: string | undefined
+  let originalBaseUrl: string | undefined
+  let originalModel: string | undefined
+  let originalEntrypoint: string | undefined
+  let originalOAuthToken: string | undefined
+  let originalProviderManagedByHost: string | undefined
+  let originalDiagnosticsFile: string | undefined
+  let originalHome: string | undefined
+  let originalPath: string | undefined
+  let originalShell: string | undefined
+  let originalZdotdir: string | undefined
+  let originalDisableTerminalShellEnv: string | undefined
+
+  beforeEach(async () => {
+    tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'gaster-code-conversation-service-'))
+    originalConfigDir = process.env.CLAUDE_CONFIG_DIR
+    originalApiKey = process.env.ANTHROPIC_API_KEY
+    originalAuthToken = process.env.ANTHROPIC_AUTH_TOKEN
+    originalBaseUrl = process.env.ANTHROPIC_BASE_URL
+    originalModel = process.env.ANTHROPIC_MODEL
+    originalEntrypoint = process.env.CLAUDE_CODE_ENTRYPOINT
+    originalOAuthToken = process.env.CLAUDE_CODE_OAUTH_TOKEN
+    originalProviderManagedByHost = process.env.CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST
+    originalDiagnosticsFile = process.env.CLAUDE_CODE_DIAGNOSTICS_FILE
+    originalHome = process.env.HOME
+    originalPath = process.env.PATH
+    originalShell = process.env.SHELL
+    originalZdotdir = process.env.ZDOTDIR
+    originalDisableTerminalShellEnv = process.env[GASTER_ENV.TERMINAL_SHELL_ENV_DISABLED]
+
+    process.env.CLAUDE_CONFIG_DIR = tmpDir
+    process.env.ANTHROPIC_API_KEY = 'stale-parent-api-key'
+    process.env.ANTHROPIC_AUTH_TOKEN = 'test-token'
+    process.env.ANTHROPIC_BASE_URL = 'https://example.invalid/anthropic'
+    process.env.ANTHROPIC_MODEL = 'test-model'
+    process.env.CLAUDE_CODE_OAUTH_TOKEN = 'inherited-parent-oauth-token'
+    // Clear inherited CLAUDE_CODE_ENTRYPOINT so tests can assert whether
+    // buildChildEnv injects it or not without interference from the shell env.
+    delete process.env.CLAUDE_CODE_ENTRYPOINT
+    delete process.env.CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST
+    delete process.env.CLAUDE_CODE_DIAGNOSTICS_FILE
+    process.env[GASTER_ENV.TERMINAL_SHELL_ENV_DISABLED] = '1'
+    resetTerminalShellEnvironmentCacheForTests()
+  })
+
+  afterEach(async () => {
+    if (originalConfigDir === undefined) delete process.env.CLAUDE_CONFIG_DIR
+    else process.env.CLAUDE_CONFIG_DIR = originalConfigDir
+
+    if (originalApiKey === undefined) delete process.env.ANTHROPIC_API_KEY
+    else process.env.ANTHROPIC_API_KEY = originalApiKey
+
+    if (originalAuthToken === undefined) delete process.env.ANTHROPIC_AUTH_TOKEN
+    else process.env.ANTHROPIC_AUTH_TOKEN = originalAuthToken
+
+    if (originalBaseUrl === undefined) delete process.env.ANTHROPIC_BASE_URL
+    else process.env.ANTHROPIC_BASE_URL = originalBaseUrl
+
+    if (originalModel === undefined) delete process.env.ANTHROPIC_MODEL
+    else process.env.ANTHROPIC_MODEL = originalModel
+
+    if (originalEntrypoint === undefined) delete process.env.CLAUDE_CODE_ENTRYPOINT
+    else process.env.CLAUDE_CODE_ENTRYPOINT = originalEntrypoint
+
+    if (originalOAuthToken === undefined) delete process.env.CLAUDE_CODE_OAUTH_TOKEN
+    else process.env.CLAUDE_CODE_OAUTH_TOKEN = originalOAuthToken
+
+    if (originalProviderManagedByHost === undefined) delete process.env.CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST
+    else process.env.CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST = originalProviderManagedByHost
+
+    if (originalDiagnosticsFile === undefined) delete process.env.CLAUDE_CODE_DIAGNOSTICS_FILE
+    else process.env.CLAUDE_CODE_DIAGNOSTICS_FILE = originalDiagnosticsFile
+
+    if (originalHome === undefined) delete process.env.HOME
+    else process.env.HOME = originalHome
+
+    if (originalPath === undefined) delete process.env.PATH
+    else process.env.PATH = originalPath
+
+    if (originalShell === undefined) delete process.env.SHELL
+    else process.env.SHELL = originalShell
+
+    if (originalZdotdir === undefined) delete process.env.ZDOTDIR
+    else process.env.ZDOTDIR = originalZdotdir
+
+    if (originalDisableTerminalShellEnv === undefined) delete process.env[GASTER_ENV.TERMINAL_SHELL_ENV_DISABLED]
+    else process.env[GASTER_ENV.TERMINAL_SHELL_ENV_DISABLED] = originalDisableTerminalShellEnv
+
+    resetTerminalShellEnvironmentCacheForTests()
+    await fs.rm(tmpDir, { recursive: true, force: true })
+  })
+
+  async function writeFakeZsh(filePath: string) {
+    await fs.writeFile(
+      filePath,
+      [
+        '#!/bin/sh',
+        'command=',
+        'while [ "$#" -gt 0 ]; do',
+        '  if [ "$1" = "-c" ]; then',
+        '    shift',
+        '    command="$1"',
+        '    break',
+        '  fi',
+        '  shift',
+        'done',
+        'if [ -f "$HOME/.zshrc" ]; then',
+        '  . "$HOME/.zshrc" </dev/null >/dev/null 2>/dev/null || true',
+        'fi',
+        'exec /bin/sh -c "$command"',
+        '',
+      ].join('\n'),
+      { mode: 0o755 },
+    )
+  }
+
+  test('keeps inherited provider env when no desktop provider config exists', async () => {
+    const service = new ConversationService() as any
+    const env = (await service.buildChildEnv('D:\\workspace\\code\\myself_code\\GasterCode')) as Record<string, string>
+
+    expect(env.ANTHROPIC_AUTH_TOKEN).toBe('test-token')
+    expect(env.ANTHROPIC_BASE_URL).toBe('https://example.invalid/anthropic')
+    expect(env.ANTHROPIC_MODEL).toBe('test-model')
+    expect(env.CLAUDE_CODE_DIAGNOSTICS_FILE).toBe(path.join(tmpDir, 'gaster-code', 'diagnostics', 'cli-diagnostics.jsonl'))
+    expect(env.CLAUDE_COWORK_MEMORY_PATH_OVERRIDE).toBe(
+      `${path.join(tmpDir, 'projects', 'D--workspace-code-myself-code-GasterCode', 'memory')}${path.sep}`,
+    )
+    await expect(fs.stat(path.dirname(env.CLAUDE_CODE_DIAGNOSTICS_FILE))).resolves.toBeTruthy()
+  })
+
+  test('buildChildEnv pins desktop memory to the current sanitized project directory', async () => {
+    const service = new ConversationService() as any
+    const workDir = path.join(tmpDir, 'workspace', 'myself_code', 'GasterCode')
+    await fs.mkdir(workDir, { recursive: true })
+
+    const env = (await service.buildChildEnv(workDir)) as Record<string, string>
+
+    expect(env.CLAUDE_COWORK_MEMORY_PATH_OVERRIDE).toBe(
+      `${path.join(tmpDir, 'projects', sanitizePath(workDir), 'memory')}${path.sep}`,
+    )
+    expect(env.CLAUDE_COWORK_MEMORY_PATH_OVERRIDE).toContain('myself-code')
+    expect(env.CLAUDE_COWORK_MEMORY_PATH_OVERRIDE).not.toContain('myself_code')
+  })
+
+  test('buildChildEnv inherits exported terminal shell variables for desktop CLI sessions', async () => {
+    const shellPath = path.join(tmpDir, 'zsh')
+    const nodeBin = path.join(tmpDir, 'node-bin')
+    const nvmDir = path.join(tmpDir, '.nvm')
+    await fs.mkdir(nodeBin, { recursive: true })
+    await fs.mkdir(nvmDir, { recursive: true })
+    await writeFakeZsh(shellPath)
+    await fs.writeFile(
+      path.join(tmpDir, '.zshrc'),
+      [
+        `export NVM_DIR="${nvmDir}"`,
+        `export PATH="${nodeBin}:$PATH"`,
+        '',
+      ].join('\n'),
+    )
+
+    delete process.env[GASTER_ENV.TERMINAL_SHELL_ENV_DISABLED]
+    process.env.HOME = tmpDir
+    process.env.SHELL = shellPath
+    process.env.PATH = '/usr/bin:/bin'
+    delete process.env.ZDOTDIR
+    resetTerminalShellEnvironmentCacheForTests()
+
+    const service = new ConversationService() as any
+    const env = (await service.buildChildEnv(tmpDir)) as Record<string, string>
+
+    expect(env.NVM_DIR).toBe(nvmDir)
+    expect(env.PATH.split(path.delimiter)[0]).toBe(nodeBin)
+    expect(env.PATH.split(path.delimiter)).toContain('/usr/bin')
+  })
+
+  test('strips inherited provider env when desktop provider config exists', async () => {
+    const gasterDir = path.join(tmpDir, 'gaster-code')
+    await fs.mkdir(gasterDir, { recursive: true })
+    await fs.writeFile(
+      path.join(gasterDir, 'providers.json'),
+      JSON.stringify({ activeId: null, providers: [] }),
+      'utf-8',
+    )
+
+    const service = new ConversationService() as any
+    const env = (await service.buildChildEnv('D:\\workspace\\code\\myself_code\\GasterCode')) as Record<string, string>
+
+    expect(env.ANTHROPIC_AUTH_TOKEN).toBeUndefined()
+    expect(env.ANTHROPIC_BASE_URL).toBeUndefined()
+    expect(env.ANTHROPIC_MODEL).toBeUndefined()
+  })
+
+  test('buildChildEnv injects CLAUDE_CODE_OAUTH_TOKEN when official mode + Gaster Code oauth token exists', async () => {
+    const gasterDir = path.join(tmpDir, 'gaster-code')
+    await fs.mkdir(gasterDir, { recursive: true })
+    await fs.writeFile(
+      path.join(gasterDir, 'settings.json'),
+      JSON.stringify({ env: {} }),
+      'utf-8',
+    )
+
+    const { gasterOAuthService } = await import('../services/gasterOAuthService.js')
+    await gasterOAuthService.saveTokens({
+      accessToken: 'gaster-fresh-token',
+      refreshToken: 'gaster-refresh-xxx',
+      expiresAt: Date.now() + 30 * 60_000,
+      scopes: ['user:inference'],
+      subscriptionType: 'max',
+    })
+
+    const service = new ConversationService() as any
+    const env = (await service.buildChildEnv('/tmp')) as Record<string, string>
+
+    expect(env.CLAUDE_CODE_ENTRYPOINT).toBe('claude-desktop')
+    expect(env.CLAUDE_CODE_OAUTH_TOKEN).toBe('gaster-fresh-token')
+  })
+
+  test('buildChildEnv does NOT inject CLAUDE_CODE_OAUTH_TOKEN when not official mode', async () => {
+    const gasterDir = path.join(tmpDir, 'gaster-code')
+    await fs.mkdir(gasterDir, { recursive: true })
+    await fs.writeFile(
+      path.join(gasterDir, 'settings.json'),
+      JSON.stringify({ env: { ANTHROPIC_AUTH_TOKEN: 'custom-provider-token' } }),
+      'utf-8',
+    )
+
+    const { gasterOAuthService } = await import('../services/gasterOAuthService.js')
+    await gasterOAuthService.saveTokens({
+      accessToken: 'gaster-token-should-not-be-used',
+      refreshToken: null,
+      expiresAt: null,
+      scopes: [],
+      subscriptionType: null,
+    })
+
+    const service = new ConversationService() as any
+    const env = (await service.buildChildEnv('/tmp')) as Record<string, string>
+
+    expect(env.CLAUDE_CODE_OAUTH_TOKEN).toBeUndefined()
+    expect(env.CLAUDE_CODE_ENTRYPOINT).toBeUndefined()
+  })
+
+  test('buildChildEnv injects explicit provider runtime env for session-scoped providers', async () => {
+    const providerService = new ProviderService()
+    const provider = await providerService.addProvider({
+      presetId: 'custom',
+      name: 'Packy',
+      apiKey: 'provider-key',
+      baseUrl: 'https://api.packy.example',
+      apiFormat: 'openai_chat',
+      models: {
+        main: 'kimi-k2.6',
+        haiku: '',
+        sonnet: '',
+        opus: '',
+      },
+    })
+
+    const service = new ConversationService() as any
+    const env = (await service.buildChildEnv('/tmp', undefined, {
+      providerId: provider.id,
+    })) as Record<string, string>
+
+    expect(env.ANTHROPIC_BASE_URL).toBe(`http://127.0.0.1:3456/proxy/providers/${provider.id}`)
+    expect(env.ANTHROPIC_API_KEY).toBe('proxy-managed')
+    expect(env.ANTHROPIC_MODEL).toBe('kimi-k2.6')
+    expect(env.ANTHROPIC_DEFAULT_HAIKU_MODEL).toBe('kimi-k2.6')
+    expect(env.ANTHROPIC_DEFAULT_SONNET_MODEL).toBe('kimi-k2.6')
+    expect(env.ANTHROPIC_DEFAULT_OPUS_MODEL).toBe('kimi-k2.6')
+    expect(env.CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST).toBe('1')
+    expect(env.CLAUDE_CODE_ENTRYPOINT).toBeUndefined()
+  })
+
+  test('restarts only CLI sessions that were started with the updated provider', async () => {
+    const service = new ConversationService() as any
+    const killed: string[] = []
+    const restarted: Array<{
+      sessionId: string
+      workDir: string
+      providerId: string | null | undefined
+      model: string | undefined
+      permissionMode: string | undefined
+    }> = []
+    service.startSession = async (
+      sessionId: string,
+      workDir: string,
+      _sdkUrl: string,
+      options: { providerId?: string | null; model?: string; permissionMode?: string } = {},
+    ) => {
+      restarted.push({
+        sessionId,
+        workDir,
+        providerId: options.providerId,
+        model: options.model,
+        permissionMode: options.permissionMode,
+      })
+      service.sessions.set(sessionId, {
+        providerId: options.providerId ?? null,
+        model: options.model ?? null,
+        workDir,
+        permissionMode: options.permissionMode ?? 'default',
+        proc: { kill: () => undefined, exited: Promise.resolve(0) },
+        outputDrain: Promise.resolve(),
+      })
+    }
+    const buildSession = (providerId: string | null) => ({
+      providerId,
+      model: providerId ? 'deepseek-v4-pro' : null,
+      workDir: `/tmp/${providerId ?? 'official'}`,
+      permissionMode: 'default',
+      proc: {
+        kill: () => killed.push(providerId ?? 'official'),
+        exited: Promise.resolve(143),
+      },
+      outputDrain: Promise.resolve(),
+    })
+    service.sessions.set('gmaster-session', buildSession('managed-gmaster-api'))
+    service.sessions.set('custom-session', buildSession('custom-provider'))
+
+    const stopped = await service.restartSessionsUsingProvider('managed-gmaster-api')
+
+    expect(stopped).toEqual(['gmaster-session'])
+    expect(killed).toEqual(['managed-gmaster-api'])
+    expect(service.hasSession('gmaster-session')).toBe(true)
+    expect(service.hasSession('custom-session')).toBe(true)
+    expect(restarted).toEqual([{
+      sessionId: 'gmaster-session',
+      workDir: '/tmp/managed-gmaster-api',
+      providerId: 'managed-gmaster-api',
+      model: 'deepseek-v4-pro',
+      permissionMode: 'default',
+    }])
+  })
+
+  test('buildChildEnv uses the session-selected model for session-scoped providers', async () => {
+    const providerService = new ProviderService()
+    const provider = await providerService.addProvider({
+      presetId: 'custom',
+      name: 'Switchable',
+      apiKey: 'provider-key',
+      baseUrl: 'https://api.switchable.example',
+      apiFormat: 'openai_chat',
+      models: {
+        main: 'old-provider-main',
+        haiku: 'new-provider-haiku',
+        sonnet: 'new-provider-sonnet',
+        opus: 'new-provider-opus',
+      },
+    })
+
+    const service = new ConversationService() as any
+    const env = (await service.buildChildEnv('/tmp', undefined, {
+      providerId: provider.id,
+      model: 'new-provider-sonnet',
+    })) as Record<string, string>
+
+    expect(env.ANTHROPIC_BASE_URL).toBe(`http://127.0.0.1:3456/proxy/providers/${provider.id}`)
+    expect(env.ANTHROPIC_MODEL).toBe('new-provider-sonnet')
+  })
+
+  test('buildChildEnv preserves provider default env and clears stale api keys for bearer-token providers', async () => {
+    const providerService = new ProviderService()
+    const provider = await providerService.addProvider({
+      presetId: 'deepseek',
+      name: 'DeepSeek',
+      apiKey: 'provider-key',
+      baseUrl: 'https://api.deepseek.com/anthropic',
+      apiFormat: 'anthropic',
+      models: {
+        main: 'deepseek-v4-pro',
+        haiku: 'deepseek-v4-flash',
+        sonnet: 'deepseek-v4-pro',
+        opus: 'deepseek-v4-pro',
+      },
+    })
+
+    const service = new ConversationService() as any
+    const env = (await service.buildChildEnv('/tmp', undefined, {
+      providerId: provider.id,
+      model: 'deepseek-v4-pro',
+    })) as Record<string, string>
+
+    expect(env.ANTHROPIC_BASE_URL).toBe('https://api.deepseek.com/anthropic')
+    expect(env.ANTHROPIC_AUTH_TOKEN).toBe('provider-key')
+    expect(env.ANTHROPIC_API_KEY).toBe('')
+    expect(env.ANTHROPIC_MODEL).toBe('deepseek-v4-pro')
+    expect(env.GASTER_CODE_SEND_DISABLED_THINKING).toBe('1')
+  })
+
+  test('buildChildEnv can force official auth even when a custom default provider exists', async () => {
+    const gasterDir = path.join(tmpDir, 'gaster-code')
+    await fs.mkdir(gasterDir, { recursive: true })
+    await fs.writeFile(
+      path.join(gasterDir, 'settings.json'),
+      JSON.stringify({ env: { ANTHROPIC_AUTH_TOKEN: 'custom-provider-token' } }),
+      'utf-8',
+    )
+
+    const { gasterOAuthService } = await import('../services/gasterOAuthService.js')
+    await gasterOAuthService.saveTokens({
+      accessToken: 'forced-official-token',
+      refreshToken: 'forced-official-refresh',
+      expiresAt: Date.now() + 30 * 60_000,
+      scopes: ['user:inference'],
+      subscriptionType: 'max',
+    })
+
+    const service = new ConversationService() as any
+    const env = (await service.buildChildEnv('/tmp', undefined, {
+      providerId: null,
+    })) as Record<string, string>
+
+    expect(env.ANTHROPIC_API_KEY).toBeUndefined()
+    expect(env.CLAUDE_CODE_ENTRYPOINT).toBe('claude-desktop')
+    expect(env.CLAUDE_CODE_OAUTH_TOKEN).toBe('forced-official-token')
+  })
+
+  test('buildChildEnv does not leak inherited CLAUDE_CODE_OAUTH_TOKEN when official token is unavailable', async () => {
+    const gasterDir = path.join(tmpDir, 'gaster-code')
+    await fs.mkdir(gasterDir, { recursive: true })
+    await fs.writeFile(
+      path.join(gasterDir, 'settings.json'),
+      JSON.stringify({ env: {} }),
+      'utf-8',
+    )
+
+    const service = new ConversationService() as any
+    const env = (await service.buildChildEnv('/tmp')) as Record<string, string>
+
+    expect(env.CLAUDE_CODE_ENTRYPOINT).toBe('claude-desktop')
+    expect(env.CLAUDE_CODE_OAUTH_TOKEN).toBeUndefined()
+  })
+
+  test('buildChildEnv injects desktop Computer Use host bundle id for sdk sessions', async () => {
+    const service = new ConversationService() as any
+    const env = (await service.buildChildEnv(
+      '/tmp',
+      'ws://127.0.0.1:3456/sdk/test-session?token=test-token',
+    )) as Record<string, string>
+
+    expect(env.GASTER_CODE_COMPUTER_USE_HOST_BUNDLE_ID).toBe(
+      'com.gaster-code.desktop',
+    )
+    expect(env.GASTER_CODE_DESKTOP_SERVER_URL).toBe('http://127.0.0.1:3456')
+    expect(env.CLAUDE_CODE_ENABLE_SDK_FILE_CHECKPOINTING).toBe('1')
+  })
+
+  test('uses bun entrypoint fallback on Windows dev mode', () => {
+    const service = new ConversationService() as any
+    const args = service.resolveCliArgs(['--print'])
+
+    if (process.platform === 'win32') {
+      expect(args[0]).toBe(process.execPath)
+      expect(args[1]).toBe('--preload')
+      expect(args[2]).toContain('preload.ts')
+      expect(args[3]).toContain(path.join('src', 'entrypoints', 'cli.tsx'))
+    } else {
+      expect(args[0]).toContain(path.join('bin', 'gaster-code'))
+    }
+  })
+
+  test('buildSessionCliArgs enables partial assistant messages for desktop streaming', () => {
+    const service = new ConversationService() as any
+    const args = service.buildSessionCliArgs(
+      '123e4567-e89b-12d3-a456-426614174000',
+      'ws://127.0.0.1:3456/sdk/test-session?token=test-token',
+      false,
+      { permissionMode: 'bypassPermissions' },
+    ) as string[]
+
+    expect(args).toContain('--include-partial-messages')
+    expect(args).toContain('--sdk-url')
+    expect(args).toContain('--replay-user-messages')
+  })
+
+  test('buildChildEnv asks desktop SDK sessions to wait briefly for MCP tools', async () => {
+    const service = new ConversationService() as any
+    const env = (await service.buildChildEnv(
+      '/tmp',
+      'ws://127.0.0.1:3456/sdk/test-session?token=test-token',
+    )) as Record<string, string>
+
+    expect(env.GASTER_CODE_DESKTOP_AWAIT_MCP).toBe('1')
+    expect(env.GASTER_CODE_DESKTOP_AWAIT_MCP_TIMEOUT_MS).toBe('5000')
+  })
+
+  test('buildSessionCliArgs forwards the selected runtime model and effort to the CLI process', () => {
+    const service = new ConversationService() as any
+    const args = service.buildSessionCliArgs(
+      '123e4567-e89b-12d3-a456-426614174000',
+      'ws://127.0.0.1:3456/sdk/test-session?token=test-token',
+      false,
+      {
+        model: 'model-b-opus',
+        effort: 'max',
+      },
+    ) as string[]
+
+    expect(args).toContain('--model')
+    expect(args).toContain('model-b-opus')
+    expect(args).toContain('--effort')
+    expect(args).toContain('max')
+  })
+
+  test('buildSessionCliArgs starts pending desktop worktrees through the native CLI flag', () => {
+    const service = new ConversationService() as any
+    const args = service.buildSessionCliArgs(
+      '123e4567-e89b-12d3-a456-426614174000',
+      'ws://127.0.0.1:3456/sdk/test-session?token=test-token',
+      false,
+      undefined,
+      {
+        requestedWorkDir: '/tmp/source-repo',
+        repoRoot: '/tmp/source-repo',
+        branch: 'feature/rail',
+        worktree: true,
+        baseRef: 'feature/rail',
+        worktreeSlug: 'desktop-feature-rail-123e4567',
+      },
+    ) as string[]
+
+    expect(args).toContain('--worktree')
+    expect(args).toContain('desktop-feature-rail-123e4567')
+    expect(args).toContain('--worktree-base-ref')
+    expect(args).toContain('feature/rail')
+  })
+})
