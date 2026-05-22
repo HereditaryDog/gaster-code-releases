@@ -33,7 +33,7 @@
 
 ## 项目说明
 
-Gaster Code 现在是一个公开维护的开源项目。当前稳定版本为 **v1.0.1**，源码、发布说明、安装包和 updater metadata 都在本仓库维护。
+Gaster Code 现在是一个公开维护的开源项目。当前源码补丁版本为 **v1.0.1**，已包含绘图复杂提示词超时修复；当前可下载安装包仍为 **v1.0.0**。
 
 **来源透明说明：** 本项目的代码基础来自 Claude Code 泄露源码的社区整理与研究，产品形态和二次开发灵感来自 `cc-haha` 项目。Gaster Code 不是 Anthropic、Claude Code 或 `cc-haha` 的官方项目，也不与上述项目或组织存在官方关联。
 
@@ -41,17 +41,19 @@ Gaster Code 现在是一个公开维护的开源项目。当前稳定版本为 *
 
 ## 下载
 
-最新版本：**v1.0.1**
+当前可下载安装包：**v1.0.0**
 
-- [GitHub Release](https://github.com/HereditaryDog/gaster-code-releases/releases/tag/v1.0.1)
+- [GitHub Release](https://github.com/HereditaryDog/gaster-code-releases/releases/latest)
 - [latest.json](https://github.com/HereditaryDog/gaster-code-releases/releases/latest/download/latest.json)
 
 | 平台 | 安装包 |
 | --- | --- |
-| macOS Apple Silicon | `Gaster-Code_1.0.1_macos_arm64_dmg.dmg` |
-| macOS Intel | `Gaster-Code_1.0.1_macos_x64_dmg.dmg` |
-| Windows x64 | `Gaster-Code_1.0.1_windows_x64_nsis.exe` |
-| Linux x64 | `Gaster-Code_1.0.1_linux_x64_deb.deb` |
+| macOS Apple Silicon | `Gaster-Code_1.0.0_macos_arm64_dmg.dmg` |
+| macOS Intel | `Gaster-Code_1.0.0_macos_x64_dmg.dmg` |
+| Windows x64 | `Gaster-Code_1.0.0_windows_x64_nsis.exe` |
+| Linux x64 | `Gaster-Code_1.0.0_linux_x64_deb.deb` |
+
+`v1.0.1` 代码和文档已推送到 `main` 与 `v1.0.1` tag。安装包发布需要公共仓库配置 Tauri updater 签名私钥，或私有源码仓库 Actions 付款/额度恢复后由私有仓库签名并同步到本仓库。
 
 macOS 首次运行如果提示无法打开，可以在终端执行：
 
@@ -154,7 +156,7 @@ scripts/    发布、质量检查和辅助脚本
 
 ## 发布与更新
 
-桌面端发布使用 `.github/workflows/release-desktop.yml` 构建 macOS ARM64、macOS x64、Windows x64 和 Linux x64 安装包。正式安装包会发布到本仓库的 GitHub Releases，并通过 `latest.json` 提供给桌面端 updater。
+桌面端发布使用 `.github/workflows/release-desktop.yml` 构建 macOS ARM64、macOS x64、Windows x64 和 Linux x64 安装包。正式安装包会发布到本仓库的 GitHub Releases，并通过 `latest.json` 提供给桌面端 updater。生成 updater metadata 需要 `TAURI_SIGNING_PRIVATE_KEY` 和 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`。
 
 本地 Apple Silicon 测试打包入口：
 

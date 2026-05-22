@@ -33,7 +33,7 @@
 
 ## Project Note
 
-Gaster Code is now maintained as a public open-source project. The current stable version is **v1.0.1**, with source code, release notes, installers, and updater metadata maintained in this repository.
+Gaster Code is now maintained as a public open-source project. The current source hotfix version is **v1.0.1** and includes the complex-prompt Drawing timeout fix; the current downloadable installer release is still **v1.0.0**.
 
 **Source transparency note:** this project is based on community research and organization of leaked Claude Code source code, with product and development inspiration from the `cc-haha` project. Gaster Code is not an official Anthropic, Claude Code, or `cc-haha` project, and is not affiliated with those projects or organizations.
 
@@ -41,17 +41,19 @@ The repository is public so developers can inspect the code, reproduce the build
 
 ## Download
 
-Latest version: **v1.0.1**
+Current downloadable installer release: **v1.0.0**
 
-- [GitHub Release](https://github.com/HereditaryDog/gaster-code-releases/releases/tag/v1.0.1)
+- [GitHub Release](https://github.com/HereditaryDog/gaster-code-releases/releases/latest)
 - [latest.json](https://github.com/HereditaryDog/gaster-code-releases/releases/latest/download/latest.json)
 
 | Platform | Installer |
 | --- | --- |
-| macOS Apple Silicon | `Gaster-Code_1.0.1_macos_arm64_dmg.dmg` |
-| macOS Intel | `Gaster-Code_1.0.1_macos_x64_dmg.dmg` |
-| Windows x64 | `Gaster-Code_1.0.1_windows_x64_nsis.exe` |
-| Linux x64 | `Gaster-Code_1.0.1_linux_x64_deb.deb` |
+| macOS Apple Silicon | `Gaster-Code_1.0.0_macos_arm64_dmg.dmg` |
+| macOS Intel | `Gaster-Code_1.0.0_macos_x64_dmg.dmg` |
+| Windows x64 | `Gaster-Code_1.0.0_windows_x64_nsis.exe` |
+| Linux x64 | `Gaster-Code_1.0.0_linux_x64_deb.deb` |
+
+`v1.0.1` source and docs are pushed to `main` and the `v1.0.1` tag. Installer publication requires the public repository to have the Tauri updater signing secrets, or the private source repository Actions billing/capacity to recover so the private repository can sign and sync assets here.
 
 If macOS blocks the first launch, run:
 
@@ -154,7 +156,7 @@ scripts/    Release, quality-gate, and helper scripts
 
 ## Release And Updates
 
-Desktop releases are built by `.github/workflows/release-desktop.yml` for macOS ARM64, macOS x64, Windows x64, and Linux x64. Installers are published to this repository's GitHub Releases, and `latest.json` powers the desktop updater.
+Desktop releases are built by `.github/workflows/release-desktop.yml` for macOS ARM64, macOS x64, Windows x64, and Linux x64. Installers are published to this repository's GitHub Releases, and `latest.json` powers the desktop updater. Generating updater metadata requires `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`.
 
 Local Apple Silicon test packaging:
 
