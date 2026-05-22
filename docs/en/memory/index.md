@@ -114,8 +114,8 @@ All illustrations use a dark background (#1a1a2e) + Anthropic brand copper-orang
 ## Related Resources
 
 - [Gaster Code Home](/en/)
-- [Memory system source code](https://github.com/HereditaryDog/gaster-code/tree/main/src/memdir/)
-- [Auto-extraction service](https://github.com/HereditaryDog/gaster-code/tree/main/src/services/extractMemories/)
-- [AutoDream service](https://github.com/HereditaryDog/gaster-code/tree/main/src/services/autoDream/)
-- [DreamTask](https://github.com/HereditaryDog/gaster-code/tree/main/src/tasks/DreamTask/)
-- [GitHub Issues](https://github.com/HereditaryDog/gaster-code/issues)
+- [Memory system source code](https://github.com/HereditaryDog/gaster-code-releases/tree/main/src/memdir/)
+- [Auto-extraction service](https://github.com/HereditaryDog/gaster-code-releases/tree/main/src/services/extractMemories/)
+- [AutoDream service](https://github.com/HereditaryDog/gaster-code-releases/tree/main/src/services/autoDream/)
+- [DreamTask](https://github.com/HereditaryDog/gaster-code-releases/tree/main/src/tasks/DreamTask/)
+- [GitHub Issues](https://github.com/HereditaryDog/gaster-code-releases/issues)

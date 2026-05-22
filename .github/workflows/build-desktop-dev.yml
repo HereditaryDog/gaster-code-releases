@@ -61,7 +61,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       # ── 读取版本号 ───────────────────────────────────────────
       - name: Read version
@@ -94,7 +94,7 @@ jobs:
 
       # ── Node.js ──────────────────────────────────────────────
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 20
 
@@ -221,7 +221,7 @@ jobs:
 
       # ── 上传为 GitHub Artifact ───────────────────────────────
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: Gaster-Code-v${{ steps.version.outputs.version }}-${{ matrix.artifact_name }}
           path: ${{ steps.collect.outputs.staging_dir }}

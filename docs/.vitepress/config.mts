@@ -222,7 +222,7 @@ export default withMermaid(defineConfig({
       description: 'A locally runnable AI coding assistant with G-Master API, custom providers, desktop workspaces, and optional remote access.',
       themeConfig: {
         editLink: {
-          pattern: 'https://github.com/HereditaryDog/gaster-code/edit/main/docs/:path',
+          pattern: 'https://github.com/HereditaryDog/gaster-code-releases/edit/main/docs/:path',
           text: 'Edit this page on GitHub',
         },
         nav: [
@@ -236,14 +236,14 @@ export default withMermaid(defineConfig({
 
   themeConfig: {
     editLink: {
-      pattern: 'https://github.com/HereditaryDog/gaster-code/edit/main/docs/:path',
+      pattern: 'https://github.com/HereditaryDog/gaster-code-releases/edit/main/docs/:path',
       text: '在 GitHub 上编辑此页',
     },
     search: {
       provider: 'local',
     },
     socialLinks: [
-      { icon: 'github', link: 'https://github.com/HereditaryDog/gaster-code' },
+      { icon: 'github', link: 'https://github.com/HereditaryDog/gaster-code-releases' },
     ],
     footer: {
       message: 'Released under the MIT License.',
