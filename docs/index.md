@@ -3,23 +3,26 @@ layout: home
 
 hero:
   name: Gaster Code
-  text: 本地可运行的 AI 编码助手
-  tagline: 桌面端包含可信 H5 访问、会话批量整理、Git 感知文件引用和第三方 Skills / Agents 可见性修复
+  text: 公开维护的本地 AI 编码助手
+  tagline: v1.0.0 已公开发布，包含 CLI / TUI、桌面端、多会话工作区、MCP、Skills、Agents、远程适配器和自动化任务
   image:
     src: /images/logo-horizontal.png
     alt: Gaster Code
   actions:
     - theme: brand
+      text: 下载 v1.0.0
+      link: https://github.com/HereditaryDog/gaster-code-releases/releases/latest
+    - theme: alt
       text: 快速开始
       link: /guide/quick-start
     - theme: alt
-      text: 下载
-      link: https://github.com/HereditaryDog/gaster-code-releases/releases
+      text: GitHub
+      link: https://github.com/HereditaryDog/gaster-code-releases
 
 features:
   - icon: "\U0001F5A5"
-    title: 完整 TUI 交互
-    details: Gaster Code Ink 终端界面，支持 --print 无头模式
+    title: CLI / TUI / 桌面端
+    details: 终端工作流、无头模式和 Tauri 2 + React 桌面端在同一个公开源码项目里维护
   - icon: "\U0001F9E0"
     title: 记忆系统
     details: 跨会话持久化记忆，自动提取、智能检索、AutoDream 做梦整合
@@ -42,10 +45,22 @@ features:
     link: /im/
   - icon: "\U0001F4BB"
     title: Computer Use
-    details: 桌面控制功能 — 截屏、鼠标、键盘操作（Python Bridge 实现）
+    details: 桌面控制功能，包括截屏、鼠标、键盘操作和 Python Bridge
     link: /features/computer-use
-  - icon: "\U0001F5A5"
-    title: 桌面端
-    details: 基于 Tauri 2 + React 的图形化客户端，多标签、多会话、工作区文件面板、H5 访问、批量整理和 GPT Image 2 绘图
-    link: /desktop/
+  - icon: "\U0001F4E6"
+    title: 公开发布
+    details: v1.0.0 起源码、安装包、release notes 和 updater metadata 都在公开仓库维护
+    link: https://github.com/HereditaryDog/gaster-code-releases/releases/latest
 ---
+
+## 来源透明说明
+
+Gaster Code 的代码基础来自 Claude Code 泄露源码的社区整理与研究，产品形态和二次开发灵感来自 `cc-haha` 项目。Gaster Code 不是 Anthropic、Claude Code 或 `cc-haha` 的官方项目，也不与上述项目或组织存在官方关联。
+
+这个仓库从 **v1.0.0** 开始公开维护，目标是让开发者可以审查源码、复现构建、提交修复，并继续改进本地 AI 编码助手的桌面体验、模型接入、自动化任务和扩展系统。
+
+## 当前版本
+
+- 最新版本：[Gaster Code v1.0.0](https://github.com/HereditaryDog/gaster-code-releases/releases/tag/v1.0.0)
+- 更新元数据：[latest.json](https://github.com/HereditaryDog/gaster-code-releases/releases/latest/download/latest.json)
+- 公开源码：[HereditaryDog/gaster-code-releases](https://github.com/HereditaryDog/gaster-code-releases)

@@ -5,6 +5,7 @@ import path from 'node:path'
 
 const root = path.resolve(import.meta.dir, '..', '..')
 const doubleHa = 'ha' + 'ha'
+const oldShortProjectName = ['cc', doubleHa].join('-')
 const oldOwner = 'nan' + 'mi'
 const oldEnvPrefix = ['CC', doubleHa.toUpperCase()].join('_')
 const gasterLegacyEnv = ['GASTER', 'CODE', 'LEGACY'].join('_')
@@ -69,6 +70,13 @@ type Finding = {
   match: string
 }
 
+const sourceTransparencyFiles = new Set([
+  'README.md',
+  'README.en.md',
+  'docs/index.md',
+  'docs/en/index.md',
+])
+
 const findings: Finding[] = []
 const files = new Set<string>()
 
@@ -104,9 +112,12 @@ for (const file of [...files].sort()) {
   for (const entry of banned) {
     const match = entry.pattern.exec(content)
     if (!match) continue
+    const line = lineNumberForIndex(content, match.index)
+    const lineText = lineTextForIndex(content, match.index)
+    if (isAllowedSourceTransparencyMention(rel, entry.label, lineText)) continue
     findings.push({
       file: rel,
-      line: lineNumberForIndex(content, match.index),
+      line,
       label: entry.label,
       match: match[0],
     })
@@ -204,10 +215,29 @@ function extractPrintableStrings(buffer: Buffer): string {
   return strings.join('\n')
 }
 
+function isAllowedSourceTransparencyMention(rel: string, label: string, lineText: string): boolean {
+  const normalized = rel.split(path.sep).join('/')
+  if (!sourceTransparencyFiles.has(normalized)) return false
+  if (label !== 'legacy short source-project brand' && label !== 'legacy bare nickname') {
+    return false
+  }
+  const normalizedLine = lineText.toLowerCase()
+  return (
+    normalizedLine.includes(oldShortProjectName) &&
+    (normalizedLine.includes('inspiration from') || normalizedLine.includes('claude code'))
+  )
+}
+
 function lineNumberForIndex(content: string, index: number): number {
   let line = 1
   for (let i = 0; i < index; i += 1) {
     if (content.charCodeAt(i) === 10) line += 1
   }
   return line
+}
+
+function lineTextForIndex(content: string, index: number): string {
+  const start = content.lastIndexOf('\n', index - 1) + 1
+  const end = content.indexOf('\n', index)
+  return content.slice(start, end === -1 ? content.length : end)
 }

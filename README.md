@@ -1,61 +1,76 @@
 # Gaster Code
 
 <p align="center">
-  <img src="docs/images/gaster-code-readme-logo.svg" alt="Gaster Code" width="220">
+  <img src="docs/images/banner.svg" alt="Gaster Code" width="760">
 </p>
 
 <div align="center">
 
-[![GitHub Stars](https://img.shields.io/github/stars/HereditaryDog/gaster-code?style=social)](https://github.com/HereditaryDog/gaster-code/stargazers)
-[![GitHub Forks](https://img.shields.io/github/forks/HereditaryDog/gaster-code?style=social)](https://github.com/HereditaryDog/gaster-code/network/members)
-[![GitHub Issues](https://img.shields.io/github/issues/HereditaryDog/gaster-code)](https://github.com/HereditaryDog/gaster-code/issues)
-[![GitHub Pull Requests](https://img.shields.io/github/issues-pr/HereditaryDog/gaster-code)](https://github.com/HereditaryDog/gaster-code/pulls)
-[![License](https://img.shields.io/github/license/HereditaryDog/gaster-code)](https://github.com/HereditaryDog/gaster-code/blob/main/LICENSE)
-[![Current Version](https://img.shields.io/badge/version-V%200.2.8--gastercode.2-blue)](release-notes/v0.2.8-gastercode.2.md)
-[![中文](https://img.shields.io/badge/中文-当前-blue)](README.md)
-[![English](https://img.shields.io/badge/English-Available-green)](README.en.md)
+[![Latest Release](https://img.shields.io/github/v/release/HereditaryDog/gaster-code-releases?label=release&color=2563eb)](https://github.com/HereditaryDog/gaster-code-releases/releases/latest)
+[![Downloads](https://img.shields.io/badge/download-macOS%20%7C%20Windows%20%7C%20Linux-22c55e)](https://github.com/HereditaryDog/gaster-code-releases/releases/latest)
+[![License](https://img.shields.io/github/license/HereditaryDog/gaster-code-releases?color=111827)](LICENSE)
+[![Issues](https://img.shields.io/github/issues/HereditaryDog/gaster-code-releases?color=f97316)](https://github.com/HereditaryDog/gaster-code-releases/issues)
+[![Pull Requests](https://img.shields.io/github/issues-pr/HereditaryDog/gaster-code-releases?color=8b5cf6)](https://github.com/HereditaryDog/gaster-code-releases/pulls)
+[![中文](https://img.shields.io/badge/README-中文-blue)](README.md)
+[![English](https://img.shields.io/badge/README-English-green)](README.en.md)
 
 </div>
 
-Gaster Code 是一个面向本地开发场景的 AI 编码助手，提供命令行/TUI、图形化桌面端、多会话工作区、MCP 集成、自动化任务和远程适配能力，适合在真实代码仓库里完成修改、调试、审查和日常开发协作。
-
-> 当前稳定版本：**V 0.2.8-gastercode.2**。这个版本在 0.2.8 功能基础上优化会话切换性能，减少历史会话切回时的重复任务列表、变更卡片和工作区状态请求，让多会话切换更轻快。
+<p align="center">
+  <strong>本地可运行的 AI 编码助手。</strong><br>
+  CLI / TUI、桌面端、多会话工作区、MCP、Skills、Agents、远程适配器和自动化任务集中在一个公开项目里。
+</p>
 
 <p align="center">
-  <a href="#功能">功能</a> ·
+  <a href="#下载">下载</a> ·
   <a href="#快速开始">快速开始</a> ·
-  <a href="#桌面端联调">桌面端联调</a> ·
-  <a href="#打包与发布">打包与发布</a> ·
-  <a href="#文档索引">文档索引</a>
+  <a href="#能力概览">能力概览</a> ·
+  <a href="#项目说明">项目说明</a> ·
+  <a href="#参与开发">参与开发</a>
 </p>
 
 ---
 
-## 功能
+## 项目说明
 
-- CLI / TUI 交互界面，适合终端内直接完成编码任务
-- Tauri 2 + React 桌面端，支持多标签、多会话、工作区文件面板和多工作区管理
-- Codex 风格深色界面，使用蓝色作为品牌强调色
-- G-Master API 网页授权登录，登录后自动写入官方默认服务商
-- 通过 G-Master API 接入 GPT Image 2 绘图
-- 自定义模型提供商、鉴权变量、模型上下文窗口和端点映射
-- 插件、Skills、Agents 支持刷新后重新扫描用户、项目、外部安装区域
-- H5 手机浏览器访问，可通过局域网或自有反向代理连接桌面端服务，并支持 Token 与允许来源控制
-- 会话批量整理，支持选择多个历史会话后统一确认删除
-- `@` 文件和目录引用，优先使用 Git 感知搜索并遵守 ignore 规则
-- 可调整侧边栏宽度，桌面端字体和导航层级针对长期开发使用优化
-- Project Memory 可视化管理，支持在设置页查看、编辑和预览项目记忆文件
-- 侧边栏可直接用可用 IDE 或文件管理器打开当前项目
-- 本地 Token 用量 / 活动统计，便于查看会话、模型和工具使用趋势
-- 回复语言设置，可独立于界面语言指定模型回复语言
-- MCP、插件、Skills 扩展机制，支持识别斜杠命令包装的外部 Skill
-- 多 Agent / Teams 协作能力，支持刷新显示用户安装的 Agent
-- 定时任务、桌面通知、自动化执行与任务跟踪
-- Computer Use 桌面控制能力，支持自定义 Python 解释器
-- Telegram、飞书、微信、钉钉远程控制适配器
-- 诊断导出、最近错误、日志目录打开和上下文用量显示
+Gaster Code 现在是一个公开维护的开源项目。当前公开首发版本为 **v1.0.0**，源码、发布说明、安装包和 updater metadata 都在本仓库维护。
 
----
+**来源透明说明：** 本项目的代码基础来自 Claude Code 泄露源码的社区整理与研究，产品形态和二次开发灵感来自 `cc-haha` 项目。Gaster Code 不是 Anthropic、Claude Code 或 `cc-haha` 的官方项目，也不与上述项目或组织存在官方关联。
+
+我们公开这个仓库，是为了让更多开发者能够审查代码、复现实验、提交修复，并围绕本地 AI 编码助手继续做可用性、模型接入、桌面体验和自动化能力的改进。
+
+## 下载
+
+最新版本：**v1.0.0**
+
+- [GitHub Release](https://github.com/HereditaryDog/gaster-code-releases/releases/tag/v1.0.0)
+- [latest.json](https://github.com/HereditaryDog/gaster-code-releases/releases/latest/download/latest.json)
+
+| 平台 | 安装包 |
+| --- | --- |
+| macOS Apple Silicon | `Gaster-Code_1.0.0_macos_arm64_dmg.dmg` |
+| macOS Intel | `Gaster-Code_1.0.0_macos_x64_dmg.dmg` |
+| Windows x64 | `Gaster-Code_1.0.0_windows_x64_nsis.exe` |
+| Linux x64 | `Gaster-Code_1.0.0_linux_x64_deb.deb` |
+
+macOS 首次运行如果提示无法打开，可以在终端执行：
+
+```bash
+xattr -cr /Applications/Gaster\ Code.app
+```
+
+## 能力概览
+
+| 方向 | 能力 |
+| --- | --- |
+| 本地编码 | CLI / TUI、无头模式、工具调用、权限确认、Git 感知文件引用 |
+| 桌面端 | Tauri 2 + React、多标签、多会话、工作区文件面板、会话批量整理 |
+| 模型接入 | G-Master API 默认接入，也支持 OpenAI、DeepSeek、Ollama 等兼容模型 |
+| 扩展系统 | MCP、插件、Skills、Agents、斜杠命令和用户安装目录扫描 |
+| 自动化 | 定时任务、桌面通知、任务跟踪、多 Agent / Teams 协作 |
+| 远程控制 | Telegram、飞书、微信、钉钉适配器，支持远程对话和权限处理 |
+| 多端访问 | H5 手机浏览器访问，支持 Token 和允许来源控制 |
+| 诊断与数据 | 诊断导出、最近错误、日志目录、本地 Token 用量和活动统计 |
 
 ## 快速开始
 
@@ -78,7 +93,7 @@ powershell -c "irm bun.sh/install.ps1 | iex"
 bun install
 ```
 
-如果你会使用桌面端或适配器，建议一并安装：
+如果你要运行桌面端或远程适配器，继续安装对应依赖：
 
 ```bash
 cd desktop && bun install
@@ -92,7 +107,7 @@ cd ..
 cp .env.example .env
 ```
 
-然后按需编辑 `.env`，填入模型服务、鉴权和本地运行需要的配置。
+按需填写模型服务、鉴权和本地运行配置。
 
 ### 4. 启动 CLI
 
@@ -106,140 +121,76 @@ bun run start
 bun run start -- -p "summarize this repository"
 ```
 
----
+## 桌面端开发
 
-## 桌面端联调
-
-桌面端开发时，需要同时启动本地 API 服务和前端。
-
-### 启动本地 API 服务
+桌面端开发需要同时启动本地 API 服务和前端。
 
 ```bash
 SERVER_PORT=3456 bun run src/server/index.ts
 ```
 
-Windows PowerShell:
-
-```powershell
-$env:SERVER_PORT = "3456"
-bun run src/server/index.ts
-```
-
-健康检查：
-
-```bash
-curl http://127.0.0.1:3456/health
-```
-
-### 启动桌面前端
+另开一个终端：
 
 ```bash
 cd desktop
 bun run dev --host 127.0.0.1 --port 2024
 ```
 
-浏览器访问：
+打开：
 
 ```text
 http://127.0.0.1:2024
 ```
 
----
+## 项目结构
 
-## 打包与发布
-
-当前桌面版本：`V 0.2.8-gastercode.2`。
-
-### Windows
-
-本地脚本：
-
-```powershell
-cd desktop
-powershell -ExecutionPolicy Bypass -File .\scripts\build-windows-x64.ps1
+```text
+src/        CLI、TUI、本地服务、工具和核心逻辑
+desktop/    Tauri 桌面端、React 前端、原生打包配置
+adapters/   Telegram、飞书、微信、钉钉等远程适配器
+docs/       使用文档、架构说明和功能指南
+scripts/    发布、质量检查和辅助脚本
 ```
 
-当前仓库也提供 GitHub Actions 开发构建：
+## 发布与更新
 
-- Workflow: `.github/workflows/build-desktop-dev.yml`
-- Windows 产物：MSI 安装包
+桌面端发布使用 `.github/workflows/release-desktop.yml` 构建 macOS ARM64、macOS x64、Windows x64 和 Linux x64 安装包。正式安装包会发布到本仓库的 GitHub Releases，并通过 `latest.json` 提供给桌面端 updater。
 
-### 公开安装包
-
-下载公开安装包：
-
-- GitHub Releases: https://github.com/HereditaryDog/gaster-code-releases/releases
-
-| 平台 | 安装包 |
-|------|--------|
-| macOS Apple Silicon | `Gaster-Code_0.2.8-gastercode.2_macos_arm64_dmg.dmg` |
-| macOS Intel | `Gaster-Code_0.2.8-gastercode.2_macos_x64_dmg.dmg` |
-| Windows x64 | `Gaster-Code_0.2.8-gastercode.2_windows_x64_nsis.exe` |
-| Linux x64 | `Gaster-Code_0.2.8-gastercode.2_linux_x64_deb.deb` |
-
-### macOS
-
-安装步骤：
-
-1. 双击 `.dmg` 文件，将 `Gaster Code.app` 拖入 `Applications`
-2. 首次打开时，进入 `Applications`，右键点击 `Gaster Code.app`，选择「打开」，在弹窗中点击「打开」，仅需操作一次
-3. 如果提示「已损坏，无法打开」，在终端执行：
-
-```bash
-xattr -cr /Applications/Gaster\ Code.app
-```
-
-如果仍然打不开，可以再执行一次带管理员权限的命令：
-
-```bash
-sudo xattr -cr /Applications/Gaster\ Code.app
-```
-
-> 当前内部测试包暂未进行 Apple Developer ID 公证，macOS 可能会阻止首次运行。右键打开或移除隔离属性后即可正常使用。
-
-本地 Apple Silicon 打包脚本：
+本地 Apple Silicon 测试打包入口：
 
 ```bash
 ./desktop/scripts/build-macos-arm64.sh
 ```
 
-该脚本需要在 macOS arm64 主机上运行。
+## 文档
 
-### 正式发布
-
-正式桌面发布走：
-
-```text
-.github/workflows/release-desktop.yml
-```
-
-它会根据 tag 版本构建 macOS ARM64、macOS x64、Windows x64 和 Linux x64 桌面产物，主仓库保持私有，最终安装包和 `latest.json` 会同步到公开的 `HereditaryDog/gaster-code-releases` release-only 仓库，供桌面端 updater 访问。Linux ARM64 可以在手动发布工作流中按需启用。当前版本发布说明见 [release-notes/v0.2.8-gastercode.2.md](release-notes/v0.2.8-gastercode.2.md)。
-
----
-
-## 文档索引
-
+- [快速开始](docs/guide/quick-start.md)
 - [环境变量](docs/guide/env-vars.md)
 - [FAQ](docs/guide/faq.md)
-- [全局使用](docs/guide/global-usage.md)
 - [桌面端文档](docs/desktop/)
-- [前端开发规范](docs/frontend-development-guidelines.md)
 - [IM 接入](docs/im/)
-- [MCP 与扩展能力](docs/skills/01-usage-guide.md)
-- [多 Agent / Teams](docs/agent/01-usage-guide.md)
+- [MCP 与 Skills](docs/skills/01-usage-guide.md)
+- [多 Agent / Teams](docs/agent/)
 - [Computer Use](docs/features/computer-use.md)
 - [项目结构](docs/reference/project-structure.md)
 
-## 仓库结构
+## 参与开发
 
-- `src/`: CLI、TUI、服务端、工具与核心逻辑
-- `desktop/`: 桌面端前端与 Tauri 打包工程
-- `adapters/`: 远程适配器
-- `docs/`: 使用文档与设计说明
-- `scripts/`: 发布和辅助脚本
+欢迎提交 issue、PR、复现步骤、平台兼容性反馈和文档修正。适合优先处理的方向包括：
+
+- 公开仓库文档和安装体验
+- 桌面端首次启动、更新、诊断和错误恢复
+- 模型提供商接入与配置体验
+- Skills、Agents、MCP 和远程适配器的可用性
+- 自动化任务、Teams 协作和多工作区流程
+
+提交前建议运行：
+
+```bash
+bun run check:brand
+bun run quality:pr
+```
 
 ---
 
-## 说明
-
-本仓库当前以实际可运行、可打包、可继续二次开发为目标维护。若你在使用中发现界面文案、打包元数据或工作流仍有残留不一致，可以直接提 issue 或提交修复。
+Gaster Code 的目标不是做一个展示页，而是维护一个能真正运行、能打包、能继续二次开发的本地 AI 编码助手。
