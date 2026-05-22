@@ -14,6 +14,10 @@ const GMASTER_API_BASE_URL = 'https://gmapi.fun'
 const GMASTER_IMAGE_MODEL = 'gpt-image-2'
 const GMASTER_PROMPT_ENHANCEMENT_MODEL = 'deepseek-v4-flash'
 const IMAGE_GENERATION_TIMEOUT_MS = 300_000
+const IMAGE_GENERATION_ASYNC_REQUEST_TIMEOUT_MS = 60_000
+const IMAGE_GENERATION_POLL_REQUEST_TIMEOUT_MS = 60_000
+const IMAGE_GENERATION_JOB_TIMEOUT_MS = 900_000
+const IMAGE_GENERATION_POLL_INTERVAL_MS = 2_000
 const PROMPT_ENHANCEMENT_TIMEOUT_MS = 90_000
 const IMAGE_HISTORY_LIMIT = 20
 const IMAGE_SIZE_VALUES = [
@@ -44,7 +48,7 @@ const NATIVE_IMAGE_SIZE_BY_REQUESTED: Record<ImageSize, NativeImageSize> = {
 }
 
 const GenerateImageSchema = z.object({
-  prompt: z.string().trim().min(1, 'Prompt is required').max(4000),
+  prompt: z.string().max(4000).refine((value) => value.trim().length > 0, 'Prompt is required'),
   size: z.enum(IMAGE_SIZE_VALUES).default('1024x1024'),
 })
 const EnhancePromptSchema = GenerateImageSchema
@@ -55,6 +59,16 @@ type ImageGenerationResponse = {
     url?: string
     revised_prompt?: string
   }>
+}
+
+type ImageGenerationJobResponse = {
+  id?: string
+  job_id?: string
+  object?: string
+  status?: string
+  poll_url?: string
+  result?: ImageGenerationResponse
+  error?: ErrorResponseBody['error']
 }
 
 type GeneratedImagePayload = {
@@ -93,6 +107,7 @@ type ErrorResponseBody = {
     message?: string
     type?: string
     code?: string
+    upstream_status?: number
   }
   message?: string
 }
@@ -143,15 +158,9 @@ async function handleGenerate(req: Request, url: URL): Promise<Response> {
   const provider = await getManagedGMasterProvider()
   const baseUrl = provider.baseUrl.replace(/\/+$/, '')
 
-  const response = await fetchImageGeneration(baseUrl, provider, input)
+  const responseBody = await fetchImageGeneration(baseUrl, provider, input)
 
-  const responseBody = await response.json().catch(() => null) as ImageGenerationResponse | ErrorResponseBody | null
-  if (!response.ok) {
-    const failure = getImageGenerationFailure(response.status, responseBody)
-    throw new ApiError(failure.statusCode, failure.message, failure.code)
-  }
-
-  const image = responseBody && 'data' in responseBody ? responseBody.data?.[0] : undefined
+  const image = responseBody.data?.[0]
   if (!image?.b64_json && !image?.url) {
     throw ApiError.internal('Image generation response did not include an image')
   }
@@ -623,46 +632,235 @@ function isImageUpstreamForbidden(status: number, message: string): boolean {
 }
 
 function isImageUpstreamTimeout(status: number, message: string): boolean {
-  return status === 524 || /http 524|status_code=524|status code 524/i.test(message)
+  return status === 504 || status === 524 || /http (?:504|524)|status_code=(?:504|524)|status code (?:504|524)|upstream_timeout/i.test(message)
 }
 
 async function fetchImageGeneration(
   baseUrl: string,
   provider: SavedProvider,
   input: z.infer<typeof GenerateImageSchema>,
-): Promise<Response> {
+): Promise<ImageGenerationResponse> {
+  const requestBody = JSON.stringify(buildImageGenerationRequest(input))
+  let response: Response
   try {
-    return await fetch(`${baseUrl}/v1/images/generations`, {
+    response = await fetch(`${baseUrl}/v1/images/generations/async`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${provider.apiKey}`,
       },
-      body: JSON.stringify({
-        model: GMASTER_IMAGE_MODEL,
-        prompt: input.prompt,
-        size: getNativeImageSize(input.size),
-        n: 1,
-      }),
-      signal: AbortSignal.timeout(IMAGE_GENERATION_TIMEOUT_MS),
+      body: requestBody,
+      signal: AbortSignal.timeout(IMAGE_GENERATION_ASYNC_REQUEST_TIMEOUT_MS),
     })
   } catch (error) {
     if (isTimeoutError(error)) {
       throw new ApiError(
         504,
-        'Image generation timed out after 300s. The upstream image service did not finish in time.',
+        'Image generation job creation timed out after 60s. The upstream image queue did not accept the request in time.',
         'IMAGE_GENERATION_TIMEOUT',
       )
     }
     if (isUpstreamRequestError(error)) {
       throw new ApiError(
         502,
-        'G-Master API image request was interrupted before returning a response. The upstream image channel may close longer prompt requests or reset during gateway pressure. Try a shorter prompt or retry later.',
+        'G-Master API image request was interrupted before returning a response. The image gateway may have reset while accepting the queued job. Retry later; the prompt is not rewritten by Gaster Code.',
         'IMAGE_GENERATION_UPSTREAM_REQUEST_FAILED',
       )
     }
     throw error
   }
+
+  const responseBody = await readJsonResponse(response)
+  if (!response.ok) {
+    if (response.status === 404 || response.status === 405) {
+      return await fetchImageGenerationSync(baseUrl, provider, requestBody)
+    }
+    throwImageGenerationFailure(response.status, responseBody)
+  }
+
+  const directResult = asImageGenerationResponse(responseBody)
+  if (directResult) return directResult
+
+  const job = asImageGenerationJobResponse(responseBody)
+  if (!job) {
+    throw ApiError.internal('Image generation job response was not recognized')
+  }
+  return await waitForImageGenerationJob(baseUrl, provider, job)
+}
+
+async function fetchImageGenerationSync(
+  baseUrl: string,
+  provider: SavedProvider,
+  requestBody: string,
+): Promise<ImageGenerationResponse> {
+  const response = await fetch(`${baseUrl}/v1/images/generations`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${provider.apiKey}`,
+    },
+    body: requestBody,
+    signal: AbortSignal.timeout(IMAGE_GENERATION_TIMEOUT_MS),
+  })
+  const responseBody = await readJsonResponse(response)
+  if (!response.ok) {
+    throwImageGenerationFailure(response.status, responseBody)
+  }
+  const result = asImageGenerationResponse(responseBody)
+  if (!result) {
+    throw ApiError.internal('Image generation response was not recognized')
+  }
+  return result
+}
+
+async function waitForImageGenerationJob(
+  baseUrl: string,
+  provider: SavedProvider,
+  initialJob: ImageGenerationJobResponse,
+): Promise<ImageGenerationResponse> {
+  let job = initialJob
+  const deadline = Date.now() + IMAGE_GENERATION_JOB_TIMEOUT_MS
+
+  for (;;) {
+    const immediateResult = getCompletedImageGenerationJobResult(job)
+    if (immediateResult) return immediateResult
+    if (isFailedImageGenerationJob(job)) {
+      throwImageGenerationJobFailure(job)
+    }
+
+    const pollUrl = getImageGenerationJobPollUrl(baseUrl, job)
+    if (!pollUrl) {
+      throw ApiError.internal('Image generation job response did not include a poll URL')
+    }
+    if (Date.now() >= deadline) {
+      throw new ApiError(
+        504,
+        'Image generation job timed out after 900s. The queued image task did not finish in time.',
+        'IMAGE_GENERATION_TIMEOUT',
+      )
+    }
+
+    const pollResponse = await fetchImageGenerationJob(baseUrl, provider, pollUrl)
+    const pollBody = await readJsonResponse(pollResponse)
+    if (!pollResponse.ok) {
+      throwImageGenerationFailure(pollResponse.status, pollBody)
+    }
+    const nextJob = asImageGenerationJobResponse(pollBody)
+    if (!nextJob) {
+      throw ApiError.internal('Image generation poll response was not recognized')
+    }
+    job = nextJob
+
+    if (!getCompletedImageGenerationJobResult(job) && !isFailedImageGenerationJob(job)) {
+      await sleep(Math.min(IMAGE_GENERATION_POLL_INTERVAL_MS, Math.max(0, deadline - Date.now())))
+    }
+  }
+}
+
+async function fetchImageGenerationJob(
+  baseUrl: string,
+  provider: SavedProvider,
+  pollUrl: string,
+): Promise<Response> {
+  try {
+    return await fetch(pollUrl, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${provider.apiKey}`,
+      },
+      signal: AbortSignal.timeout(IMAGE_GENERATION_POLL_REQUEST_TIMEOUT_MS),
+    })
+  } catch (error) {
+    if (isTimeoutError(error)) {
+      throw new ApiError(
+        504,
+        'Image generation job polling timed out after 60s. The queued image task did not return a status update in time.',
+        'IMAGE_GENERATION_TIMEOUT',
+      )
+    }
+    if (isUpstreamRequestError(error)) {
+      throw new ApiError(
+        502,
+        `G-Master API image job polling was interrupted before returning a response from ${baseUrl}. Retry later; the prompt is not rewritten by Gaster Code.`,
+        'IMAGE_GENERATION_UPSTREAM_REQUEST_FAILED',
+      )
+    }
+    throw error
+  }
+}
+
+function buildImageGenerationRequest(input: z.infer<typeof GenerateImageSchema>): Record<string, unknown> {
+  return {
+    model: GMASTER_IMAGE_MODEL,
+    prompt: input.prompt,
+    size: getNativeImageSize(input.size),
+    n: 1,
+  }
+}
+
+async function readJsonResponse(response: Response): Promise<unknown> {
+  return await response.json().catch(() => null)
+}
+
+function asImageGenerationResponse(value: unknown): ImageGenerationResponse | null {
+  if (!value || typeof value !== 'object') return null
+  const data = (value as ImageGenerationResponse).data
+  if (!Array.isArray(data)) return null
+  return value as ImageGenerationResponse
+}
+
+function asImageGenerationJobResponse(value: unknown): ImageGenerationJobResponse | null {
+  if (!value || typeof value !== 'object') return null
+  const job = value as ImageGenerationJobResponse
+  if (typeof job.status !== 'string') return null
+  return job
+}
+
+function getCompletedImageGenerationJobResult(job: ImageGenerationJobResponse): ImageGenerationResponse | null {
+  if (job.status !== 'succeeded') return null
+  return asImageGenerationResponse(job.result)
+}
+
+function isFailedImageGenerationJob(job: ImageGenerationJobResponse): boolean {
+  return job.status === 'failed'
+}
+
+function getImageGenerationJobPollUrl(baseUrl: string, job: ImageGenerationJobResponse): string | null {
+  const pollUrl = typeof job.poll_url === 'string' && job.poll_url.trim()
+    ? job.poll_url.trim()
+    : job.job_id || job.id
+      ? `/v1/images/jobs/${encodeURIComponent(job.job_id ?? job.id ?? '')}`
+      : ''
+  if (!pollUrl) return null
+  return new URL(pollUrl, `${baseUrl}/`).toString()
+}
+
+function throwImageGenerationJobFailure(job: ImageGenerationJobResponse): never {
+  const errorStatus = getImageGenerationJobFailureStatus(job)
+  const fallbackMessage = 'Image generation job failed'
+  const body: ErrorResponseBody = {
+    error: job.error ?? { message: fallbackMessage, code: 'image_generation_failed' },
+  }
+  throwImageGenerationFailure(errorStatus, body)
+}
+
+function getImageGenerationJobFailureStatus(job: ImageGenerationJobResponse): number {
+  const error = job.error
+  if (error && typeof error === 'object') {
+    if (typeof error.upstream_status === 'number') return error.upstream_status
+    if (error.code === 'upstream_timeout') return 524
+    if (error.code === 'upstream_forbidden') return 403
+  }
+  return 502
+}
+
+function throwImageGenerationFailure(status: number, responseBody: unknown): never {
+  const failure = getImageGenerationFailure(status, responseBody as ImageGenerationResponse | ErrorResponseBody | null)
+  throw new ApiError(failure.statusCode, failure.message, failure.code)
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
 function getNativeImageSize(size: ImageSize): NativeImageSize {

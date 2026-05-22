@@ -102,7 +102,7 @@ export function Drawing() {
   async function handleGenerate(event: FormEvent) {
     event.preventDefault()
     if (!trimmedPrompt || isGenerating) return
-    await generateImage(trimmedPrompt, size)
+    await generateImage(prompt, size)
   }
 
   async function handleOptimizePrompt() {
@@ -110,7 +110,7 @@ export function Drawing() {
     setIsEnhancingPrompt(true)
     setError(null)
     try {
-      const result = await imagesApi.enhancePrompt({ prompt: trimmedPrompt, size })
+      const result = await imagesApi.enhancePrompt({ prompt, size })
       setPrompt(result.prompt.slice(0, PROMPT_LIMIT))
     } catch (err) {
       const message = err instanceof Error ? err.message : ''
@@ -350,7 +350,7 @@ export function Drawing() {
               <button
                 type="button"
                 onClick={() => {
-                  if (trimmedPrompt && !isGenerating) void generateImage(trimmedPrompt, size)
+                  if (trimmedPrompt && !isGenerating) void generateImage(prompt, size)
                 }}
                 disabled={!trimmedPrompt || isGenerating}
                 className="flex h-[70px] w-[70px] flex-col items-center justify-center gap-1 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface-container-low)] text-xs text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] disabled:cursor-not-allowed disabled:opacity-50"

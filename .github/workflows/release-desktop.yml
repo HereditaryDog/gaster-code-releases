@@ -223,11 +223,11 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.draft == false)
     permissions:
-      contents: read
+      contents: write
     env:
       PRIVATE_RELEASE_REPOSITORY: ${{ github.repository }}
       PUBLIC_RELEASE_REPOSITORY: HereditaryDog/gaster-code-releases
-      GH_TOKEN: ${{ secrets.PUBLIC_RELEASE_TOKEN }}
+      GH_TOKEN: ${{ secrets.PUBLIC_RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
 
     steps:
       - name: Checkout

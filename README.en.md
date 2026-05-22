@@ -33,7 +33,7 @@
 
 ## Project Note
 
-Gaster Code is now maintained as a public open-source project. The first public release line is **v1.0.0**, with source code, release notes, installers, and updater metadata maintained in this repository.
+Gaster Code is now maintained as a public open-source project. The current stable version is **v1.0.1**, with source code, release notes, installers, and updater metadata maintained in this repository.
 
 **Source transparency note:** this project is based on community research and organization of leaked Claude Code source code, with product and development inspiration from the `cc-haha` project. Gaster Code is not an official Anthropic, Claude Code, or `cc-haha` project, and is not affiliated with those projects or organizations.
 
@@ -41,17 +41,17 @@ The repository is public so developers can inspect the code, reproduce the build
 
 ## Download
 
-Latest version: **v1.0.0**
+Latest version: **v1.0.1**
 
-- [GitHub Release](https://github.com/HereditaryDog/gaster-code-releases/releases/tag/v1.0.0)
+- [GitHub Release](https://github.com/HereditaryDog/gaster-code-releases/releases/tag/v1.0.1)
 - [latest.json](https://github.com/HereditaryDog/gaster-code-releases/releases/latest/download/latest.json)
 
 | Platform | Installer |
 | --- | --- |
-| macOS Apple Silicon | `Gaster-Code_1.0.0_macos_arm64_dmg.dmg` |
-| macOS Intel | `Gaster-Code_1.0.0_macos_x64_dmg.dmg` |
-| Windows x64 | `Gaster-Code_1.0.0_windows_x64_nsis.exe` |
-| Linux x64 | `Gaster-Code_1.0.0_linux_x64_deb.deb` |
+| macOS Apple Silicon | `Gaster-Code_1.0.1_macos_arm64_dmg.dmg` |
+| macOS Intel | `Gaster-Code_1.0.1_macos_x64_dmg.dmg` |
+| Windows x64 | `Gaster-Code_1.0.1_windows_x64_nsis.exe` |
+| Linux x64 | `Gaster-Code_1.0.1_linux_x64_deb.deb` |
 
 If macOS blocks the first launch, run:
 

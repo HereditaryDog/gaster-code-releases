@@ -154,10 +154,10 @@ export const zh: Record<TranslationKey, string> = {
   'drawing.generating': '生成中',
   'drawing.empty': '暂无图片',
   'drawing.errorFallback': '图片生成失败',
-  'drawing.timeoutError': '图片生成等待时间过长。图片服务没有在 5 分钟内返回，请稍后重试。',
-  'drawing.upstreamTimeoutError': 'G-Master API 图片通道响应超时（HTTP 524）。图片服务生成时间过长，请稍后重试，或换一个更简单的提示词/尺寸。',
+  'drawing.timeoutError': '图片生成等待时间过长。图片服务没有在 15 分钟内返回，请稍后重试。',
+  'drawing.upstreamTimeoutError': 'G-Master API 图片通道响应超时（HTTP 524）。图片任务返回时间过长，请稍后重试；Gaster Code 没有改写你的提示词。',
   'drawing.upstreamError': '图片生成服务请求失败。请稍后重试，或换一个尺寸/提示词再生成。',
-  'drawing.upstreamRequestFailedError': 'G-Master API 图片请求连接中断。较长提示词或上游网关波动可能会导致请求被提前关闭，请先精简提示词或稍后重试。',
+  'drawing.upstreamRequestFailedError': 'G-Master API 图片请求在返回响应前连接中断。请稍后重试；Gaster Code 没有改写你的提示词。',
   'drawing.upstreamForbiddenError': 'G-Master API 图片通道返回 403，当前 gpt-image-2 可能暂不可用或没有图片生成权限。请稍后重试，或联系 G-Master API 检查图片通道配置。',
   'drawing.resultAlt': '生成图片',
   'drawing.revisedPrompt': '优化后的提示词',
@@ -788,6 +788,9 @@ export const zh: Record<TranslationKey, string> = {
   'settings.about.socialMedia': '社交媒体',
   'settings.about.updates': '应用更新',
   'settings.about.updatesDesc': '检查 GitHub Releases，下载安装包，并在安装后自动重启。',
+  'settings.about.originalProject': '致敬原项目',
+  'settings.about.originalProjectDesc': '向原项目 NanmiCoder/cc-haha 致敬。Gaster Code 作为独立分支，在本地编程助手体验上继续迭代。',
+
   // Settings > Computer Use
   'settings.tab.computerUse': 'Computer Use',
   'settings.computerUse.title': 'Computer Use',

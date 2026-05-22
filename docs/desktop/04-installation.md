@@ -1,8 +1,8 @@
 # 安装指南
 
-当前稳定版本：**V 0.2.8-gastercode.2**。这个版本在 0.2.8 功能基础上优化会话切换性能，减少历史会话切回时的重复任务列表、变更卡片和工作区状态请求，让多会话切换更轻快。
+当前稳定版本：**V 1.0.1**。这个版本在 1.0.0 正式公开版本基础上修复绘图复杂提示词超时问题，绘图请求会通过 G-Master API 异步图片任务创建和轮询结果，并保留用户输入的原始提示词。
 
-> 本版本使用公开 release-only 仓库提供 updater 元数据和安装包下载。`0.2.1-gastercode.1` 及更早安装包仍内置私有主仓库 endpoint，无法自动发现本版本，需要手动下载安装一次；安装本版本之后，后续更新会从公开 release-only 仓库获取。
+> 本版本使用公开仓库提供 updater 元数据和安装包下载。`0.2.1-gastercode.1` 及更早安装包仍内置私有主仓库 endpoint，无法自动发现本版本，需要手动下载安装一次；安装本版本之后，后续更新会从公开仓库获取。
 
 ## 下载
 
@@ -10,10 +10,10 @@
 
 | 平台 | 文件 |
 |------|------|
-| macOS (Apple Silicon) | `Gaster-Code_0.2.8-gastercode.2_macos_arm64_dmg.dmg` |
-| macOS (Intel) | `Gaster-Code_0.2.8-gastercode.2_macos_x64_dmg.dmg` |
-| Windows x64 | `Gaster-Code_0.2.8-gastercode.2_windows_x64_nsis.exe` |
-| Linux x64 | `Gaster-Code_0.2.8-gastercode.2_linux_x64_deb.deb` |
+| macOS (Apple Silicon) | `Gaster-Code_1.0.1_macos_arm64_dmg.dmg` |
+| macOS (Intel) | `Gaster-Code_1.0.1_macos_x64_dmg.dmg` |
+| Windows x64 | `Gaster-Code_1.0.1_windows_x64_nsis.exe` |
+| Linux x64 | `Gaster-Code_1.0.1_linux_x64_deb.deb` |
 
 > 发布策略：不拆平台代码分支。当前 tag 自动发布默认构建 macOS ARM64、macOS x64、Windows x64 和 Linux x64；Linux ARM64 可以在手动发布工作流中按需启用。
 

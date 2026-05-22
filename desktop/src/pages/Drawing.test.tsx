@@ -49,17 +49,18 @@ describe('Drawing', () => {
 
     render(<Drawing />)
 
+    const prompt = '  neon cat poster\nwith exact spacing  '
     fireEvent.change(screen.getByRole('textbox', { name: /Prompt/ }), {
-      target: { value: 'neon cat poster' },
+      target: { value: prompt },
     })
     fireEvent.click(screen.getByRole('radio', { name: /1920x1080/ }))
     fireEvent.click(screen.getByRole('button', { name: 'Generate' }))
 
     await waitFor(() => expect(imagesApi.generate).toHaveBeenCalledWith({
-      prompt: 'neon cat poster',
+      prompt,
       size: '1920x1080',
     }))
-    expect(await screen.findByAltText('neon cat poster')).toHaveAttribute('src', 'data:image/png;base64,abc123')
+    expect(await screen.findByAltText(/neon cat poster/)).toHaveAttribute('src', 'data:image/png;base64,abc123')
     expect(screen.getByText('A cinematic neon cat poster')).toBeInTheDocument()
   })
 
@@ -163,7 +164,7 @@ describe('Drawing', () => {
     })
     fireEvent.click(screen.getByRole('button', { name: 'Generate' }))
 
-    expect(await screen.findByText(/image service did not return within 5 minutes/i)).toBeInTheDocument()
+    expect(await screen.findByText(/image service did not return within 15 minutes/i)).toBeInTheDocument()
   })
 
   it('shows a drawing-specific upstream 524 timeout message', async () => {

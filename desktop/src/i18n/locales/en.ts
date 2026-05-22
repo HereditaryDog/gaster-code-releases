@@ -152,10 +152,10 @@ export const en = {
   'drawing.generating': 'Generating',
   'drawing.empty': 'No image yet',
   'drawing.errorFallback': 'Image generation failed',
-  'drawing.timeoutError': 'Image generation is taking too long. The image service did not return within 5 minutes. Please try again.',
-  'drawing.upstreamTimeoutError': 'G-Master API image channel timed out (HTTP 524). The image service took too long to respond. Please try again later, or use a simpler prompt or smaller size.',
+  'drawing.timeoutError': 'Image generation is taking too long. The image service did not return within 15 minutes. Please try again.',
+  'drawing.upstreamTimeoutError': 'G-Master API image channel timed out (HTTP 524). The image task took too long to respond. Please retry later; Gaster Code did not rewrite your prompt.',
   'drawing.upstreamError': 'The image service request failed. Try again later, or use a different size or prompt.',
-  'drawing.upstreamRequestFailedError': 'The G-Master API image request was interrupted. Longer prompts or upstream gateway instability can close the request early. Try a shorter prompt or retry later.',
+  'drawing.upstreamRequestFailedError': 'The G-Master API image request was interrupted before a response returned. Please retry later; Gaster Code did not rewrite your prompt.',
   'drawing.upstreamForbiddenError': 'G-Master API image channel returned 403. gpt-image-2 may be temporarily unavailable or missing image-generation permission. Try again later, or ask G-Master API to check the image channel configuration.',
   'drawing.resultAlt': 'Generated image',
   'drawing.revisedPrompt': 'Revised prompt',
@@ -786,6 +786,9 @@ export const en = {
   'settings.about.socialMedia': 'Social Media',
   'settings.about.updates': 'App Updates',
   'settings.about.updatesDesc': 'Check GitHub Releases, download the installer, and relaunch after install.',
+  'settings.about.originalProject': 'Original Project',
+  'settings.about.originalProjectDesc': 'Respect to the original NanmiCoder/cc-haha project. Gaster Code carries the local coding assistant work forward as an independent fork.',
+
   // Settings > Computer Use
   'settings.tab.computerUse': 'Computer Use',
   'settings.computerUse.title': 'Computer Use',
