@@ -75,6 +75,7 @@ const sourceTransparencyFiles = new Set([
   'README.en.md',
   'docs/index.md',
   'docs/en/index.md',
+  'release-notes/v1.0.0.md',
 ])
 
 const findings: Finding[] = []
