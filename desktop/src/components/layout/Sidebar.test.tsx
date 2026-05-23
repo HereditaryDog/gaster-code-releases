@@ -174,6 +174,31 @@ describe('Sidebar', () => {
     expect(screen.getByRole('complementary')).not.toHaveAttribute('data-tauri-drag-region')
   })
 
+  it('switches session rows without synchronously connecting the heavy transcript', () => {
+    const now = new Date().toISOString()
+    useSessionStore.setState({
+      sessions: [
+        buildSession({ id: 'session-1', title: 'First Session', createdAt: now, modifiedAt: now }),
+        buildSession({ id: 'session-2', title: 'Second Session', createdAt: now, modifiedAt: now }),
+      ],
+    })
+    useTabStore.setState({
+      tabs: [{ sessionId: 'session-1', title: 'First Session', type: 'session', status: 'idle' }],
+      activeTabId: 'session-1',
+    })
+
+    render(<Sidebar />)
+
+    fireEvent.click(screen.getByRole('button', { name: /Second Session/ }))
+
+    expect(useTabStore.getState().activeTabId).toBe('session-2')
+    expect(useTabStore.getState().tabs).toEqual([
+      { sessionId: 'session-1', title: 'First Session', type: 'session', status: 'idle' },
+      { sessionId: 'session-2', title: 'Second Session', type: 'session', status: 'idle' },
+    ])
+    expect(connectToSession).not.toHaveBeenCalled()
+  })
+
   it('shows a toast when session creation fails', async () => {
     createSession.mockRejectedValue(new Error('boom'))
 

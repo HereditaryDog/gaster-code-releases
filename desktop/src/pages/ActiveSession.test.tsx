@@ -4,8 +4,12 @@ import '@testing-library/jest-dom'
 import { act } from 'react'
 
 vi.mock('../components/chat/MessageList', () => ({
-  MessageList: ({ compact }: { compact?: boolean }) => (
-    <div data-testid="message-list" data-compact={compact ? 'true' : 'false'} />
+  MessageList: ({ compact, sessionId }: { compact?: boolean; sessionId?: string | null }) => (
+    <div
+      data-testid="message-list"
+      data-compact={compact ? 'true' : 'false'}
+      data-session-id={sessionId ?? ''}
+    />
   ),
 }))
 
@@ -123,6 +127,114 @@ describe('ActiveSession task polling', () => {
 
     expect(screen.getByTestId('message-list')).toBeInTheDocument()
     expect(screen.getByTestId('chat-input')).toHaveAttribute('data-variant', 'default')
+  })
+
+  it('shows the target session shell before mounting a switched session transcript', () => {
+    vi.useFakeTimers()
+    const firstSessionId = 'history-session-a'
+    const secondSessionId = 'history-session-b'
+
+    useSessionStore.setState({
+      sessions: [
+        {
+          id: firstSessionId,
+          title: 'First Heavy Session',
+          createdAt: '2026-05-07T00:00:00.000Z',
+          modifiedAt: '2026-05-07T00:00:00.000Z',
+          messageCount: 1200,
+          projectPath: '/workspace/project',
+          workDir: '/workspace/project',
+          workDirExists: true,
+        },
+        {
+          id: secondSessionId,
+          title: 'Second Heavy Session',
+          createdAt: '2026-05-07T00:00:00.000Z',
+          modifiedAt: '2026-05-07T00:01:00.000Z',
+          messageCount: 1600,
+          projectPath: '/workspace/project',
+          workDir: '/workspace/project',
+          workDirExists: true,
+        },
+      ],
+      activeSessionId: firstSessionId,
+      isLoading: false,
+      error: null,
+    })
+    useTabStore.setState({
+      tabs: [
+        { sessionId: firstSessionId, title: 'First Heavy Session', type: 'session', status: 'idle' },
+        { sessionId: secondSessionId, title: 'Second Heavy Session', type: 'session', status: 'idle' },
+      ],
+      activeTabId: firstSessionId,
+    })
+    useChatStore.setState({
+      sessions: {
+        [firstSessionId]: {
+          messages: [{
+            id: 'first-message',
+            type: 'assistant_text',
+            content: 'First transcript',
+            timestamp: 1,
+          }],
+          chatState: 'idle',
+          connectionState: 'connected',
+          streamingText: '',
+          streamingToolInput: '',
+          activeToolUseId: null,
+          activeToolName: null,
+          activeThinkingId: null,
+          pendingPermission: null,
+          pendingComputerUsePermission: null,
+          tokenUsage: { input_tokens: 0, output_tokens: 0 },
+          elapsedSeconds: 0,
+          statusVerb: '',
+          slashCommands: [],
+          agentTaskNotifications: {},
+          elapsedTimer: null,
+        },
+        [secondSessionId]: {
+          messages: [{
+            id: 'second-message',
+            type: 'assistant_text',
+            content: 'Second transcript',
+            timestamp: 1,
+          }],
+          chatState: 'idle',
+          connectionState: 'connected',
+          streamingText: '',
+          streamingToolInput: '',
+          activeToolUseId: null,
+          activeToolName: null,
+          activeThinkingId: null,
+          pendingPermission: null,
+          pendingComputerUsePermission: null,
+          tokenUsage: { input_tokens: 0, output_tokens: 0 },
+          elapsedSeconds: 0,
+          statusVerb: '',
+          slashCommands: [],
+          agentTaskNotifications: {},
+          elapsedTimer: null,
+        },
+      },
+    })
+
+    render(<ActiveSession />)
+    expect(screen.getByTestId('message-list')).toHaveAttribute('data-session-id', firstSessionId)
+
+    act(() => {
+      useTabStore.setState({ activeTabId: secondSessionId })
+    })
+
+    expect(screen.getByText('Second Heavy Session')).toBeInTheDocument()
+    expect(screen.queryByTestId('message-list')).not.toBeInTheDocument()
+    expect(screen.getByTestId('session-content-loading')).toBeInTheDocument()
+
+    act(() => {
+      vi.runOnlyPendingTimers()
+    })
+
+    expect(screen.getByTestId('message-list')).toHaveAttribute('data-session-id', secondSessionId)
   })
 
   it('does not duplicate the current goal as a page-level status panel', () => {

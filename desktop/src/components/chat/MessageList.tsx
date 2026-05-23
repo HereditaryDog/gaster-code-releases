@@ -1,4 +1,4 @@
-import { useRef, useEffect, useMemo, memo, useState, useCallback, useLayoutEffect, type ReactNode } from 'react'
+import { useRef, useEffect, useMemo, memo, useState, useCallback, useLayoutEffect, useTransition, type ReactNode } from 'react'
 import { ArrowDown, BookMarked, Bot, CheckCircle2, ChevronDown, ChevronRight, CircleStop, LoaderCircle, MessageCircle, Settings, Target, XCircle } from 'lucide-react'
 import { ApiError } from '../../api/client'
 import { sessionsApi, type SessionTurnCheckpoint } from '../../api/sessions'
@@ -10,6 +10,7 @@ import { useSessionStore } from '../../stores/sessionStore'
 import { useWorkspaceChatContextStore } from '../../stores/workspaceChatContextStore'
 import { useTranslation } from '../../i18n'
 import type { TranslationKey } from '../../i18n/locales/en'
+import { isTauriRuntime } from '../../lib/desktopRuntime'
 import { UserMessage } from './UserMessage'
 import { AssistantMessage } from './AssistantMessage'
 import { ThinkingBlock } from './ThinkingBlock'
@@ -632,6 +633,18 @@ const AUTO_SCROLL_BOTTOM_THRESHOLD_PX = 48
 const MAX_SCROLL_SNAPSHOTS = 100
 const TURN_CHANGE_CARD_CACHE_TTL_MS = 60_000
 const MAX_TURN_CHANGE_CARD_CACHE_ENTRIES = 25
+const BROWSER_TRANSCRIPT_RENDER_CONFIG = {
+  threshold: 160,
+  initialCount: 80,
+  chunkSize: 160,
+  chunkDelayMs: 16,
+}
+const NATIVE_TRANSCRIPT_RENDER_CONFIG = {
+  threshold: 80,
+  initialCount: 40,
+  chunkSize: 40,
+  chunkDelayMs: 32,
+}
 const CHAT_SCROLL_AREA_CLASS = [
   'chat-scroll-area',
   'chat-scroll-area--composer-fade',
@@ -659,6 +672,18 @@ type TurnChangeCardCacheEntry = {
 }
 
 const sessionScrollSnapshots = new Map<string, SessionScrollSnapshot>()
+
+function getTranscriptRenderConfig() {
+  return isTauriRuntime()
+    ? NATIVE_TRANSCRIPT_RENDER_CONFIG
+    : BROWSER_TRANSCRIPT_RENDER_CONFIG
+}
+
+function getInitialRenderedMessageCount(messageCount: number, config = getTranscriptRenderConfig()) {
+  return messageCount > config.threshold
+    ? Math.min(config.initialCount, messageCount)
+    : messageCount
+}
 
 function isNearScrollBottom(element: HTMLElement) {
   return (
@@ -734,6 +759,20 @@ export function MessageList({ sessionId, compact = false }: MessageListProps = {
   const streamingText = sessionState?.streamingText ?? ''
   const activeThinkingId = sessionState?.activeThinkingId ?? null
   const agentTaskNotifications = sessionState?.agentTaskNotifications ?? {}
+  const transcriptRenderConfig = useMemo(() => getTranscriptRenderConfig(), [])
+  const [renderedMessageCount, setRenderedMessageCount] = useState(() =>
+    getInitialRenderedMessageCount(messages.length, transcriptRenderConfig),
+  )
+  const renderedSessionIdRef = useRef<string | null | undefined>(resolvedSessionId)
+  const [, startTranscriptRenderTransition] = useTransition()
+  const hiddenMessageCount = Math.max(0, messages.length - renderedMessageCount)
+  const visibleMessages = useMemo(
+    () => hiddenMessageCount > 0
+      ? messages.slice(hiddenMessageCount)
+      : messages,
+    [hiddenMessageCount, messages],
+  )
+  const isTranscriptHydrating = hiddenMessageCount > 0
   const shouldFollowContentResize =
     streamingText.trim().length > 0 ||
     chatState === 'streaming' ||
@@ -755,6 +794,42 @@ export function MessageList({ sessionId, compact = false }: MessageListProps = {
   const [showJumpToLatest, setShowJumpToLatest] = useState(false)
   const turnChangeCardCacheRef = useRef(new Map<string, TurnChangeCardCacheEntry>())
   const turnChangeCardRequestsRef = useRef(new Map<string, Promise<TurnChangeCardModel[]>>())
+
+  useEffect(() => {
+    const initialCount = getInitialRenderedMessageCount(messages.length, transcriptRenderConfig)
+    if (renderedSessionIdRef.current !== resolvedSessionId) {
+      renderedSessionIdRef.current = resolvedSessionId
+      setRenderedMessageCount(initialCount)
+      return
+    }
+
+    setRenderedMessageCount((current) => {
+      if (messages.length <= transcriptRenderConfig.threshold) return messages.length
+      if (current <= 0) return initialCount
+      if (current >= messages.length - 1) return messages.length
+      return Math.min(current, messages.length)
+    })
+  }, [messages.length, resolvedSessionId, transcriptRenderConfig])
+
+  useEffect(() => {
+    if (!isTranscriptHydrating) return
+
+    const timer = window.setTimeout(() => {
+      startTranscriptRenderTransition(() => {
+        setRenderedMessageCount((current) =>
+          Math.min(messages.length, current + transcriptRenderConfig.chunkSize),
+        )
+      })
+    }, transcriptRenderConfig.chunkDelayMs)
+
+    return () => window.clearTimeout(timer)
+  }, [
+    isTranscriptHydrating,
+    messages.length,
+    renderedMessageCount,
+    startTranscriptRenderTransition,
+    transcriptRenderConfig,
+  ])
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior) => {
     shouldAutoScrollRef.current = true
@@ -854,7 +929,7 @@ export function MessageList({ sessionId, compact = false }: MessageListProps = {
     }
 
     scrollToBottom('auto')
-  }, [messages.length, resolvedSessionId, scrollToBottom, streamingText])
+  }, [messages.length, resolvedSessionId, scrollToBottom, streamingText, visibleMessages.length])
 
   const handleJumpToLatest = useCallback(() => {
     scrollToBottom('auto')
@@ -875,10 +950,10 @@ export function MessageList({ sessionId, compact = false }: MessageListProps = {
   }, [scrollToBottom, shouldFollowContentResize])
 
   const { toolResultMap, childToolCallsByParent, renderItems } = useMemo(
-    () => buildRenderModel(messages),
-    [messages],
+    () => buildRenderModel(visibleMessages),
+    [visibleMessages],
   )
-  const completedTurnTargets = useMemo(() => getCompletedTurnTargets(messages), [messages])
+  const completedTurnTargets = useMemo(() => getCompletedTurnTargets(visibleMessages), [visibleMessages])
   const turnTargetSignature = useMemo(
     () => getTurnTargetSignature(completedTurnTargets),
     [completedTurnTargets],
@@ -897,9 +972,9 @@ export function MessageList({ sessionId, compact = false }: MessageListProps = {
   )
 
   useEffect(() => {
-    if (!resolvedSessionId || completedTurnTargets.length === 0 || isMemberSession) {
-      setTurnChangeCards([])
-      setTurnChangeLoadError(null)
+    if (isTranscriptHydrating || !resolvedSessionId || completedTurnTargets.length === 0 || isMemberSession) {
+      setTurnChangeCards((cards) => cards.length === 0 ? cards : [])
+      setTurnChangeLoadError((error) => error === null ? error : null)
       setIsLoadingTurnChangeCards(false)
       return
     }
@@ -979,7 +1054,15 @@ export function MessageList({ sessionId, compact = false }: MessageListProps = {
     return () => {
       cancelled = true
     }
-  }, [chatState, completedTurnTargets, isMemberSession, latestCompletedTurnId, resolvedSessionId, turnTargetSignature])
+  }, [
+    chatState,
+    completedTurnTargets,
+    isMemberSession,
+    isTranscriptHydrating,
+    latestCompletedTurnId,
+    resolvedSessionId,
+    turnTargetSignature,
+  ])
 
   const handleUndoCurrentTurn = useCallback(async () => {
     if (!resolvedSessionId || !confirmTurnCard || rewindingTurnId) return
@@ -1054,12 +1137,25 @@ export function MessageList({ sessionId, compact = false }: MessageListProps = {
           ref={scrollContentRef}
           className={compact ? 'mx-auto max-w-full' : 'mx-auto max-w-[860px]'}
         >
+          {hiddenMessageCount > 0 && (
+            <div
+              data-testid="transcript-progressive-loading"
+              className="mb-4 rounded-[10px] border border-[var(--color-border)]/60 bg-[var(--color-surface-container)] px-4 py-3 text-center text-xs font-medium text-[var(--color-text-tertiary)]"
+            >
+              {t('common.loading')}
+            </div>
+          )}
+
           {renderItems.map((item, index) => {
             const itemKey = item.kind === 'tool_group' ? item.id : item.message.id
             const cardsForItem = turnCardsByRenderIndex.get(index) ?? []
 
             return (
-              <div key={itemKey}>
+              <div
+                key={itemKey}
+                data-transcript-render-item
+                style={{ contentVisibility: 'auto', containIntrinsicSize: '0 96px' }}
+              >
                 {item.kind === 'tool_group' ? (
                   <ToolCallGroup
                     toolCalls={item.toolCalls}

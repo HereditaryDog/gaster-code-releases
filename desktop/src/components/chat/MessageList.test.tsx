@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MessageList, buildRenderModel } from './MessageList'
 import { relativizeWorkspacePath } from './CurrentTurnChangeCard'
@@ -116,37 +116,101 @@ describe('MessageList nested tool calls', () => {
       branch: null,
       isGitRepo: false,
       changedFiles: [],
-    })
+      })
   })
 
-  it('keeps full long transcripts mounted so variable-height messages cannot leave spacer gaps', () => {
-    useChatStore.setState({
-      sessions: {
-        [ACTIVE_TAB]: makeSessionState({
-          messages: Array.from({ length: 220 }, (_, index) => ({
-            id: `assistant-${index}`,
-            type: 'assistant_text',
-            content: index % 25 === 0
-              ? [
-                  `assistant transcript line ${index}`,
-                  '',
-                  '```ts',
-                  'const value = "this intentionally makes the row much taller"',
-                  '```',
-                ].join('\n')
-              : `assistant transcript line ${index}`,
-            timestamp: index,
-          })),
-        }),
-      },
-    })
+  afterEach(() => {
+    vi.useRealTimers()
+    delete (window as typeof window & { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__
+  })
 
-    const { container } = render(<MessageList />)
+  it('renders the recent slice of long transcripts first and hydrates older messages later', async () => {
+    vi.useFakeTimers()
+    try {
+      useChatStore.setState({
+        sessions: {
+          [ACTIVE_TAB]: makeSessionState({
+            messages: Array.from({ length: 220 }, (_, index) => ({
+              id: `assistant-${index}`,
+              type: 'assistant_text',
+              content: index % 25 === 0
+                ? [
+                    `assistant transcript line ${index}`,
+                    '',
+                    '```ts',
+                    'const value = "this intentionally makes the row much taller"',
+                    '```',
+                  ].join('\n')
+                : `assistant transcript line ${index}`,
+              timestamp: index,
+            })),
+          }),
+        },
+      })
 
-    expect(screen.getByText('assistant transcript line 0')).toBeTruthy()
-    expect(screen.getByText('assistant transcript line 219')).toBeTruthy()
-    expect(container.querySelectorAll('[data-message-shell="assistant"]').length).toBe(220)
-    expect(container.querySelector('[data-virtual-message-item]')).toBeNull()
+      const { container } = render(<MessageList />)
+
+      expect(screen.queryByText('assistant transcript line 0')).toBeNull()
+      expect(screen.getByText('assistant transcript line 219')).toBeTruthy()
+      expect(container.querySelectorAll('[data-message-shell="assistant"]').length).toBeLessThan(220)
+      expect(screen.getByTestId('transcript-progressive-loading')).toBeTruthy()
+
+      await act(async () => {
+        vi.advanceTimersByTime(200)
+        await Promise.resolve()
+      })
+
+      expect(screen.getByText('assistant transcript line 0')).toBeTruthy()
+      expect(container.querySelectorAll('[data-message-shell="assistant"]').length).toBe(220)
+      expect(screen.queryByTestId('transcript-progressive-loading')).toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('uses smaller transcript hydration batches in the native Tauri runtime', async () => {
+    ;(window as typeof window & { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ = {}
+    vi.useFakeTimers()
+    try {
+      useChatStore.setState({
+        sessions: {
+          [ACTIVE_TAB]: makeSessionState({
+            messages: Array.from({ length: 220 }, (_, index) => ({
+              id: `assistant-${index}`,
+              type: 'assistant_text',
+              content: `native transcript line ${index}`,
+              timestamp: index,
+            })),
+          }),
+        },
+      })
+
+      const { container } = render(<MessageList />)
+
+      expect(screen.queryByText('native transcript line 179')).toBeNull()
+      expect(screen.getByText('native transcript line 180')).toBeTruthy()
+      expect(screen.getByText('native transcript line 219')).toBeTruthy()
+      expect(container.querySelectorAll('[data-message-shell="assistant"]').length).toBe(40)
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(40)
+      })
+
+      expect(screen.queryByText('native transcript line 139')).toBeNull()
+      expect(screen.getByText('native transcript line 140')).toBeTruthy()
+      expect(container.querySelectorAll('[data-message-shell="assistant"]').length).toBe(80)
+
+      for (let chunkIndex = 0; chunkIndex < 4; chunkIndex += 1) {
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(40)
+        })
+      }
+
+      expect(screen.getByText('native transcript line 0')).toBeTruthy()
+      expect(container.querySelectorAll('[data-message-shell="assistant"]').length).toBe(220)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('adds selected user message text to the chat context', async () => {
