@@ -59,6 +59,6 @@ Starting with **v1.0.0**, this repository is publicly maintained so developers c
 ## Current Version
 
 - Latest source version: [Gaster Code v1.0.4](https://github.com/HereditaryDog/gaster-code-releases/releases/tag/v1.0.4)
-- Current downloadable installer release: [Gaster Code v1.0.0](https://github.com/HereditaryDog/gaster-code-releases/releases/latest)
+- Current downloadable installer release: [Gaster Code v1.0.4](https://github.com/HereditaryDog/gaster-code-releases/releases/latest)
 - Updater metadata: [latest.json](https://github.com/HereditaryDog/gaster-code-releases/releases/latest/download/latest.json)
 - Public source: [HereditaryDog/gaster-code-releases](https://github.com/HereditaryDog/gaster-code-releases)
