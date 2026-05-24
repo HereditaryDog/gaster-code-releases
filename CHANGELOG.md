@@ -26,6 +26,12 @@
 - 无需用户数据迁移。
 - 当前公开安装包版本为 `1.0.4`。
 - 本地 Apple Silicon 测试包命名为 `Gaster Code-a 1.0.4.dmg`。
+- macOS 用户如果首次启动时提示“已损坏，无法打开”或“此文件已损坏”，请先将 `Gaster Code.app` 拖入 `Applications` 文件夹，然后打开终端执行：
+
+  ```bash
+  xattr -cr /Applications/Gaster\ Code.app
+  ```
+
 - 正式安装包在 GitHub Release 提供 macOS Apple Silicon、macOS Intel、Windows x64 和 Linux x64 版本。
 
 ## 1.0.3 - 2026-05-24
