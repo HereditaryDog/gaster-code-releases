@@ -55,7 +55,7 @@ jobs:
                 asset_name_pattern: "Gaster-Code_[version]_macos_arm64_[bundle][ext]"
               },
               {
-                platform: "macos-latest",
+                platform: "macos-15-intel",
                 rust_target: "x86_64-apple-darwin",
                 tauri_args: "--target x86_64-apple-darwin",
                 label: "macOS-x64",

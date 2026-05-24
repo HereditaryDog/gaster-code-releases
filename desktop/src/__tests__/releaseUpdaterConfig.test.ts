@@ -54,6 +54,15 @@ describe('desktop release updater configuration', () => {
     )
   })
 
+  it('builds the macOS x64 release on an Intel runner', () => {
+    const macosX64Block = releaseWorkflowYaml.match(
+      /platform:\s*"macos-15-intel"[\s\S]+?label:\s*"macOS-x64"/,
+    )?.[0]
+
+    expect(macosX64Block).toContain('rust_target: "x86_64-apple-darwin"')
+    expect(macosX64Block).toContain('tauri_args: "--target x86_64-apple-darwin"')
+  })
+
   it('rewrites updater manifest asset URLs before publishing the public release', () => {
     expect(releaseWorkflowYaml).toContain('PRIVATE_ASSET_BASE')
     expect(releaseWorkflowYaml).toContain('PUBLIC_ASSET_BASE')
