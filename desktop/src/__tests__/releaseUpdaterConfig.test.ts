@@ -68,4 +68,13 @@ describe('desktop release updater configuration', () => {
     expect(releaseWorkflowYaml).toContain('PUBLIC_ASSET_BASE')
     expect(releaseWorkflowYaml).toContain('.value.url |= if startswith($private)')
   })
+
+  it('allows publishing directly from the public release repository', () => {
+    expect(releaseWorkflowYaml).toContain(
+      'if [ "$PRIVATE_RELEASE_REPOSITORY" != "$PUBLIC_RELEASE_REPOSITORY" ]; then',
+    )
+    expect(releaseWorkflowYaml).toContain(
+      'Private and public release repositories match; keeping updater manifest URLs unchanged.',
+    )
+  })
 })

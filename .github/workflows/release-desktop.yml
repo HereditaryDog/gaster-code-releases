@@ -272,21 +272,25 @@ jobs:
             exit 1
           fi
 
-          PRIVATE_ASSET_BASE="https://github.com/${PRIVATE_RELEASE_REPOSITORY}/releases/download/${TAG}/"
-          PUBLIC_ASSET_BASE="https://github.com/${PUBLIC_RELEASE_REPOSITORY}/releases/download/${TAG}/"
+          if [ "$PRIVATE_RELEASE_REPOSITORY" != "$PUBLIC_RELEASE_REPOSITORY" ]; then
+            PRIVATE_ASSET_BASE="https://github.com/${PRIVATE_RELEASE_REPOSITORY}/releases/download/${TAG}/"
+            PUBLIC_ASSET_BASE="https://github.com/${PUBLIC_RELEASE_REPOSITORY}/releases/download/${TAG}/"
 
-          jq \
-            --arg private "$PRIVATE_ASSET_BASE" \
-            --arg public "$PUBLIC_ASSET_BASE" \
-            '.platforms |= with_entries(.value.url |= if startswith($private) then $public + (.[($private | length):]) else . end)' \
-            public-release-assets/latest.json > public-release-assets/latest.public.json
-          mv public-release-assets/latest.public.json public-release-assets/latest.json
+            jq \
+              --arg private "$PRIVATE_ASSET_BASE" \
+              --arg public "$PUBLIC_ASSET_BASE" \
+              '.platforms |= with_entries(.value.url |= if startswith($private) then $public + (.[($private | length):]) else . end)' \
+              public-release-assets/latest.json > public-release-assets/latest.public.json
+            mv public-release-assets/latest.public.json public-release-assets/latest.json
 
-          jq -e \
-            --arg private "$PRIVATE_ASSET_BASE" \
-            --arg public "$PUBLIC_ASSET_BASE" \
-            '.platforms | to_entries | all(.value.url | (startswith($public) and (startswith($private) | not)))' \
-            public-release-assets/latest.json >/dev/null
+            jq -e \
+              --arg private "$PRIVATE_ASSET_BASE" \
+              --arg public "$PUBLIC_ASSET_BASE" \
+              '.platforms | to_entries | all(.value.url | (startswith($public) and (startswith($private) | not)))' \
+              public-release-assets/latest.json >/dev/null
+          else
+            echo "Private and public release repositories match; keeping updater manifest URLs unchanged."
+          fi
 
       - name: Publish assets to public release repository
         shell: bash
