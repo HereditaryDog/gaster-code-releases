@@ -47,6 +47,13 @@ describe('desktop release updater configuration', () => {
     expect(releaseWorkflowYaml).toContain('PUBLIC_RELEASE_TOKEN')
   })
 
+  it('passes the encoded Tauri signing key directly to tauri-action', () => {
+    expect(releaseWorkflowYaml).not.toContain('Normalize Tauri signing key')
+    expect(releaseWorkflowYaml).toContain(
+      'TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}',
+    )
+  })
+
   it('rewrites updater manifest asset URLs before publishing the public release', () => {
     expect(releaseWorkflowYaml).toContain('PRIVATE_ASSET_BASE')
     expect(releaseWorkflowYaml).toContain('PUBLIC_ASSET_BASE')

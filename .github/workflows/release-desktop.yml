@@ -196,27 +196,6 @@ jobs:
           TAURI_ENV_TARGET_TRIPLE: ${{ matrix.rust_target }}
         run: bun run build:sidecars
 
-      - name: Normalize Tauri signing key
-        shell: bash
-        env:
-          RAW_TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-        run: |
-          if [ -z "${RAW_TAURI_SIGNING_PRIVATE_KEY:-}" ]; then
-            echo "::error::Missing TAURI_SIGNING_PRIVATE_KEY secret"
-            exit 1
-          fi
-
-          {
-            echo 'TAURI_SIGNING_PRIVATE_KEY<<__TAURI_SIGNING_PRIVATE_KEY__'
-            if printf '%s\n' "$RAW_TAURI_SIGNING_PRIVATE_KEY" | head -n 1 | grep -q 'minisign secret key'; then
-              printf '%s\n' "$RAW_TAURI_SIGNING_PRIVATE_KEY"
-            else
-              echo 'untrusted comment: minisign secret key'
-              printf '%s\n' "$RAW_TAURI_SIGNING_PRIVATE_KEY"
-            fi
-            echo '__TAURI_SIGNING_PRIVATE_KEY__'
-          } >> "$GITHUB_ENV"
-
       # ── Build Tauri app ──────────────────────────────────────
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
@@ -224,6 +203,7 @@ jobs:
           BUN_INSTALL_CACHE_DIR: ${{ runner.temp }}/bun-install-cache
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_ENV_TARGET_TRIPLE: ${{ matrix.rust_target }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           projectPath: desktop
