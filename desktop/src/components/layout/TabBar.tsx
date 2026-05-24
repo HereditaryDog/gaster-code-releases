@@ -1,4 +1,5 @@
-import { forwardRef, useRef, useState, useEffect, useCallback } from 'react'
+import { forwardRef, useMemo, useRef, useState, useEffect, useCallback } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import {
   SCHEDULED_TAB_ID,
   SETTINGS_TAB_ID,
@@ -7,15 +8,15 @@ import {
   type Tab,
 } from '../../stores/tabStore'
 import { useChatStore } from '../../stores/chatStore'
+import { useSessionStore } from '../../stores/sessionStore'
 import { useWorkspacePanelStore } from '../../stores/workspacePanelStore'
 import { useTerminalPanelStore } from '../../stores/terminalPanelStore'
 import { useTranslation } from '../../i18n'
 import { WindowControls, showWindowControls } from './WindowControls'
-import { Folder, FolderOpen, Palette, SquareTerminal, X } from 'lucide-react'
+import { OpenProjectMenu } from './OpenProjectMenu'
+import { Folder, FolderOpen, SquareTerminal } from 'lucide-react'
 
 const TAB_WIDTH = 180
-const ACTIVE_TAB_WIDTH = 220
-const INACTIVE_TAB_WIDTH = 204
 const DRAG_START_THRESHOLD = 4
 const isTauri = typeof window !== 'undefined' && ('__TAURI_INTERNALS__' in window || '__TAURI__' in window)
 
@@ -44,9 +45,22 @@ export function TabBar() {
   const activeTabId = useTabStore((s) => s.activeTabId)
   const setActiveTab = useTabStore((s) => s.setActiveTab)
   const closeTab = useTabStore((s) => s.closeTab)
+  const sessionTabIds = useMemo(
+    () => tabs.filter((tab) => isSessionTab(tab)).map((tab) => tab.sessionId),
+    [tabs],
+  )
+  const activeChatSessionIds = useChatStore(useShallow((s) =>
+    sessionTabIds.filter((sessionId) => s.sessions[sessionId]?.chatState !== 'idle')
+  ))
   const disconnectSession = useChatStore((s) => s.disconnectSession)
   const activeTab = tabs.find((tab) => tab.sessionId === activeTabId) ?? null
   const isActiveSessionTab = isSessionTab(activeTab) || isSessionTabId(activeTabId)
+  const activeSession = useSessionStore((state) =>
+    activeTabId ? state.sessions.find((session) => session.id === activeTabId) : undefined,
+  )
+  const openProjectPath = isActiveSessionTab && activeSession?.workDirExists !== false
+    ? activeSession?.workDir ?? null
+    : null
   const isWorkspacePanelOpen = useWorkspacePanelStore((state) =>
     activeTabId && isActiveSessionTab ? state.isPanelOpen(activeTabId) : false,
   )
@@ -69,6 +83,16 @@ export function TabBar() {
   const tabRefs = useRef(new Map<string, HTMLDivElement | null>())
   const startDraggingRef = useRef<(() => Promise<void>) | null>(null)
   const t = useTranslation()
+  const runningSessionIds = useMemo(() => {
+    const ids = new Set<string>()
+    for (const tab of tabs) {
+      if (isSessionTab(tab) && tab.status === 'running') ids.add(tab.sessionId)
+    }
+    for (const sessionId of activeChatSessionIds) {
+      ids.add(sessionId)
+    }
+    return ids
+  }, [activeChatSessionIds, tabs])
 
   useEffect(() => {
     if (!isTauri) return
@@ -99,6 +123,21 @@ export function TabBar() {
       ro.disconnect()
     }
   }, [updateScrollState, tabs.length])
+
+  useEffect(() => {
+    if (!activeTabId) return
+    const activeTabEl = tabRefs.current.get(activeTabId)
+    if (!activeTabEl) return
+
+    activeTabEl.scrollIntoView({
+      block: 'nearest',
+      inline: 'nearest',
+      behavior: 'smooth',
+    })
+
+    const frame = window.requestAnimationFrame(updateScrollState)
+    return () => window.cancelAnimationFrame(frame)
+  }, [activeTabId, tabs.length, updateScrollState])
 
   useEffect(() => {
     if (!contextMenu) return
@@ -291,18 +330,18 @@ export function TabBar() {
   return (
     <div
       data-testid="tab-bar"
-      className="flex items-end bg-[var(--color-surface-container)] min-h-[39px] select-none border-b border-[var(--color-border)] pt-1"
+      className="flex min-h-11 items-stretch bg-[var(--color-surface-container)] select-none border-b border-[var(--color-border)]"
     >
 
       {canScrollLeft && (
-        <button onClick={() => scroll('left')} className="flex-shrink-0 w-7 h-[35px] flex items-center justify-center rounded-t-[9px] text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)]">
+        <button onClick={() => scroll('left')} className="flex h-11 w-7 flex-shrink-0 items-center justify-center text-[var(--color-text-tertiary)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]">
           <span className="material-symbols-outlined text-[16px]">chevron_left</span>
         </button>
       )}
 
       <div
         ref={scrollRef}
-        className="tab-bar-hit-area flex-1 flex items-end overflow-x-hidden px-1"
+        className="tab-bar-hit-area flex-1 flex items-stretch overflow-x-hidden"
         onDragOver={(e) => e.preventDefault()}
         onMouseDown={handleScrollRegionMouseDown}
       >
@@ -311,10 +350,12 @@ export function TabBar() {
             key={tab.sessionId}
             ref={(node) => { tabRefs.current.set(tab.sessionId, node) }}
             tab={tab}
+            isRunning={runningSessionIds.has(tab.sessionId)}
             isActive={tab.sessionId === activeTabId}
             isDragOver={dragOverIndex === index}
             isDragging={tab.sessionId === draggingSessionId}
             dragOffsetX={tab.sessionId === draggingSessionId ? dragOffsetX : 0}
+            runningLabel={t('tabs.sessionRunning')}
             onClick={() => handleTabClick(tab.sessionId)}
             onClose={() => handleClose(tab.sessionId)}
             onContextMenu={(e) => handleContextMenu(e, tab.sessionId)}
@@ -323,7 +364,10 @@ export function TabBar() {
         ))}
       </div>
 
-      <div className="flex h-[35px] shrink-0 items-center gap-1 border-l border-[var(--color-border)]/70 px-2">
+      <div className="flex shrink-0 items-center gap-1 border-l border-[var(--color-border)]/70 px-2">
+        {isTauri && isActiveSessionTab && (
+          <OpenProjectMenu path={openProjectPath} />
+        )}
         <ToolbarIconButton
           icon={<SquareTerminal size={17} strokeWidth={1.9} />}
           label={t('tabs.openTerminal')}
@@ -335,12 +379,6 @@ export function TabBar() {
             useTabStore.getState().openTerminalTab()
           }}
           active={isTerminalPanelOpen}
-        />
-        <ToolbarIconButton
-          icon={<Palette size={17} strokeWidth={1.9} />}
-          label={t('sidebar.drawing')}
-          onClick={() => useTabStore.getState().openDrawingTab(t('sidebar.drawing'))}
-          active={activeTab?.type === 'drawing'}
         />
         {isActiveSessionTab && activeTabId && (
           <ToolbarIconButton
@@ -357,12 +395,12 @@ export function TabBar() {
           data-testid="tab-bar-drag-gutter"
           data-tauri-drag-region
           aria-hidden="true"
-          className={`flex-shrink-0 min-h-[35px] ${showWindowControls ? 'w-3' : 'w-4'}`}
+          className={`min-h-11 flex-shrink-0 ${showWindowControls ? 'w-3' : 'w-4'}`}
         />
       )}
 
       {canScrollRight && (
-        <button onClick={() => scroll('right')} className="flex-shrink-0 w-7 h-[35px] flex items-center justify-center rounded-t-[9px] text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)]">
+        <button onClick={() => scroll('right')} className="flex h-11 w-7 flex-shrink-0 items-center justify-center text-[var(--color-text-tertiary)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]">
           <span className="material-symbols-outlined text-[16px]">chevron_right</span>
         </button>
       )}
@@ -455,61 +493,62 @@ export function TabBar() {
 
 const TabItem = forwardRef<HTMLDivElement, {
   tab: Tab
+  isRunning: boolean
   isActive: boolean
   isDragOver: boolean
   isDragging: boolean
   dragOffsetX: number
+  runningLabel: string
   onClick: () => void
   onClose: () => void
   onContextMenu: (e: React.MouseEvent) => void
   onMouseDown: (event: React.MouseEvent) => void
-}>(({ tab, isActive, isDragOver, isDragging, dragOffsetX, onClick, onClose, onContextMenu, onMouseDown }, ref) => {
+}>(({ tab, isRunning, isActive, isDragOver, isDragging, dragOffsetX, runningLabel, onClick, onClose, onContextMenu, onMouseDown }, ref) => {
   return (
     <div
       ref={ref}
       data-dragging={isDragging ? 'true' : 'false'}
-      aria-current={isActive ? 'page' : undefined}
-      title={tab.title || 'Untitled'}
       onClick={onClick}
       onMouseDown={onMouseDown}
       onContextMenu={onContextMenu}
       className={`
-        tab-bar-hit-area group mx-0.5 flex-shrink-0 flex items-center gap-2 overflow-hidden px-2.5 min-h-[35px] relative
+        tab-bar-hit-area group relative flex min-h-11 flex-shrink-0 items-center gap-1.5 px-3
         ${isDragging ? 'z-20 cursor-grabbing' : 'cursor-grab'}
-        transition-[background-color,border-color,box-shadow,opacity,transform,width] duration-150 ease-out
+        transition-[background-color,box-shadow,opacity,transform] duration-150 ease-out
         ${isActive
-          ? 'z-10 rounded-t-[13px] border-x border-t border-b-0 border-[color-mix(in_srgb,var(--color-border)_68%,transparent)] bg-[color-mix(in_srgb,var(--color-surface)_94%,transparent)] shadow-[inset_0_2px_0_var(--color-brand),inset_0_1px_0_rgba(255,255,255,0.16),0_1px_0_var(--color-surface),0_10px_24px_rgba(0,0,0,0.10)]'
-          : 'rounded-t-[12px] border border-transparent bg-transparent hover:border-[color-mix(in_srgb,var(--color-border)_52%,transparent)] hover:bg-[color-mix(in_srgb,var(--color-surface-hover)_72%,transparent)] hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.10),0_8px_20px_rgba(0,0,0,0.08)]'
+          ? 'bg-[var(--color-surface)] shadow-[inset_0_-2px_0_var(--color-brand)]'
+          : 'bg-transparent hover:bg-[var(--color-surface-hover)]'
         }
         ${isDragging ? 'opacity-95 shadow-[0_10px_24px_rgba(0,0,0,0.18)] ring-1 ring-[var(--color-border)]' : ''}
         ${isDragOver ? 'before:absolute before:left-0 before:top-[4px] before:bottom-[4px] before:w-[3px] before:bg-[var(--color-brand)] before:rounded-full before:shadow-[0_0_0_1px_rgba(255,255,255,0.25)]' : ''}
       `}
       style={{
-        width: isActive ? ACTIVE_TAB_WIDTH : INACTIVE_TAB_WIDTH,
-        maxWidth: isActive ? ACTIVE_TAB_WIDTH : INACTIVE_TAB_WIDTH,
+        width: TAB_WIDTH,
+        maxWidth: TAB_WIDTH,
         transform: isDragging ? `translateX(${dragOffsetX}px) scale(1.02)` : undefined,
       }}
     >
-      {tab.type === 'session' && tab.status === 'running' && (
-        <span className="w-2 h-2 rounded-full bg-[var(--color-success)] ring-2 ring-[color-mix(in_srgb,var(--color-success)_18%,transparent)] animate-pulse flex-shrink-0" />
+      {tab.type === 'session' && isRunning && (
+        <span
+          className="h-1.5 w-1.5 flex-shrink-0 rounded-full bg-[var(--color-success)] animate-pulse"
+          aria-label={runningLabel}
+          title={runningLabel}
+        />
       )}
       {tab.type === 'session' && tab.status === 'error' && (
-        <span className="w-2 h-2 rounded-full bg-[var(--color-error)] ring-2 ring-[color-mix(in_srgb,var(--color-error)_18%,transparent)] flex-shrink-0" />
+        <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-error)] flex-shrink-0" />
       )}
       {tab.type === 'settings' && (
-        <span className={`material-symbols-outlined text-[14px] flex-shrink-0 ${isActive ? 'text-[var(--color-brand)]' : 'text-[var(--color-text-tertiary)]'}`}>settings</span>
+        <span className="material-symbols-outlined text-[14px] flex-shrink-0 text-[var(--color-text-tertiary)]">settings</span>
       )}
       {tab.type === 'scheduled' && (
-        <span className={`material-symbols-outlined text-[14px] flex-shrink-0 ${isActive ? 'text-[var(--color-brand)]' : 'text-[var(--color-text-tertiary)]'}`}>schedule</span>
+        <span className="material-symbols-outlined text-[14px] flex-shrink-0 text-[var(--color-text-tertiary)]">schedule</span>
       )}
       {tab.type === 'terminal' && (
-        <span className={`material-symbols-outlined text-[14px] flex-shrink-0 ${isActive ? 'text-[var(--color-brand)]' : 'text-[var(--color-text-tertiary)]'}`}>terminal</span>
-      )}
-      {tab.type === 'drawing' && (
-        <span className={`material-symbols-outlined text-[14px] flex-shrink-0 ${isActive ? 'text-[var(--color-brand)]' : 'text-[var(--color-text-tertiary)]'}`}>palette</span>
+        <span className="material-symbols-outlined text-[14px] flex-shrink-0 text-[var(--color-text-tertiary)]">terminal</span>
       )}
 
-      <span className={`min-w-0 flex-1 truncate text-xs leading-none transition-[padding-right] duration-150 ${isActive ? 'pr-6 text-[var(--color-text-primary)] font-semibold' : 'pr-0 text-[var(--color-text-secondary)] group-hover:pr-6'}`}>
+      <span className={`flex-1 truncate text-xs ${isActive ? 'text-[var(--color-text-primary)] font-medium' : 'text-[var(--color-text-secondary)]'}`}>
         {tab.title || 'Untitled'}
       </span>
 
@@ -518,9 +557,9 @@ const TabItem = forwardRef<HTMLDivElement, {
         aria-label={`Close ${tab.title || 'Untitled'}`}
         onMouseDown={(e) => { e.stopPropagation() }}
         onClick={(e) => { e.stopPropagation(); onClose() }}
-        className={`absolute right-1.5 inline-flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-md bg-transparent p-0 transition-[background-color,opacity,color] text-[var(--color-text-tertiary)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)] focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-border-focus)] ${isActive ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100'}`}
+        className="flex-shrink-0 -mr-0.5 inline-flex h-3 w-3 items-center justify-center bg-transparent p-0 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-[opacity,color] text-[var(--color-text-tertiary)] hover:text-[var(--color-text-secondary)] focus-visible:outline-none"
       >
-        <X aria-hidden="true" size={13} strokeWidth={2} />
+        <span className="material-symbols-outlined text-[11px] leading-none">close</span>
       </button>
     </div>
   )

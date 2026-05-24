@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'bun:test'
 import {
+  convertMarkdownTablesToBullets,
   formatImHelp,
   formatImStatus,
   formatPairingRequired,
@@ -45,6 +46,65 @@ describe('splitMessage', () => {
     expect(joined).toContain('Hello')
     expect(joined).toContain('test')
     expect(joined).toContain('baz')
+  })
+})
+
+describe('convertMarkdownTablesToBullets', () => {
+  it('converts pipe tables into row-labeled bullets', () => {
+    const markdown = [
+      'Before',
+      '',
+      '| Feature | Status | Notes |',
+      '| --- | --- | --- |',
+      '| Auth | Done | OAuth2 |',
+      '| API | WIP | REST only |',
+      '',
+      'After',
+    ].join('\n')
+
+    expect(convertMarkdownTablesToBullets(markdown)).toBe([
+      'Before',
+      '',
+      'Auth',
+      '• Status: Done',
+      '• Notes: OAuth2',
+      '',
+      'API',
+      '• Status: WIP',
+      '• Notes: REST only',
+      '',
+      'After',
+    ].join('\n'))
+  })
+
+  it('skips empty table cells', () => {
+    const markdown = [
+      '| Item | Value | Notes |',
+      '| --- | --- | --- |',
+      '| One | 1 | |',
+    ].join('\n')
+
+    expect(convertMarkdownTablesToBullets(markdown)).toBe([
+      'One',
+      '• Value: 1',
+    ].join('\n'))
+  })
+
+  it('leaves non-table pipe text unchanged', () => {
+    const markdown = 'Use foo | bar as plain text.'
+    expect(convertMarkdownTablesToBullets(markdown)).toBe(markdown)
+  })
+
+  it('does not rewrite pipe tables inside fenced code blocks', () => {
+    const markdown = [
+      '```',
+      '| Feature | Status |',
+      '| --- | --- |',
+      '| Auth | Done |',
+      '```',
+    ].join('\n')
+
+    expect(convertMarkdownTablesToBullets(markdown)).toBe(markdown)
   })
 })
 

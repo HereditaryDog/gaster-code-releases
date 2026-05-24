@@ -67,11 +67,12 @@
   src: url('/fonts/material-symbols-outlined.woff2') format('woff2');
 }
 
-/* Code highlighting is handled by shiki/react-shiki (inline styles + CSS line numbers) */
-
-/* ─── Shiki code viewer ───────────────────────────────────────── */
-.code-viewer-area .line {
+.code-viewer-area .line,
+.code-viewer-area .token-line {
   display: block;
+}
+
+.code-viewer-area .line {
   padding: 0 12px;
 }
 
@@ -79,20 +80,41 @@
   padding-left: 12px;
 }
 
-.code-viewer-area .line:hover {
+.code-viewer-area .line:hover,
+.code-viewer-area .token-line:hover {
   background: rgba(0, 0, 0, 0.03);
 }
 
-.code-viewer-area .line-numbers::before {
-  margin-right: 1.5ch;
-}
-
-.code-viewer-area .has-line-numbers {
+.code-viewer-area .has-line-numbers,
+.code-viewer-area .rs-has-line-numbers {
+  counter-reset: line-number calc(var(--line-start, 1) - 1);
   --line-numbers-foreground: rgba(135, 115, 109, 0.5);
   --line-numbers-width: 2.5ch;
   --line-numbers-padding-left: 0;
   --line-numbers-padding-right: 0;
   --line-numbers-font-size: 11px;
+  --rs-line-numbers-foreground: var(--line-numbers-foreground);
+  --rs-line-numbers-width: var(--line-numbers-width);
+  --rs-line-numbers-padding-left: var(--line-numbers-padding-left);
+  --rs-line-numbers-padding-right: var(--line-numbers-padding-right);
+  --rs-line-numbers-font-size: var(--line-numbers-font-size);
+}
+
+.code-viewer-area .line-numbers::before,
+.code-viewer-area .rs-line-number::before {
+  content: counter(line-number);
+  counter-increment: line-number;
+  display: inline-flex;
+  justify-content: flex-end;
+  box-sizing: content-box;
+  min-width: var(--rs-line-numbers-width);
+  padding-left: var(--rs-line-numbers-padding-left);
+  padding-right: var(--rs-line-numbers-padding-right);
+  color: var(--rs-line-numbers-foreground);
+  font-size: var(--rs-line-numbers-font-size);
+  user-select: none;
+  pointer-events: none;
+  margin-right: 1.5ch;
 }
 
 .settings-terminal-host .xterm {

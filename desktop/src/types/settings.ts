@@ -25,6 +25,18 @@ export type UpdateProxySettings = {
   url: string
 }
 
+export type NetworkProxyMode = 'system' | 'manual'
+
+export type NetworkProxySettings = {
+  mode: NetworkProxyMode
+  url: string
+}
+
+export type NetworkSettings = {
+  aiRequestTimeoutMs: number
+  proxy: NetworkProxySettings
+}
+
 export type DesktopTerminalStartupShell =
   | 'system'
   | 'pwsh'
@@ -42,6 +54,16 @@ export type H5AccessSettings = {
   tokenPreview: string | null
   allowedOrigins: string[]
   publicBaseUrl: string | null
+}
+
+export type H5HostStaleness = 'ok' | 'unreachable' | 'proxy' | 'unset'
+
+export type H5AccessDiagnostics = {
+  storedHostStaleness: H5HostStaleness
+  storedPublicBaseUrl: string | null
+  effectivePublicBaseUrl: string | null
+  suggestedHost: string | null
+  localInterfaceHosts: string[]
 }
 
 export type ModelInfo = {
@@ -62,6 +84,10 @@ export type UserSettings = {
   desktopNotificationsEnabled?: boolean
   webSearch?: WebSearchSettings
   updateProxy?: Partial<UpdateProxySettings>
+  network?: {
+    aiRequestTimeoutMs?: number
+    proxy?: Partial<NetworkProxySettings>
+  }
   desktopTerminal?: Partial<DesktopTerminalSettings>
   language?: string
   [key: string]: unknown

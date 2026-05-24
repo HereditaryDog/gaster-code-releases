@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import '@testing-library/jest-dom'
 import type { PerSessionState } from '../../stores/chatStore'
@@ -10,6 +10,10 @@ const getCurrentWindowMock = vi.hoisted(() => vi.fn(() => ({
 })))
 const windowControlsMock = vi.hoisted(() => ({
   show: true,
+}))
+const scrollIntoViewMock = vi.hoisted(() => vi.fn())
+const openProjectMenuMock = vi.hoisted(() => ({
+  paths: [] as Array<string | null | undefined>,
 }))
 
 function makeChatSession(chatState: ChatState): PerSessionState {
@@ -56,9 +60,13 @@ vi.mock('../../i18n', () => ({
       'tabs.closeAllConfirmTitle': 'Sessions Running',
       'tabs.closeAllConfirmMessage': '{count} sessions still running',
       'tabs.closeAllConfirmStop': 'Stop All & Close',
+      'tabs.sessionRunning': 'Session running',
       'tabs.openTerminal': 'Open Terminal',
       'tabs.showWorkspace': 'Show Workspace',
       'tabs.hideWorkspace': 'Hide Workspace',
+      'openProject.openProject': 'Open project',
+      'openProject.openIn': 'Open in {target}',
+      'openProject.openFailed': 'Could not open project',
       'common.cancel': 'Cancel',
     }
 
@@ -69,6 +77,14 @@ vi.mock('../../i18n', () => ({
       }
     }
     return text
+  },
+}))
+
+vi.mock('./OpenProjectMenu', () => ({
+  OpenProjectMenu: ({ path }: { path: string | null | undefined }) => {
+    if (!path) return null
+    openProjectMenuMock.paths.push(path)
+    return <div data-testid="open-project-menu">{path}</div>
   },
 }))
 
@@ -100,15 +116,25 @@ describe('TabBar', () => {
       value: {},
     })
 
+    Object.defineProperty(window.HTMLElement.prototype, 'scrollIntoView', {
+      configurable: true,
+      value: scrollIntoViewMock,
+    })
+
     startDraggingMock.mockClear()
     getCurrentWindowMock.mockClear()
+    scrollIntoViewMock.mockClear()
+    openProjectMenuMock.paths = []
     windowControlsMock.show = true
     vi.resetModules()
   })
 
   afterEach(async () => {
+    cleanup()
+
     const { useTabStore } = await import('../../stores/tabStore')
     const { useChatStore } = await import('../../stores/chatStore')
+    const { useSessionStore } = await import('../../stores/sessionStore')
     const { useWorkspacePanelStore } = await import('../../stores/workspacePanelStore')
     const { useTerminalPanelStore } = await import('../../stores/terminalPanelStore')
 
@@ -116,10 +142,54 @@ describe('TabBar', () => {
     useChatStore.setState({
       sessions: {},
     } as Partial<ReturnType<typeof useChatStore.getState>>)
+    useSessionStore.setState({
+      sessions: [],
+      activeSessionId: null,
+      isLoading: false,
+      error: null,
+      isBatchMode: false,
+      selectedSessionIds: new Set(),
+    } as Partial<ReturnType<typeof useSessionStore.getState>>)
     useWorkspacePanelStore.setState(useWorkspacePanelStore.getInitialState(), true)
     useTerminalPanelStore.setState(useTerminalPanelStore.getInitialState(), true)
 
     delete (window as typeof window & { __TAURI__?: unknown }).__TAURI__
+  })
+
+  it('scrolls the active tab into view when the active tab changes', async () => {
+    const { TabBar } = await import('./TabBar')
+    const { useTabStore } = await import('../../stores/tabStore')
+    const { useChatStore } = await import('../../stores/chatStore')
+
+    useTabStore.setState({
+      tabs: [
+        { sessionId: 'tab-1', title: 'First Session', type: 'session', status: 'idle' },
+        { sessionId: 'tab-2', title: 'Second Session', type: 'session', status: 'idle' },
+        { sessionId: 'tab-3', title: 'Third Session', type: 'session', status: 'idle' },
+        { sessionId: 'tab-4', title: 'Fourth Session', type: 'session', status: 'idle' },
+        { sessionId: 'tab-5', title: 'New Session', type: 'session', status: 'idle' },
+      ],
+      activeTabId: 'tab-1',
+    })
+    useChatStore.setState({
+      sessions: {},
+      disconnectSession: vi.fn(),
+    } as Partial<ReturnType<typeof useChatStore.getState>>)
+
+    await act(async () => {
+      render(<TabBar />)
+    })
+    scrollIntoViewMock.mockClear()
+
+    await act(async () => {
+      useTabStore.getState().setActiveTab('tab-5')
+    })
+
+    expect(scrollIntoViewMock).toHaveBeenCalledWith({
+      block: 'nearest',
+      inline: 'nearest',
+      behavior: 'smooth',
+    })
   })
 
   it('keeps the overflow button flush against window controls on Windows', async () => {
@@ -221,15 +291,14 @@ describe('TabBar', () => {
     expect(screen.getByTestId('tab-bar-drag-gutter')).toHaveAttribute('data-tauri-drag-region')
   })
 
-  it('makes the active project tab easier to identify and close', async () => {
+  it('keeps the desktop tab strip at a roomier titlebar height', async () => {
     const { TabBar } = await import('./TabBar')
     const { useTabStore } = await import('../../stores/tabStore')
     const { useChatStore } = await import('../../stores/chatStore')
 
     useTabStore.setState({
       tabs: [
-        { sessionId: 'tab-1', title: '银行对账单与手续费做账', type: 'session', status: 'idle' },
-        { sessionId: 'tab-2', title: 'Optimize collaboration with assistant', type: 'session', status: 'idle' },
+        { sessionId: 'tab-1', title: 'Untitled Session', type: 'session', status: 'idle' },
       ],
       activeTabId: 'tab-1',
     })
@@ -242,55 +311,179 @@ describe('TabBar', () => {
       render(<TabBar />)
     })
 
-    const activeTab = screen.getByText('银行对账单与手续费做账').closest('.tab-bar-hit-area')
-    const inactiveTab = screen.getByText('Optimize collaboration with assistant').closest('.tab-bar-hit-area')
-    const closeButton = screen.getByLabelText('Close 银行对账单与手续费做账')
+    const tabBar = screen.getByTestId('tab-bar')
+    const tab = screen.getByText('Untitled Session').closest('.tab-bar-hit-area')
 
-    expect(activeTab).toHaveAttribute('aria-current', 'page')
-    expect(activeTab).toHaveAttribute('title', '银行对账单与手续费做账')
-    expect(activeTab).toHaveStyle({ width: '220px' })
-    expect(inactiveTab).toHaveStyle({ width: '204px' })
-    expect(activeTab).toHaveClass('rounded-t-[13px]', 'border-t')
-    expect(activeTab).toHaveClass('border-x', 'border-b-0')
-    expect(activeTab?.className).toContain('border-[color-mix(in_srgb,var(--color-border)_68%,transparent)]')
-    expect(activeTab?.className).toContain('bg-[color-mix(in_srgb,var(--color-surface)_94%,transparent)]')
-    expect(activeTab?.className).toContain('inset_0_1px_0_rgba(255,255,255,0.16)')
-    expect(inactiveTab).toHaveClass('rounded-t-[12px]')
-    expect(inactiveTab?.className).toContain('hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.10),0_8px_20px_rgba(0,0,0,0.08)]')
-    expect(inactiveTab).not.toHaveClass('border-b-0')
-    expect(closeButton).toHaveClass('opacity-100')
+    expect(tabBar).toHaveClass('min-h-11')
+    expect(tab).toHaveClass('min-h-11')
+    expect(screen.getByTestId('tab-bar-drag-gutter')).toHaveClass('min-h-11')
   })
 
-  it('keeps project tab labels clear of decorative close icons', async () => {
+  it('passes the active session workdir into the open-project control', async () => {
     const { TabBar } = await import('./TabBar')
     const { useTabStore } = await import('../../stores/tabStore')
     const { useChatStore } = await import('../../stores/chatStore')
+    const { useSessionStore } = await import('../../stores/sessionStore')
 
     useTabStore.setState({
       tabs: [
-        { sessionId: 'tab-1', title: 'Explain analysis mode behavior', type: 'session', status: 'idle' },
-        { sessionId: 'tab-2', title: '银行对账单与手续费做账', type: 'session', status: 'idle' },
+        { sessionId: 'tab-1', title: 'Workspace Session', type: 'session', status: 'idle' },
       ],
-      activeTabId: 'tab-2',
+      activeTabId: 'tab-1',
     })
     useChatStore.setState({
       sessions: {},
       disconnectSession: vi.fn(),
     } as Partial<ReturnType<typeof useChatStore.getState>>)
+    useSessionStore.setState({
+      sessions: [{
+        id: 'tab-1',
+        title: 'Workspace Session',
+        createdAt: '2026-05-13T00:00:00.000Z',
+        modifiedAt: '2026-05-13T00:00:00.000Z',
+        messageCount: 0,
+        projectPath: '/repo',
+        workDir: '/repo/worktree',
+        workDirExists: true,
+      }],
+      activeSessionId: 'tab-1',
+    })
 
     await act(async () => {
       render(<TabBar />)
     })
 
-    const inactiveTitle = screen.getByText('Explain analysis mode behavior')
-    const inactiveTab = inactiveTitle.closest('.tab-bar-hit-area')
-    const closeButton = screen.getByLabelText('Close Explain analysis mode behavior')
+    expect(screen.getByTestId('open-project-menu')).toHaveTextContent('/repo/worktree')
+    expect(openProjectMenuMock.paths[openProjectMenuMock.paths.length - 1]).toBe('/repo/worktree')
+  })
 
-    expect(inactiveTab).toHaveStyle({ width: '204px' })
-    expect(inactiveTitle).toHaveClass('group-hover:pr-6')
-    expect(closeButton).toHaveClass('absolute', 'right-1.5')
-    expect(closeButton).toHaveTextContent('')
-    expect(closeButton.querySelector('svg')).toBeInTheDocument()
+  it('does not rerender for chat payload changes when tab running state is unchanged', async () => {
+    const { TabBar } = await import('./TabBar')
+    const { useTabStore } = await import('../../stores/tabStore')
+    const { useChatStore } = await import('../../stores/chatStore')
+    const { useSessionStore } = await import('../../stores/sessionStore')
+
+    useTabStore.setState({
+      tabs: [
+        { sessionId: 'tab-1', title: 'Workspace Session', type: 'session', status: 'idle' },
+      ],
+      activeTabId: 'tab-1',
+    })
+    useChatStore.setState({
+      sessions: {
+        'tab-1': makeChatSession('idle'),
+      },
+      disconnectSession: vi.fn(),
+    } as Partial<ReturnType<typeof useChatStore.getState>>)
+    useSessionStore.setState({
+      sessions: [{
+        id: 'tab-1',
+        title: 'Workspace Session',
+        createdAt: '2026-05-13T00:00:00.000Z',
+        modifiedAt: '2026-05-13T00:00:00.000Z',
+        messageCount: 0,
+        projectPath: '/repo',
+        workDir: '/repo/worktree',
+        workDirExists: true,
+      }],
+      activeSessionId: 'tab-1',
+    })
+
+    await act(async () => {
+      render(<TabBar />)
+    })
+    expect(openProjectMenuMock.paths[openProjectMenuMock.paths.length - 1]).toBe('/repo/worktree')
+
+    openProjectMenuMock.paths = []
+    await act(async () => {
+      useChatStore.setState((state) => ({
+        sessions: {
+          ...state.sessions,
+          'tab-1': {
+            ...state.sessions['tab-1']!,
+            streamingText: 'token churn should not affect tab chrome',
+          },
+        },
+      }))
+    })
+
+    expect(openProjectMenuMock.paths).toEqual([])
+  })
+
+  it('hides the open-project control when the active session workdir is unavailable', async () => {
+    const { TabBar } = await import('./TabBar')
+    const { useTabStore } = await import('../../stores/tabStore')
+    const { useChatStore } = await import('../../stores/chatStore')
+    const { useSessionStore } = await import('../../stores/sessionStore')
+
+    useTabStore.setState({
+      tabs: [
+        { sessionId: 'tab-1', title: 'Workspace Session', type: 'session', status: 'idle' },
+      ],
+      activeTabId: 'tab-1',
+    })
+    useChatStore.setState({
+      sessions: {},
+      disconnectSession: vi.fn(),
+    } as Partial<ReturnType<typeof useChatStore.getState>>)
+    useSessionStore.setState({
+      sessions: [{
+        id: 'tab-1',
+        title: 'Workspace Session',
+        createdAt: '2026-05-13T00:00:00.000Z',
+        modifiedAt: '2026-05-13T00:00:00.000Z',
+        messageCount: 0,
+        projectPath: '/repo',
+        workDir: '/repo/worktree',
+        workDirExists: false,
+      }],
+      activeSessionId: 'tab-1',
+    })
+
+    await act(async () => {
+      render(<TabBar />)
+    })
+
+    expect(screen.queryByTestId('open-project-menu')).not.toBeInTheDocument()
+  })
+
+  it('hides the open-project control outside the desktop shell', async () => {
+    delete (window as typeof window & { __TAURI__?: unknown }).__TAURI__
+
+    const { TabBar } = await import('./TabBar')
+    const { useTabStore } = await import('../../stores/tabStore')
+    const { useChatStore } = await import('../../stores/chatStore')
+    const { useSessionStore } = await import('../../stores/sessionStore')
+
+    useTabStore.setState({
+      tabs: [
+        { sessionId: 'tab-1', title: 'Workspace Session', type: 'session', status: 'idle' },
+      ],
+      activeTabId: 'tab-1',
+    })
+    useChatStore.setState({
+      sessions: {},
+      disconnectSession: vi.fn(),
+    } as Partial<ReturnType<typeof useChatStore.getState>>)
+    useSessionStore.setState({
+      sessions: [{
+        id: 'tab-1',
+        title: 'Workspace Session',
+        createdAt: '2026-05-13T00:00:00.000Z',
+        modifiedAt: '2026-05-13T00:00:00.000Z',
+        messageCount: 0,
+        projectPath: '/repo',
+        workDir: '/repo/worktree',
+        workDirExists: true,
+      }],
+      activeSessionId: 'tab-1',
+    })
+
+    await act(async () => {
+      render(<TabBar />)
+    })
+
+    expect(screen.queryByTestId('open-project-menu')).not.toBeInTheDocument()
   })
 
   it('starts dragging when clicking the empty tab-bar gutter', async () => {
@@ -694,5 +887,35 @@ describe('TabBar', () => {
     expect(disconnectSession).toHaveBeenCalledWith('tab-thinking')
     expect(disconnectSession).toHaveBeenCalledWith('tab-idle')
     expect(useTabStore.getState().tabs).toEqual([])
+  })
+
+  it('shows a running marker on tabs from tab status or live chat state', async () => {
+    const { TabBar } = await import('./TabBar')
+    const { useTabStore } = await import('../../stores/tabStore')
+    const { useChatStore } = await import('../../stores/chatStore')
+
+    useTabStore.setState({
+      tabs: [
+        { sessionId: 'tab-status-running', title: 'Status Running', type: 'session', status: 'running' },
+        { sessionId: 'tab-chat-running', title: 'Chat Running', type: 'session', status: 'idle' },
+        { sessionId: 'tab-idle', title: 'Idle', type: 'session', status: 'idle' },
+      ],
+      activeTabId: 'tab-status-running',
+    })
+    useChatStore.setState({
+      sessions: {
+        'tab-status-running': makeChatSession('idle'),
+        'tab-chat-running': makeChatSession('thinking'),
+        'tab-idle': makeChatSession('idle'),
+      },
+      disconnectSession: vi.fn(),
+    } as Partial<ReturnType<typeof useChatStore.getState>>)
+
+    await act(async () => {
+      render(<TabBar />)
+    })
+
+    expect(screen.getAllByLabelText('Session running')).toHaveLength(2)
+    expect(screen.getByText('Idle').closest('[data-dragging]')?.querySelector('[aria-label="Session running"]')).toBeNull()
   })
 })

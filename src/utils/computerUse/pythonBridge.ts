@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url'
 import { execFileNoThrow } from '../execFileNoThrow.js'
 import { logForDebugging } from '../debug.js'
 import { getClaudeConfigHomeDir } from '../envUtils.js'
+import { buildPipInstallAttempts } from './pipInstall.js'
 import { loadStoredComputerUseConfig } from './preauthorizedConfig.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -16,9 +17,6 @@ const projectRoot = path.resolve(__dirname, '../../..')
 const runtimeStateRoot = path.join(getClaudeConfigHomeDir(), '.runtime')
 const venvRoot = path.join(runtimeStateRoot, 'venv')
 const installStampPath = path.join(runtimeStateRoot, 'requirements.sha256')
-
-const PIP_INDEX_URL = 'https://pypi.tuna.tsinghua.edu.cn/simple/'
-const PIP_TRUSTED_HOST = 'pypi.tuna.tsinghua.edu.cn'
 
 const isWindows = process.platform === 'win32'
 
@@ -59,6 +57,31 @@ async function runOrThrow(file: string, args: string[], label: string): Promise<
     throw new Error(`${label} failed with code ${code}: ${stderr || stdout || 'unknown error'}`)
   }
   return stdout
+}
+
+export async function runPipInstallWithFallback(
+  baseArgs: string[],
+  label: string,
+  run: (args: string[]) => Promise<{ code: number; stdout: string; stderr: string }> = args =>
+    execFileNoThrow(pythonBinPath(), args, { useCwd: false }),
+): Promise<void> {
+  let firstFailure = ''
+  for (const args of buildPipInstallAttempts(baseArgs)) {
+    const { code, stdout, stderr } = await run(args)
+    if (code === 0) return
+    if (!firstFailure) {
+      firstFailure = `${label} failed with code ${code}: ${stderr || stdout || 'unknown error'}`
+    }
+  }
+  throw new Error(firstFailure || `${label} failed`)
+}
+
+export async function installRuntimeDependencies(
+  requirementsPath: string,
+  install: typeof runPipInstallWithFallback = runPipInstallWithFallback,
+): Promise<void> {
+  await install(['-m', 'pip', 'install', '--upgrade', 'pip'], 'pip upgrade')
+  await install(['-m', 'pip', 'install', '-r', requirementsPath], 'python dependency install')
 }
 
 async function getVenvCreationPythonCommand(): Promise<string> {
@@ -120,16 +143,7 @@ export async function ensureBootstrapped(): Promise<void> {
 
     if (installedDigest !== digest) {
       logForDebugging('installing python runtime dependencies', { level: 'debug' })
-      await runOrThrow(pythonBinPath(), [
-        '-m', 'pip', 'install', '--upgrade', 'pip',
-        '-i', PIP_INDEX_URL, '--trusted-host', PIP_TRUSTED_HOST,
-      ], 'pip upgrade')
-      await runOrThrow(
-        pythonBinPath(),
-        ['-m', 'pip', 'install', '-r', requirementsPath,
-         '-i', PIP_INDEX_URL, '--trusted-host', PIP_TRUSTED_HOST],
-        'python dependency install',
-      )
+      await installRuntimeDependencies(requirementsPath)
       await writeFile(installStampPath, `${digest}\n`, 'utf8')
     }
   })()

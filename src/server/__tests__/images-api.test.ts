@@ -46,7 +46,7 @@ describe('images API', () => {
     await fs.rm(tmpDir, { recursive: true, force: true })
   })
 
-  test('POST /api/images/generate uses the managed G-Master gpt-image-2 channel', async () => {
+  test('POST /api/images/generate uses the managed G-Master async gpt-image-2 channel', async () => {
     await setupGMasterProvider()
     let capturedUrl = ''
     let capturedBody: Record<string, unknown> | null = null
@@ -72,7 +72,7 @@ describe('images API', () => {
     }
 
     expect(res.status).toBe(200)
-    expect(capturedUrl).toBe('https://gmapi.example.test/v1/images/generations')
+    expect(capturedUrl).toBe('https://gmapi.example.test/v1/images/generations/async')
     expect(capturedAuthorization).toBe('Bearer sk-gmaster-desktop')
     expect(capturedBody).toEqual({
       model: 'gpt-image-2',
@@ -219,7 +219,7 @@ describe('images API', () => {
 
     expect(res.status).toBe(504)
     expect(body.error).toBe('IMAGE_GENERATION_TIMEOUT')
-    expect(body.message).toContain('300s')
+    expect(body.message).toContain('60s')
   })
 
   test('POST /api/images/generate classifies upstream request failures before a response', async () => {
@@ -239,7 +239,7 @@ describe('images API', () => {
     expect(res.status).toBe(502)
     expect(body.error).toBe('IMAGE_GENERATION_UPSTREAM_REQUEST_FAILED')
     expect(body.message).toContain('G-Master API image request was interrupted')
-    expect(body.message).toContain('shorter prompt')
+    expect(body.message).toContain('prompt is not rewritten')
   })
 
   test('POST /api/images/generate classifies upstream 524 as an image channel timeout', async () => {

@@ -1,6 +1,12 @@
 import { describe, it, expect } from 'bun:test'
 import { splitMessage, formatPermissionRequest, truncateInput, escapeMarkdownV2 } from '../../common/format.js'
 import { parsePermitCallbackData } from '../../common/permission.js'
+import {
+  buildTelegramThinkingUpdate,
+  formatTelegramOutboundText,
+  formatTelegramStreamingText,
+  planTelegramStreamingUpdate,
+} from '../format.js'
 
 /**
  * Telegram Adapter 翻译逻辑测试
@@ -28,6 +34,83 @@ describe('Telegram message formatting', () => {
       const text = 'A'.repeat(2000) + '\n\n' + 'B'.repeat(2000)
       const chunks = splitMessage(text, 3000)
       expect(chunks.length).toBe(2)
+    })
+  })
+
+  describe('Telegram outbound text formatting', () => {
+    it('converts markdown tables to bullets before sending', () => {
+      const markdown = [
+        '| Feature | Status |',
+        '| --- | --- |',
+        '| Telegram | Done |',
+      ].join('\n')
+
+      expect(formatTelegramOutboundText(markdown)).toBe([
+        'Telegram',
+        '• Status: Done',
+      ].join('\n'))
+    })
+
+    it('converts markdown tables during streaming updates too', () => {
+      const markdown = [
+        '| Feature | Status |',
+        '| --- | --- |',
+        '| Telegram | Streaming |',
+      ].join('\n')
+
+      expect(formatTelegramStreamingText(markdown)).toBe([
+        'Telegram',
+        '• Status: Streaming ▍',
+      ].join('\n'))
+    })
+  })
+
+  describe('Telegram streaming updates', () => {
+    it('keeps short streaming text in the active editable chunk', () => {
+      expect(planTelegramStreamingUpdate('Hello', ' World', 4000)).toEqual({
+        sealedChunks: [],
+        activeChunk: 'Hello World',
+      })
+    })
+
+    it('seals overflowing streaming text and carries the remainder forward', () => {
+      const result = planTelegramStreamingUpdate('a'.repeat(3990), 'b'.repeat(50), 4000)
+
+      expect(result.sealedChunks.length).toBe(1)
+      expect(result.sealedChunks[0]!.length).toBeLessThanOrEqual(4000)
+      expect(result.activeChunk).toBe('b'.repeat(40))
+    })
+
+    it('can seal multiple chunks from one large buffered flush', () => {
+      const result = planTelegramStreamingUpdate('', 'x'.repeat(8500), 4000)
+
+      expect(result.sealedChunks.length).toBe(2)
+      expect(result.sealedChunks.every((chunk) => chunk.length <= 4000)).toBe(true)
+      expect(result.activeChunk.length).toBe(500)
+    })
+
+    it('keeps an exact-limit remainder editable instead of emitting an empty active chunk', () => {
+      const result = planTelegramStreamingUpdate('', 'x'.repeat(8000), 4000)
+
+      expect(result.sealedChunks).toEqual(['x'.repeat(4000)])
+      expect(result.activeChunk).toBe('x'.repeat(4000))
+    })
+  })
+
+  describe('Telegram thinking updates', () => {
+    it('accumulates thinking deltas before formatting the preview', () => {
+      const first = buildTelegramThinkingUpdate('', 'The user')
+      const second = buildTelegramThinkingUpdate(first.fullText, ' wants a long answer')
+
+      expect(second.fullText).toBe('The user wants a long answer')
+      expect(second.messageText).toBe('💭 The user wants a long answer...')
+    })
+
+    it('caps long thinking previews while keeping the full accumulated text', () => {
+      const result = buildTelegramThinkingUpdate('abcdef', 'ghij', 6)
+
+      expect(result.fullText).toBe('abcdefghij')
+      expect(result.messageText).toBe('💭 abcdef...')
     })
   })
 

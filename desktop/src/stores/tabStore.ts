@@ -5,6 +5,7 @@ import {
   removeMigratedStorage,
   writeMigratedStorage,
 } from '../lib/storageMigration'
+import { dropSession as dropVirtualHeightSession } from '../components/chat/virtualHeightCache'
 
 const TAB_STORAGE_KEY = 'gaster-code-open-tabs'
 const LEGACY_TAB_STORAGE_KEYS = ['gaster-code-legacy-open-tabs']
@@ -120,6 +121,7 @@ export const useTabStore = create<TabStore>((set, get) => ({
 
     set({ tabs: newTabs, activeTabId: newActiveId })
     get().saveTabs()
+    dropVirtualHeightSession(sessionId)
   },
 
   setActiveTab: (sessionId) => {

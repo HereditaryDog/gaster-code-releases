@@ -9,7 +9,9 @@ import {
   type AppModeConfig,
   type DesktopTerminalSettings,
   type DesktopTerminalStartupShell,
+  type H5AccessDiagnostics,
   type H5AccessSettings,
+  type NetworkSettings,
   type PermissionMode,
   type EffortLevel,
   type ModelInfo,
@@ -62,7 +64,9 @@ type SettingsStore = {
   desktopTerminal: DesktopTerminalSettings
   webSearch: WebSearchSettings
   updateProxy: UpdateProxySettings
+  network: NetworkSettings
   h5Access: H5AccessSettings
+  h5AccessDiagnostics: H5AccessDiagnostics | null
   h5AccessError: string | null
   responseLanguage: string
   uiZoom: number
@@ -85,6 +89,7 @@ type SettingsStore = {
   setDesktopTerminal: (settings: DesktopTerminalSettings) => Promise<void>
   setWebSearch: (settings: WebSearchSettings) => Promise<void>
   setUpdateProxy: (settings: UpdateProxySettings) => Promise<void>
+  setNetwork: (settings: NetworkSettings) => Promise<void>
   setAppMode: (mode: AppMode, portableDir?: string | null) => Promise<void>
   enableH5Access: () => Promise<string>
   disableH5Access: () => Promise<void>
@@ -95,6 +100,10 @@ type SettingsStore = {
   }) => Promise<void>
   setResponseLanguage: (language: string) => Promise<void>
   setUiZoom: (zoom: number) => void
+}
+
+type NetworkSettingsInput = Partial<Omit<NetworkSettings, 'proxy'>> & {
+  proxy?: Partial<NetworkSettings['proxy']>
 }
 
 const DEFAULT_H5_ACCESS_SETTINGS: H5AccessSettings = {
@@ -114,6 +123,14 @@ const DEFAULT_UPDATE_PROXY_SETTINGS: UpdateProxySettings = {
   url: '',
 }
 
+const DEFAULT_NETWORK_SETTINGS: NetworkSettings = {
+  aiRequestTimeoutMs: 120_000,
+  proxy: {
+    mode: 'system',
+    url: '',
+  },
+}
+
 export const useSettingsStore = create<SettingsStore>((set, get) => ({
   permissionMode: 'default',
   currentModel: null,
@@ -128,7 +145,9 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
   desktopTerminal: DEFAULT_DESKTOP_TERMINAL_SETTINGS,
   webSearch: { mode: 'auto', tavilyApiKey: '', braveApiKey: '' },
   updateProxy: DEFAULT_UPDATE_PROXY_SETTINGS,
+  network: DEFAULT_NETWORK_SETTINGS,
   h5Access: DEFAULT_H5_ACCESS_SETTINGS,
+  h5AccessDiagnostics: null,
   h5AccessError: null,
   responseLanguage: '',
   uiZoom: readStoredAppZoomLevel(),
@@ -176,7 +195,9 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
         desktopTerminal: normalizeDesktopTerminalSettings(userSettings.desktopTerminal),
         webSearch: normalizeWebSearchSettings(userSettings.webSearch),
         updateProxy: normalizeUpdateProxySettings(userSettings.updateProxy),
+        network: normalizeNetworkSettings(userSettings.network),
         h5Access: h5AccessResult.settings,
+        h5AccessDiagnostics: h5AccessResult.diagnostics,
         h5AccessError: h5AccessResult.error,
         responseLanguage: typeof userSettings.language === 'string' ? userSettings.language : '',
         isLoading: false,
@@ -192,7 +213,11 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
 
   fetchH5Access: async () => {
     const result = await loadH5AccessSettings(get().h5Access)
-    set({ h5Access: result.settings, h5AccessError: result.error })
+    set({
+      h5Access: result.settings,
+      h5AccessDiagnostics: result.diagnostics,
+      h5AccessError: result.error,
+    })
   },
 
   fetchAppMode: async () => {
@@ -325,6 +350,18 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
     }
   },
 
+  setNetwork: async (settings) => {
+    const prev = get().network
+    const next = normalizeNetworkSettings(settings)
+    set({ network: next })
+    try {
+      await settingsApi.updateUser({ network: next })
+    } catch (error) {
+      set({ network: prev })
+      throw error
+    }
+  },
+
   setAppMode: async (mode, portableDir) => {
     if (!isTauriRuntime()) return
     const prev = get().appMode
@@ -360,6 +397,7 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
         h5Access: normalizeH5AccessSettings(settings),
         h5AccessError: null,
       })
+      await refreshH5DiagnosticsSilent(set)
       return token
     } catch (error) {
       set({ h5AccessError: getErrorMessage(error, '启用 H5 访问失败。') })
@@ -375,6 +413,7 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
         h5Access: normalizeH5AccessSettings(settings),
         h5AccessError: null,
       })
+      await refreshH5DiagnosticsSilent(set)
     } catch (error) {
       set({ h5AccessError: getErrorMessage(error, '关闭 H5 访问失败。') })
       throw error
@@ -389,6 +428,7 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
         h5Access: normalizeH5AccessSettings(settings),
         h5AccessError: null,
       })
+      await refreshH5DiagnosticsSilent(set)
       return token
     } catch (error) {
       set({ h5AccessError: getErrorMessage(error, '重新生成 H5 令牌失败。') })
@@ -404,6 +444,7 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
         h5Access: normalizeH5AccessSettings(settings),
         h5AccessError: null,
       })
+      await refreshH5DiagnosticsSilent(set)
     } catch (error) {
       set({ h5AccessError: getErrorMessage(error, '更新 H5 访问设置失败。') })
       throw error
@@ -445,6 +486,23 @@ function normalizeUpdateProxySettings(
   }
 }
 
+function normalizeNetworkSettings(
+  settings: NetworkSettingsInput | undefined,
+): NetworkSettings {
+  const timeout = typeof settings?.aiRequestTimeoutMs === 'number' && Number.isFinite(settings.aiRequestTimeoutMs)
+    ? Math.min(Math.max(Math.round(settings.aiRequestTimeoutMs), 5_000), 600_000)
+    : DEFAULT_NETWORK_SETTINGS.aiRequestTimeoutMs
+  const proxyMode = settings?.proxy?.mode === 'manual' ? 'manual' : 'system'
+
+  return {
+    aiRequestTimeoutMs: timeout,
+    proxy: {
+      mode: proxyMode,
+      url: typeof settings?.proxy?.url === 'string' ? settings.proxy.url.trim() : '',
+    },
+  }
+}
+
 function normalizeDesktopTerminalSettings(
   settings: Partial<DesktopTerminalSettings> | undefined,
 ): DesktopTerminalSettings {
@@ -469,28 +527,58 @@ function normalizeH5AccessSettings(settings: H5AccessSettings | undefined): H5Ac
   }
 }
 
+function normalizeH5AccessDiagnostics(
+  diagnostics: H5AccessDiagnostics | undefined,
+): H5AccessDiagnostics | null {
+  if (!diagnostics) return null
+  return {
+    storedHostStaleness: diagnostics.storedHostStaleness,
+    storedPublicBaseUrl: diagnostics.storedPublicBaseUrl ?? null,
+    effectivePublicBaseUrl: diagnostics.effectivePublicBaseUrl ?? null,
+    suggestedHost: diagnostics.suggestedHost ?? null,
+    localInterfaceHosts: Array.isArray(diagnostics.localInterfaceHosts)
+      ? diagnostics.localInterfaceHosts
+      : [],
+  }
+}
+
 async function loadH5AccessSettings(previousH5Access: H5AccessSettings): Promise<{
   settings: H5AccessSettings
+  diagnostics: H5AccessDiagnostics | null
   error: string | null
 }> {
   try {
-    const { settings } = await h5AccessApi.get()
+    const { settings, diagnostics } = await h5AccessApi.get()
     return {
       settings: normalizeH5AccessSettings(settings),
+      diagnostics: normalizeH5AccessDiagnostics(diagnostics),
       error: null,
     }
   } catch (error) {
     if (isLegacyH5EndpointError(error)) {
       return {
         settings: DEFAULT_H5_ACCESS_SETTINGS,
+        diagnostics: null,
         error: null,
       }
     }
 
     return {
       settings: previousH5Access,
+      diagnostics: null,
       error: getErrorMessage(error, '加载 H5 访问设置失败。'),
     }
+  }
+}
+
+async function refreshH5DiagnosticsSilent(
+  set: (state: Partial<SettingsStore>) => void,
+): Promise<void> {
+  try {
+    const { diagnostics } = await h5AccessApi.get()
+    set({ h5AccessDiagnostics: normalizeH5AccessDiagnostics(diagnostics) })
+  } catch {
+    // Diagnostics are advisory; keep the main H5 action result visible.
   }
 }
 

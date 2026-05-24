@@ -52,14 +52,26 @@ describe('/api/h5-access', () => {
     const response = await api('GET', '/api/h5-access')
 
     expect(response.status).toBe(200)
-    await expect(response.json()).resolves.toEqual({
-      settings: {
-        enabled: false,
-        tokenPreview: null,
-        allowedOrigins: [],
-        publicBaseUrl: null,
-      },
+    const body = await response.json() as {
+      settings: unknown
+      diagnostics?: {
+        storedHostStaleness: string
+        storedPublicBaseUrl: string | null
+        effectivePublicBaseUrl: string | null
+        suggestedHost: string | null
+        localInterfaceHosts: string[]
+      }
+    }
+    expect(body.settings).toEqual({
+      enabled: false,
+      tokenPreview: null,
+      allowedOrigins: [],
+      publicBaseUrl: null,
     })
+    expect(body.diagnostics).toBeDefined()
+    expect(body.diagnostics?.storedHostStaleness).toBe('unset')
+    expect(body.diagnostics?.storedPublicBaseUrl).toBeNull()
+    expect(Array.isArray(body.diagnostics?.localInterfaceHosts)).toBe(true)
   })
 
   test('enable returns raw token once and status stays sanitized', async () => {

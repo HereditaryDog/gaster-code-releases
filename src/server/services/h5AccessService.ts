@@ -16,6 +16,22 @@ export type H5AccessEnableResult = {
   token: string
 }
 
+export type H5HostStaleness = 'ok' | 'unreachable' | 'proxy' | 'unset'
+
+export type H5AccessDiagnostics = {
+  storedHostStaleness: H5HostStaleness
+  storedPublicBaseUrl: string | null
+  effectivePublicBaseUrl: string | null
+  suggestedHost: string | null
+  localInterfaceHosts: string[]
+}
+
+export type H5PublicBaseUrlClassification = 'plain-lan' | 'proxy'
+
+export type H5PublicBaseUrlValidationResult =
+  | { ok: true; kind: H5PublicBaseUrlClassification }
+  | { ok: false; reason: string; suggestedHost: string | null }
+
 type StoredH5AccessSettings = H5AccessSettings & {
   tokenHash: string | null
 }
@@ -48,7 +64,47 @@ function toPublicSettings(settings: StoredH5AccessSettings): H5AccessSettings {
       storedPublicBaseUrl: settings.publicBaseUrl,
       configuredPublicBaseUrl: resolveConfiguredPublicBaseUrl(),
       autoPublicBaseUrl: resolveAutoLanPublicBaseUrl(),
+      localInterfaceHosts: collectLocalIPv4Hosts(),
     }),
+  }
+}
+
+function describeH5AccessDiagnostics(stored: StoredH5AccessSettings): H5AccessDiagnostics {
+  const localInterfaceHosts = collectLocalIPv4Hosts()
+  const autoPublicBaseUrl = resolveAutoLanPublicBaseUrl()
+  const configuredPublicBaseUrl = resolveConfiguredPublicBaseUrl()
+  const effectivePublicBaseUrl = resolveEffectiveH5PublicBaseUrl({
+    enabled: stored.enabled,
+    storedPublicBaseUrl: stored.publicBaseUrl,
+    configuredPublicBaseUrl,
+    autoPublicBaseUrl,
+    localInterfaceHosts,
+  })
+
+  const suggestedHost = pickPreferredLanHost(localInterfaceHosts)
+  let storedHostStaleness: H5HostStaleness = 'unset'
+  if (stored.publicBaseUrl) {
+    const classification = classifyH5PublicBaseUrl(stored.publicBaseUrl)
+    if (classification === 'plain-lan') {
+      try {
+        const u = new URL(stored.publicBaseUrl)
+        storedHostStaleness = localInterfaceHosts.includes(u.hostname) ? 'ok' : 'unreachable'
+      } catch {
+        storedHostStaleness = 'unreachable'
+      }
+    } else if (classification === 'proxy') {
+      storedHostStaleness = 'proxy'
+    } else {
+      storedHostStaleness = 'unreachable'
+    }
+  }
+
+  return {
+    storedHostStaleness,
+    storedPublicBaseUrl: stored.publicBaseUrl,
+    effectivePublicBaseUrl,
+    suggestedHost,
+    localInterfaceHosts,
   }
 }
 
@@ -162,11 +218,13 @@ export function resolveEffectiveH5PublicBaseUrl({
   storedPublicBaseUrl,
   configuredPublicBaseUrl,
   autoPublicBaseUrl,
+  localInterfaceHosts,
 }: {
   enabled: boolean
   storedPublicBaseUrl: string | null
   configuredPublicBaseUrl: string | null
   autoPublicBaseUrl: string | null
+  localInterfaceHosts?: string[]
 }): string | null {
   if (!enabled) {
     return storedPublicBaseUrl
@@ -180,47 +238,225 @@ export function resolveEffectiveH5PublicBaseUrl({
     return storedPublicBaseUrl
   }
 
-  if (!storedPublicBaseUrl || isLocalOrPrivatePublicBaseUrl(storedPublicBaseUrl)) {
+  if (!storedPublicBaseUrl || isLocalPublicBaseUrl(storedPublicBaseUrl)) {
     return autoPublicBaseUrl
+  }
+
+  // Stale-host fallback: stored is a plain private-LAN URL pointing at an IP
+  // that no longer belongs to any of this machine's interfaces (e.g. user
+  // switched Wi-Fi). Fall back to the auto-discovered URL without overwriting
+  // the stored value, so reconnecting to the original network restores it.
+  if (
+    Array.isArray(localInterfaceHosts) &&
+    isStaleLanPublicBaseUrl(storedPublicBaseUrl, localInterfaceHosts)
+  ) {
+    return autoPublicBaseUrl
+  }
+
+  const refreshedLanUrl = refreshLanPublicBaseUrlPort(storedPublicBaseUrl, autoPublicBaseUrl)
+  if (refreshedLanUrl) {
+    return refreshedLanUrl
   }
 
   return storedPublicBaseUrl
 }
 
-function isLocalOrPrivatePublicBaseUrl(value: string): boolean {
+function isStaleLanPublicBaseUrl(value: string, localInterfaceHosts: string[]): boolean {
+  if (classifyH5PublicBaseUrl(value) !== 'plain-lan') return false
+  try {
+    const hostname = new URL(value).hostname
+    return !localInterfaceHosts.includes(hostname)
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Classify a stored or input H5 publicBaseUrl. A "plain-lan" URL is a bare
+ * `http://<private-ipv4>:<port>` with no path and no userinfo — we know we
+ * can reach it only if the host is bound to one of our local interfaces.
+ * Everything else (https, custom path, hostname/proxy URL) is treated as a
+ * user-managed proxy URL we cannot reachability-check.
+ */
+export function classifyH5PublicBaseUrl(value: string): H5PublicBaseUrlClassification | 'invalid' {
+  let url: URL
+  try {
+    url = new URL(value)
+  } catch {
+    return 'invalid'
+  }
+
+  if (!['http:', 'https:'].includes(url.protocol)) return 'invalid'
+  if (url.username || url.password) return 'invalid'
+
+  const path = url.pathname.replace(/\/+$/, '')
+  if (url.protocol === 'http:' && path === '' && isPrivateIPv4(url.hostname)) {
+    return 'plain-lan'
+  }
+  return 'proxy'
+}
+
+function isLocalPublicBaseUrl(value: string): boolean {
   try {
     const hostname = new URL(value).hostname
       .trim()
       .replace(/^\[/, '')
       .replace(/\]$/, '')
       .toLowerCase()
-    return isLocalOrPrivateHost(hostname)
+    return isLocalHost(hostname)
   } catch {
     return false
   }
 }
 
-function isLocalOrPrivateHost(hostname: string): boolean {
+function isLocalHost(hostname: string): boolean {
   return hostname === 'localhost' ||
     hostname === '127.0.0.1' ||
     hostname === '::1' ||
     hostname === '0.0.0.0' ||
-    isPrivateIPv4(hostname) ||
-    hostname.startsWith('fc') ||
-    hostname.startsWith('fd') ||
-    hostname.startsWith('fe80:')
+    hostname === '::'
 }
 
-function findPrivateLanAddress(): string | null {
-  for (const entries of Object.values(os.networkInterfaces())) {
+function refreshLanPublicBaseUrlPort(storedPublicBaseUrl: string, autoPublicBaseUrl: string): string | null {
+  try {
+    const stored = new URL(storedPublicBaseUrl)
+    const auto = new URL(autoPublicBaseUrl)
+    const storedPath = stored.pathname.replace(/\/+$/, '')
+
+    if (
+      stored.protocol !== 'http:' ||
+      storedPath !== '' ||
+      !isPrivateIPv4(stored.hostname) ||
+      !auto.port
+    ) {
+      return null
+    }
+
+    return `${stored.protocol}//${stored.hostname}:${auto.port}`
+  } catch {
+    return null
+  }
+}
+
+type NetworkInterfaces = ReturnType<typeof os.networkInterfaces>
+
+export function collectLocalIPv4Hosts(networkInterfaces: NetworkInterfaces = os.networkInterfaces()): string[] {
+  const hosts: string[] = []
+  for (const entries of Object.values(networkInterfaces)) {
+    for (const entry of entries ?? []) {
+      if (entry.family === 'IPv4' && !entry.internal) {
+        hosts.push(entry.address)
+      }
+    }
+  }
+  return hosts
+}
+
+function pickPreferredLanHost(localHosts: string[]): string | null {
+  for (const host of localHosts) {
+    if (host.startsWith('192.168.')) return host
+  }
+  for (const host of localHosts) {
+    if (host.startsWith('10.')) return host
+  }
+  for (const host of localHosts) {
+    if (is172PrivateIPv4(host)) return host
+  }
+  return localHosts[0] ?? null
+}
+
+export function validateH5PublicBaseUrl(
+  publicBaseUrl: string,
+  localInterfaceHosts: string[] = collectLocalIPv4Hosts(),
+): H5PublicBaseUrlValidationResult {
+  const kind = classifyH5PublicBaseUrl(publicBaseUrl)
+  if (kind === 'invalid') {
+    return {
+      ok: false,
+      reason: `Invalid H5 publicBaseUrl: ${publicBaseUrl}`,
+      suggestedHost: pickPreferredLanHost(localInterfaceHosts),
+    }
+  }
+
+  if (kind === 'plain-lan') {
+    try {
+      const hostname = new URL(publicBaseUrl).hostname
+      if (!localInterfaceHosts.includes(hostname)) {
+        const suggested = pickPreferredLanHost(localInterfaceHosts)
+        const availableList = localInterfaceHosts.length > 0
+          ? localInterfaceHosts.join(', ')
+          : 'none'
+        return {
+          ok: false,
+          reason: `H5 host ${hostname} is not bound to any local network interface on this machine. Available LAN IPv4: ${availableList}`,
+          suggestedHost: suggested,
+        }
+      }
+    } catch {
+      return {
+        ok: false,
+        reason: `Invalid H5 publicBaseUrl: ${publicBaseUrl}`,
+        suggestedHost: pickPreferredLanHost(localInterfaceHosts),
+      }
+    }
+  }
+
+  return { ok: true, kind }
+}
+
+const PHYSICAL_INTERFACE_RE = /\b(wi-?fi|wlan|wireless|ethernet|lan|en\d+|eth\d+)\b/i
+const VIRTUAL_INTERFACE_RE = /\b(wsl|docker|hyper-?v|veth|vethernet|virtual|virtualbox|vmware|podman|container|bridge|br-|tailscale|zerotier|utun|vpn)\b/i
+
+export function findPrivateLanAddress(networkInterfaces: NetworkInterfaces = os.networkInterfaces()): string | null {
+  const candidates: Array<{
+    address: string
+    interfaceName: string
+    index: number
+    score: number
+  }> = []
+
+  let index = 0
+  for (const [interfaceName, entries] of Object.entries(networkInterfaces)) {
     for (const entry of entries ?? []) {
       if (entry.family !== 'IPv4' || entry.internal || !isPrivateIPv4(entry.address)) {
         continue
       }
-      return entry.address
+
+      candidates.push({
+        address: entry.address,
+        interfaceName,
+        index,
+        score: scoreLanAddressCandidate(interfaceName, entry.address),
+      })
+      index += 1
     }
   }
-  return null
+
+  candidates.sort((a, b) => b.score - a.score || a.index - b.index)
+  return candidates[0]?.address ?? null
+}
+
+function scoreLanAddressCandidate(interfaceName: string, address: string): number {
+  let score = 0
+
+  if (PHYSICAL_INTERFACE_RE.test(interfaceName)) {
+    score += 100
+  }
+  if (VIRTUAL_INTERFACE_RE.test(interfaceName)) {
+    score -= 200
+  }
+
+  if (address.startsWith('192.168.')) {
+    score += 30
+  } else if (address.startsWith('10.')) {
+    score += 20
+  } else if (is172PrivateIPv4(address)) {
+    score += 10
+  } else if (address.startsWith('169.254.')) {
+    score -= 100
+  }
+
+  return score
 }
 
 function isPrivateIPv4(address: string): boolean {
@@ -232,10 +468,20 @@ function isPrivateIPv4(address: string): boolean {
   const [a = -1, b = -1] = parts.map((part) => Number(part))
   return (
     a === 10 ||
-    (a === 172 && b >= 16 && b <= 31) ||
+    is172PrivateIPv4(address) ||
     (a === 192 && b === 168) ||
     (a === 169 && b === 254)
   )
+}
+
+function is172PrivateIPv4(address: string): boolean {
+  const parts = address.split('.')
+  if (parts.length !== 4 || !parts.every((part) => /^\d+$/.test(part))) {
+    return false
+  }
+
+  const [a = -1, b = -1] = parts.map((part) => Number(part))
+  return a === 172 && b >= 16 && b <= 31
 }
 
 function normalizeStoredSettings(value: unknown): StoredH5AccessSettings {
@@ -363,14 +609,25 @@ export class H5AccessService {
   }): Promise<H5AccessSettings> {
     return this.managedSettingsService.updateSettings(async (current) => {
       const h5Access = normalizeStoredSettings(current.h5Access)
+      let nextPublicBaseUrl: string | null
+      if (input.publicBaseUrl === undefined) {
+        nextPublicBaseUrl = h5Access.publicBaseUrl
+      } else {
+        nextPublicBaseUrl = normalizePublicBaseUrl(input.publicBaseUrl)
+        if (nextPublicBaseUrl !== null) {
+          const validation = validateH5PublicBaseUrl(nextPublicBaseUrl)
+          if (!validation.ok) {
+            throw ApiError.badRequest(validation.reason)
+          }
+        }
+      }
+
       const nextSettings: StoredH5AccessSettings = {
         ...h5Access,
         allowedOrigins: input.allowedOrigins === undefined
           ? h5Access.allowedOrigins
           : normalizeAllowedOrigins(input.allowedOrigins),
-        publicBaseUrl: input.publicBaseUrl === undefined
-          ? h5Access.publicBaseUrl
-          : normalizePublicBaseUrl(input.publicBaseUrl),
+        publicBaseUrl: nextPublicBaseUrl,
       }
 
       return {
@@ -381,6 +638,11 @@ export class H5AccessService {
         result: toPublicSettings(nextSettings),
       }
     })
+  }
+
+  async getDiagnostics(): Promise<H5AccessDiagnostics> {
+    const { h5Access } = await this.readStoredSettings()
+    return describeH5AccessDiagnostics(h5Access)
   }
 
   async validateToken(token: string | null | undefined): Promise<boolean> {

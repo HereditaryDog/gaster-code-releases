@@ -5,6 +5,8 @@ import * as fsp from 'fs/promises'
 import * as os from 'os'
 import * as path from 'path'
 import { handleFilesystemRoute } from '../api/filesystem.js'
+import { clearFilesystemAccessRootsForTests } from '../services/filesystemAccessRoots.js'
+import { getRepositoryContext } from '../services/repositoryLaunchService.js'
 
 const cleanupDirs = new Set<string>()
 
@@ -21,6 +23,7 @@ afterEach(async () => {
     await fsp.rm(dir, { recursive: true, force: true })
   }
   cleanupDirs.clear()
+  clearFilesystemAccessRootsForTests()
 })
 
 function git(cwd: string, ...args: string[]): string {
@@ -28,6 +31,34 @@ function git(cwd: string, ...args: string[]): string {
     cwd,
     encoding: 'utf8',
   })
+}
+
+function isWithinPath(targetPath: string, rootPath: string): boolean {
+  const target = path.resolve(targetPath)
+  const root = path.resolve(rootPath)
+  return target === root || target.startsWith(`${root}${path.sep}`)
+}
+
+async function makeExternalFixtureDir(): Promise<string | null> {
+  const candidates = ['/var/tmp', '/private/var/tmp', '/Users/Shared']
+
+  for (const baseDir of candidates) {
+    try {
+      const stat = await fsp.stat(baseDir)
+      if (!stat.isDirectory()) continue
+      const fixtureDir = await fsp.mkdtemp(path.join(baseDir, 'claude-filesystem-test-'))
+      const isDefaultAllowed =
+        isWithinPath(fixtureDir, os.homedir()) ||
+        isWithinPath(fixtureDir, '/tmp') ||
+        (process.platform === 'darwin' && isWithinPath(fixtureDir, '/private/tmp'))
+      if (!isDefaultAllowed) return fixtureDir
+      await fsp.rm(fixtureDir, { recursive: true, force: true })
+    } catch {
+      // Try the next common writable system directory.
+    }
+  }
+
+  return null
 }
 
 describe('filesystem API', () => {
@@ -40,6 +71,37 @@ describe('filesystem API', () => {
       '/api/filesystem/browse',
       makeUrl('/api/filesystem/browse', {
         path: homeFixtureDir,
+        includeFiles: 'true',
+      }),
+    )
+
+    expect(res.status).toBe(200)
+    const body = await res.json() as { entries: Array<{ name: string }> }
+    expect(body.entries.some((entry) => entry.name === 'note.txt')).toBe(true)
+  })
+
+  it('allows browsing a selected workspace outside the default home/tmp roots', async () => {
+    const externalFixtureDir = await makeExternalFixtureDir()
+    if (!externalFixtureDir) return
+
+    cleanupDirs.add(externalFixtureDir)
+    await fsp.writeFile(path.join(externalFixtureDir, 'note.txt'), 'hello')
+
+    const deniedRes = await handleFilesystemRoute(
+      '/api/filesystem/browse',
+      makeUrl('/api/filesystem/browse', {
+        path: externalFixtureDir,
+        includeFiles: 'true',
+      }),
+    )
+    expect(deniedRes.status).toBe(403)
+
+    await getRepositoryContext(externalFixtureDir)
+
+    const res = await handleFilesystemRoute(
+      '/api/filesystem/browse',
+      makeUrl('/api/filesystem/browse', {
+        path: externalFixtureDir,
         includeFiles: 'true',
       }),
     )

@@ -43,7 +43,11 @@ export async function handleH5AccessApi(
     switch (sub) {
       case undefined:
         if (req.method === 'GET') {
-          return Response.json({ settings: await h5AccessService.getSettings() })
+          const [settings, diagnostics] = await Promise.all([
+            h5AccessService.getSettings(),
+            h5AccessService.getDiagnostics(),
+          ])
+          return Response.json({ settings, diagnostics })
         }
         if (req.method === 'PUT') {
           const body = await parseJsonBody(req)

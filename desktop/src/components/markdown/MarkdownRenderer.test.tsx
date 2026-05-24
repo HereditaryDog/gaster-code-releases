@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest'
+import { beforeEach, describe, it, expect, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import '@testing-library/jest-dom'
 
@@ -16,7 +16,7 @@ vi.mock('../chat/MermaidRenderer', () => ({
   ),
 }))
 
-import { MarkdownRenderer } from './MarkdownRenderer'
+import { MarkdownRenderer, __markdownParseCacheInternals } from './MarkdownRenderer'
 
 function visibleMathText(container: HTMLElement): string {
   const clone = container.cloneNode(true) as HTMLElement
@@ -286,5 +286,44 @@ describe('MarkdownRenderer', () => {
         value: originalClipboard,
       })
     }
+  })
+})
+
+describe('MarkdownRenderer parse cache', () => {
+  beforeEach(() => {
+    __markdownParseCacheInternals.reset()
+  })
+
+  it('uses the finalized cache for non-streaming content and hits on the second render', () => {
+    const content = '# heading one\n\nbody text body text'
+    render(<MarkdownRenderer content={content} />)
+    expect(__markdownParseCacheInternals.hasFinalized(content)).toBe(true)
+    expect(__markdownParseCacheInternals.finalizedSize()).toBe(1)
+
+    const beforeChars = __markdownParseCacheInternals.finalizedChars()
+    render(<MarkdownRenderer content={content} />)
+    expect(__markdownParseCacheInternals.finalizedSize()).toBe(1)
+    expect(__markdownParseCacheInternals.finalizedChars()).toBe(beforeChars)
+  })
+
+  it('routes streaming content into the streaming cache without evicting finalized entries', () => {
+    const finalizedContent = 'finalized assistant turn text'
+    render(<MarkdownRenderer content={finalizedContent} />)
+    expect(__markdownParseCacheInternals.hasFinalized(finalizedContent)).toBe(true)
+
+    for (let i = 0; i < 8; i++) {
+      const chunk = `streaming partial ${i.toString().repeat(20)}`
+      render(<MarkdownRenderer content={chunk} streaming />)
+    }
+
+    expect(__markdownParseCacheInternals.hasFinalized(finalizedContent)).toBe(true)
+    expect(__markdownParseCacheInternals.streamingSize()).toBeLessThanOrEqual(4)
+  })
+
+  it('caps the finalized cache to roughly 200 entries', () => {
+    for (let i = 0; i < 220; i++) {
+      render(<MarkdownRenderer content={`entry ${i} content body`} />)
+    }
+    expect(__markdownParseCacheInternals.finalizedSize()).toBeLessThanOrEqual(200)
   })
 })

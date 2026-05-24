@@ -1,5 +1,5 @@
 import { CodeViewer } from './CodeViewer'
-import { useState } from 'react'
+import { memo, useState } from 'react'
 import { useTranslation } from '../../i18n'
 import { InlineImageGallery } from './InlineImageGallery'
 
@@ -15,7 +15,7 @@ type Props = {
  * inline within ToolCallBlock (i.e., when the tool_use and tool_result
  * are NOT grouped together by MessageList).
  */
-export function ToolResultBlock({ content, isError, toolName, standalone = true }: Props) {
+export const ToolResultBlock = memo(function ToolResultBlock({ content, isError, toolName, standalone = true }: Props) {
   const [expanded, setExpanded] = useState(false)
   const t = useTranslation()
 
@@ -90,7 +90,7 @@ export function ToolResultBlock({ content, isError, toolName, standalone = true 
       )}
     </div>
   )
-}
+})
 
 function extractText(content: unknown): string {
   if (typeof content === 'string') return content

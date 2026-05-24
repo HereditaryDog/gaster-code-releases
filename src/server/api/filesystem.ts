@@ -12,6 +12,7 @@ import { execFileNoThrowWithCwd } from '../../utils/execFileNoThrow.js'
 import { findGitRoot, gitExe } from '../../utils/git.js'
 import { ripGrep } from '../../utils/ripgrep.js'
 import { getInitialSettings } from '../../utils/settings/settings.js'
+import { isWithinRegisteredFilesystemRoot } from '../services/filesystemAccessRoots.js'
 
 type FilesystemEntry = {
   name: string
@@ -54,6 +55,10 @@ function isAllowedFilesystemPath(targetPath: string): boolean {
   const homeDir = path.resolve(os.homedir())
 
   if (isWithinRoot(resolvedPath, homeDir) || isWithinRoot(resolvedPath, '/tmp')) {
+    return true
+  }
+
+  if (isWithinRegisteredFilesystemRoot(resolvedPath)) {
     return true
   }
 

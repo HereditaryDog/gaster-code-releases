@@ -33,7 +33,7 @@
 
 ## Project Note
 
-Gaster Code is now maintained as a public open-source project. The current source hotfix version is **v1.0.3** and includes the Drawing complex-prompt timeout fix plus long conversation switching performance improvements; the current downloadable installer release is still **v1.0.0** until the matching GitHub Actions release workflow succeeds.
+Gaster Code is now maintained as a public open-source project. The current source hotfix version is **v1.0.4** and includes the Drawing complex-prompt timeout fix, long conversation switching performance improvements, session streaming state fixes, H5 diagnostics, network timeout/proxy settings, and remote adapter output stability improvements; the current downloadable installer release is still **v1.0.0** until the matching GitHub Actions release workflow succeeds.
 
 **Source transparency note:** this project is based on community research and organization of leaked Claude Code source code, with product and development inspiration from the `cc-haha` project. Gaster Code is not an official Anthropic, Claude Code, or `cc-haha` project, and is not affiliated with those projects or organizations.
 
@@ -41,7 +41,7 @@ The repository is public so developers can inspect the code, reproduce the build
 
 ## Download
 
-Latest source version: **v1.0.3**
+Latest source version: **v1.0.4**
 Current downloadable installer release: **v1.0.0**
 
 - [GitHub Release](https://github.com/HereditaryDog/gaster-code-releases/releases/latest)
@@ -54,7 +54,7 @@ Current downloadable installer release: **v1.0.0**
 | Windows x64 | `Gaster-Code_1.0.0_windows_x64_nsis.exe` |
 | Linux x64 | `Gaster-Code_1.0.0_linux_x64_deb.deb` |
 
-`v1.0.3` source, docs, and release notes are maintained through `main` and the `v1.0.3` tag. Installer publication requires the release workflow to finish signing, packaging, and public asset synchronization.
+`v1.0.4` source, docs, and release notes are maintained through `main` and the later `v1.0.4` tag. Installer publication requires the release workflow to finish signing, packaging, and public asset synchronization. Local Apple Silicon test packages use the `Gaster Code-a 1.0.4.dmg` name.
 
 If macOS blocks the first launch, run:
 

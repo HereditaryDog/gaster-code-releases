@@ -25,16 +25,16 @@ type CLITaskStore = {
 
   /** Fetch tasks for a given session (uses sessionId as taskListId) */
   fetchSessionTasks: (sessionId: string) => Promise<void>
-  /** Refresh tasks for the currently tracked session */
-  refreshTasks: () => Promise<void>
+  /** Refresh tasks for the currently tracked session, or a specific session if provided */
+  refreshTasks: (sessionId?: string) => Promise<void>
   /** Update tasks from TodoWrite V1 tool input (in-memory, no disk read needed) */
-  setTasksFromTodos: (todos: TodoItem[]) => void
+  setTasksFromTodos: (todos: TodoItem[], sessionId?: string) => void
   /** Mark that completed tasks were already dismissed (conversation continued) */
-  markCompletedAndDismissed: () => void
+  markCompletedAndDismissed: (sessionId?: string) => void
   /** Clear a completed task list locally and remotely so the next cycle starts clean */
-  resetCompletedTasks: () => Promise<void>
+  resetCompletedTasks: (sessionId?: string) => Promise<void>
   /** Clear task tracking state */
-  clearTasks: () => void
+  clearTasks: (sessionId?: string) => void
   /** Toggle expanded state */
   toggleExpanded: () => void
 }
@@ -131,8 +131,8 @@ export const useCLITaskStore = create<CLITaskStore>((set, get) => ({
     return fetchPromise
   },
 
-  refreshTasks: async () => {
-    const { sessionId } = get()
+  refreshTasks: async (targetSessionId) => {
+    const sessionId = targetSessionId ?? get().sessionId
     if (!sessionId) return
     try {
       const { tasks } = await cliTasksApi.getTasksForList(sessionId)
@@ -147,15 +147,19 @@ export const useCLITaskStore = create<CLITaskStore>((set, get) => ({
     }
   },
 
-  setTasksFromTodos: (todos) => {
-    const tasks = mapTodosToTasks(todos, get().sessionId)
+  setTasksFromTodos: (todos, targetSessionId) => {
+    const sessionId = targetSessionId ?? get().sessionId
+    if (!sessionId || get().sessionId !== sessionId) return
+    const tasks = mapTodosToTasks(todos, sessionId)
     set((state) => ({
       tasks,
       ...resolveDismissState(tasks, state.dismissedCompletionKey),
     }))
   },
 
-  markCompletedAndDismissed: () => {
+  markCompletedAndDismissed: (targetSessionId) => {
+    const sessionId = targetSessionId ?? get().sessionId
+    if (!sessionId || get().sessionId !== sessionId) return
     const completionKey = buildCompletedTaskKey(get().tasks)
     if (!completionKey) return
 
@@ -166,10 +170,12 @@ export const useCLITaskStore = create<CLITaskStore>((set, get) => ({
     })
   },
 
-  resetCompletedTasks: async () => {
-    const { sessionId, tasks } = get()
+  resetCompletedTasks: async (targetSessionId) => {
+    const sessionId = targetSessionId ?? get().sessionId
+    if (!sessionId || get().sessionId !== sessionId) return
+    const { tasks } = get()
     const completionKey = buildCompletedTaskKey(tasks)
-    if (!sessionId || !completionKey) return
+    if (!completionKey) return
 
     set({
       tasks: [],
@@ -188,7 +194,8 @@ export const useCLITaskStore = create<CLITaskStore>((set, get) => ({
     }
   },
 
-  clearTasks: () => {
+  clearTasks: (targetSessionId) => {
+    if (targetSessionId && get().sessionId !== targetSessionId) return
     set({
       sessionId: null,
       tasks: [],
