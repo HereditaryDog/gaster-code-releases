@@ -18,11 +18,19 @@ import { Folder, FolderOpen, SquareTerminal } from 'lucide-react'
 
 const TAB_WIDTH = 180
 const DRAG_START_THRESHOLD = 4
+const DRAG_SLOT_SHIFT = TAB_WIDTH - 20
 const isTauri = typeof window !== 'undefined' && ('__TAURI_INTERNALS__' in window || '__TAURI__' in window)
 
 type PendingCloseRequest = {
   tabs: Tab[]
   runningSessionIds: string[]
+}
+
+type DragTabBounds = {
+  sessionId: string
+  left: number
+  right: number
+  width: number
 }
 
 function isSessionTab(tab: Tab | null) {
@@ -76,9 +84,20 @@ export function TabBar() {
   const [pendingCloseRequest, setPendingCloseRequest] = useState<PendingCloseRequest | null>(null)
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null)
   const [draggingSessionId, setDraggingSessionId] = useState<string | null>(null)
-  const [dragOffsetX, setDragOffsetX] = useState(0)
   const dragIndexRef = useRef<number | null>(null)
-  const pendingDragRef = useRef<{ index: number; startX: number; startY: number } | null>(null)
+  const dragTargetIndexRef = useRef<number | null>(null)
+  const dragFrameRef = useRef<number | null>(null)
+  const dragOverIndexRef = useRef<number | null>(null)
+  const draggedTabElementRef = useRef<HTMLDivElement | null>(null)
+  const latestDragPointRef = useRef<{ clientX: number; clientY: number } | null>(null)
+  const dragTabBoundsRef = useRef<DragTabBounds[]>([])
+  const pendingDragRef = useRef<{
+    index: number
+    startX: number
+    startY: number
+    tabLeft: number
+    tabRight: number
+  } | null>(null)
   const suppressClickRef = useRef(false)
   const tabRefs = useRef(new Map<string, HTMLDivElement | null>())
   const startDraggingRef = useRef<(() => Promise<void>) | null>(null)
@@ -236,58 +255,158 @@ export function TabBar() {
     requestCloseTabs(tabs)
   }
 
-  const getTargetIndexFromClientX = useCallback((clientX: number) => {
+  const getRectRight = (rect: { left: number; right?: number; width: number }) =>
+    Number.isFinite(rect.right) ? rect.right! : rect.left + rect.width
+
+  const getCachedTabBounds = (sessionId: string) =>
+    dragTabBoundsRef.current.find((bounds) => bounds.sessionId === sessionId) ?? null
+
+  const getDraggedTransform = (offsetX: number) => `translate3d(${offsetX}px, -3px, 0) scale(1.035)`
+
+  const applyDraggedTabTransform = useCallback((offsetX: number) => {
+    if (!draggedTabElementRef.current) return
+    draggedTabElementRef.current.style.transform = getDraggedTransform(offsetX)
+  }, [])
+
+  const getTargetIndexFromDraggedCenter = useCallback((draggedCenterX: number, dragIndex: number) => {
+    let targetIndex = 0
+
     for (let index = 0; index < tabs.length; index++) {
+      if (index === dragIndex) continue
+
       const tab = tabs[index]
-      if (!tab) continue
-      const el = tabRefs.current.get(tab.sessionId)
-      if (!el) continue
-      const rect = el.getBoundingClientRect()
-      if (clientX < rect.left + rect.width / 2) return index
+      if (!tab) {
+        targetIndex++
+        continue
+      }
+      const rect = getCachedTabBounds(tab.sessionId)
+      if (!rect) {
+        targetIndex++
+        continue
+      }
+      if (draggedCenterX < rect.left + rect.width / 2) return targetIndex
+      targetIndex++
     }
 
-    return tabs.length > 0 ? tabs.length - 1 : null
+    return targetIndex
   }, [tabs])
 
+  const getTargetIndexFromDrag = useCallback((clientX: number, dragIndex: number) => {
+    const pending = pendingDragRef.current
+    if (!pending) return { targetIndex: null, previewIndex: null }
+
+    const deltaX = clientX - pending.startX
+    const draggedCenterX = (pending.tabLeft + pending.tabRight) / 2 + deltaX
+    const targetIndex = getTargetIndexFromDraggedCenter(draggedCenterX, dragIndex)
+    let previewIndex = targetIndex !== dragIndex ? targetIndex : null
+
+    if (deltaX < 0 && dragIndex > 0) {
+      const previousTab = tabs[dragIndex - 1]
+      const previousRect = previousTab ? getCachedTabBounds(previousTab.sessionId) : null
+      if (previousRect) {
+        const overlap = getRectRight(previousRect) - (pending.tabLeft + deltaX)
+        if (overlap >= 0) {
+          return { targetIndex, previewIndex: previewIndex ?? dragIndex - 1 }
+        }
+      }
+    }
+
+    if (deltaX > 0 && dragIndex < tabs.length - 1) {
+      const nextTab = tabs[dragIndex + 1]
+      const nextRect = nextTab ? getCachedTabBounds(nextTab.sessionId) : null
+      if (nextRect) {
+        const overlap = pending.tabRight + deltaX - nextRect.left
+        if (overlap >= 0) {
+          return { targetIndex, previewIndex: previewIndex ?? dragIndex + 1 }
+        }
+      }
+    }
+
+    return { targetIndex, previewIndex }
+  }, [getTargetIndexFromDraggedCenter, tabs])
+
   const finalizeDrag = useCallback((targetIndex: number | null) => {
+    if (dragFrameRef.current !== null) {
+      window.cancelAnimationFrame(dragFrameRef.current)
+      dragFrameRef.current = null
+    }
+    if (draggedTabElementRef.current) {
+      draggedTabElementRef.current.style.transform = ''
+    }
     if (dragIndexRef.current !== null && targetIndex !== null && dragIndexRef.current !== targetIndex) {
       moveTab(dragIndexRef.current, targetIndex)
     }
     dragIndexRef.current = null
+    dragTargetIndexRef.current = null
+    dragOverIndexRef.current = null
+    draggedTabElementRef.current = null
+    latestDragPointRef.current = null
+    dragTabBoundsRef.current = []
     pendingDragRef.current = null
     setDraggingSessionId(null)
-    setDragOffsetX(0)
     setDragOverIndex(null)
   }, [moveTab])
+
+  const applyLatestDragPoint = useCallback(() => {
+    dragFrameRef.current = null
+    const point = latestDragPointRef.current
+    const pending = pendingDragRef.current
+    if (!point || !pending) return
+
+    const deltaX = Math.abs(point.clientX - pending.startX)
+    const deltaY = Math.abs(point.clientY - pending.startY)
+
+    if (dragIndexRef.current === null) {
+      if (Math.max(deltaX, deltaY) < DRAG_START_THRESHOLD) return
+      dragIndexRef.current = pending.index
+      const draggingTab = tabs[pending.index]
+      draggedTabElementRef.current = draggingTab
+        ? tabRefs.current.get(draggingTab.sessionId) ?? null
+        : null
+      suppressClickRef.current = true
+      setDraggingSessionId(tabs[pending.index]?.sessionId ?? null)
+    }
+
+    applyDraggedTabTransform(point.clientX - pending.startX)
+
+    const { targetIndex, previewIndex } = getTargetIndexFromDrag(point.clientX, dragIndexRef.current)
+    dragTargetIndexRef.current = targetIndex !== null && targetIndex !== dragIndexRef.current
+      ? targetIndex
+      : null
+    if (dragOverIndexRef.current !== previewIndex) {
+      dragOverIndexRef.current = previewIndex
+      setDragOverIndex(previewIndex)
+    }
+  }, [applyDraggedTabTransform, getTargetIndexFromDrag, tabs])
 
   const handlePointerMove = useCallback((event: MouseEvent) => {
     const pending = pendingDragRef.current
     if (!pending) return
 
-    const deltaX = Math.abs(event.clientX - pending.startX)
-    const deltaY = Math.abs(event.clientY - pending.startY)
+    latestDragPointRef.current = { clientX: event.clientX, clientY: event.clientY }
+    if (dragFrameRef.current !== null) return
 
-    if (dragIndexRef.current === null) {
-      if (Math.max(deltaX, deltaY) < DRAG_START_THRESHOLD) return
-      dragIndexRef.current = pending.index
-      suppressClickRef.current = true
-      setDraggingSessionId(tabs[pending.index]?.sessionId ?? null)
-    }
+    dragFrameRef.current = window.requestAnimationFrame(applyLatestDragPoint)
+  }, [applyLatestDragPoint])
 
-    setDragOffsetX(event.clientX - pending.startX)
-
-    const targetIndex = getTargetIndexFromClientX(event.clientX)
-    if (targetIndex === null || targetIndex === dragIndexRef.current) {
-      setDragOverIndex(null)
-      return
-    }
-
-    setDragOverIndex(targetIndex)
-  }, [getTargetIndexFromClientX])
+  const flushPendingDragFrame = useCallback(() => {
+    if (dragFrameRef.current === null) return
+    window.cancelAnimationFrame(dragFrameRef.current)
+    applyLatestDragPoint()
+  }, [applyLatestDragPoint])
 
   const handlePointerUp = useCallback(() => {
-    finalizeDrag(dragOverIndex)
-  }, [dragOverIndex, finalizeDrag])
+    flushPendingDragFrame()
+    finalizeDrag(dragTargetIndexRef.current)
+  }, [finalizeDrag, flushPendingDragFrame])
+
+  useEffect(() => {
+    return () => {
+      if (dragFrameRef.current !== null) {
+        window.cancelAnimationFrame(dragFrameRef.current)
+      }
+    }
+  }, [])
 
   useEffect(() => {
     window.addEventListener('mousemove', handlePointerMove)
@@ -309,7 +428,27 @@ export function TabBar() {
 
   const handleTabMouseDown = (event: React.MouseEvent, index: number) => {
     if (event.button !== 0) return
-    pendingDragRef.current = { index, startX: event.clientX, startY: event.clientY }
+    dragTabBoundsRef.current = tabs.flatMap((tab) => {
+      const el = tabRefs.current.get(tab.sessionId)
+      if (!el) return []
+      const rect = el.getBoundingClientRect()
+      return [{
+        sessionId: tab.sessionId,
+        left: rect.left,
+        right: getRectRight(rect),
+        width: rect.width,
+      }]
+    })
+    const currentTab = tabs[index]
+    const cachedRect = currentTab ? getCachedTabBounds(currentTab.sessionId) : null
+    const rect = cachedRect ?? event.currentTarget.getBoundingClientRect()
+    pendingDragRef.current = {
+      index,
+      startX: event.clientX,
+      startY: event.clientY,
+      tabLeft: rect.left,
+      tabRight: getRectRight(rect),
+    }
   }
 
   const handleTabClick = (sessionId: string) => {
@@ -327,10 +466,21 @@ export function TabBar() {
     void startDragging().catch(() => {})
   }, [])
 
+  const draggingIndex = draggingSessionId
+    ? tabs.findIndex((tab) => tab.sessionId === draggingSessionId)
+    : -1
+
+  const getDragNudgeDirection = (index: number): -1 | 0 | 1 => {
+    if (draggingIndex === -1 || dragOverIndex === null || index === draggingIndex) return 0
+    if (dragOverIndex < draggingIndex && index >= dragOverIndex && index < draggingIndex) return 1
+    if (dragOverIndex > draggingIndex && index <= dragOverIndex && index > draggingIndex) return -1
+    return 0
+  }
+
   return (
     <div
       data-testid="tab-bar"
-      className="flex min-h-11 items-stretch bg-[var(--color-surface-container)] select-none border-b border-[var(--color-border)]"
+      className="tab-bar-shell flex min-h-11 items-stretch select-none"
     >
 
       {canScrollLeft && (
@@ -354,7 +504,7 @@ export function TabBar() {
             isActive={tab.sessionId === activeTabId}
             isDragOver={dragOverIndex === index}
             isDragging={tab.sessionId === draggingSessionId}
-            dragOffsetX={tab.sessionId === draggingSessionId ? dragOffsetX : 0}
+            dragNudgeDirection={getDragNudgeDirection(index)}
             runningLabel={t('tabs.sessionRunning')}
             onClick={() => handleTabClick(tab.sessionId)}
             onClose={() => handleClose(tab.sessionId)}
@@ -497,13 +647,13 @@ const TabItem = forwardRef<HTMLDivElement, {
   isActive: boolean
   isDragOver: boolean
   isDragging: boolean
-  dragOffsetX: number
+  dragNudgeDirection: -1 | 0 | 1
   runningLabel: string
   onClick: () => void
   onClose: () => void
   onContextMenu: (e: React.MouseEvent) => void
   onMouseDown: (event: React.MouseEvent) => void
-}>(({ tab, isRunning, isActive, isDragOver, isDragging, dragOffsetX, runningLabel, onClick, onClose, onContextMenu, onMouseDown }, ref) => {
+}>(({ tab, isRunning, isActive, isDragOver, isDragging, dragNudgeDirection, runningLabel, onClick, onClose, onContextMenu, onMouseDown }, ref) => {
   return (
     <div
       ref={ref}
@@ -513,19 +663,28 @@ const TabItem = forwardRef<HTMLDivElement, {
       onContextMenu={onContextMenu}
       className={`
         tab-bar-hit-area group relative flex min-h-11 flex-shrink-0 items-center gap-1.5 px-3
-        ${isDragging ? 'z-20 cursor-grabbing' : 'cursor-grab'}
-        transition-[background-color,box-shadow,opacity,transform] duration-150 ease-out
+        ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}
+        ${isDragging ? 'transition-[background-color,opacity,transform] duration-75 ease-out' : 'transition-[background-color,box-shadow,opacity,transform,width] duration-150 ease-out'}
         ${isActive
-          ? 'bg-[var(--color-surface)] shadow-[inset_0_-2px_0_var(--color-brand)]'
-          : 'bg-transparent hover:bg-[var(--color-surface-hover)]'
+          ? 'z-10 rounded-t-[13px] border-x border-t border-b-0 border-[color-mix(in_srgb,var(--color-brand)_34%,var(--color-border))] bg-[color-mix(in_srgb,var(--color-surface)_90%,transparent)] shadow-[inset_0_2px_0_var(--color-brand),inset_0_1px_0_rgba(255,255,255,0.14),0_1px_0_var(--color-surface),0_10px_24px_rgba(0,0,0,0.12),0_0_18px_color-mix(in_srgb,var(--color-brand)_14%,transparent)]'
+          : 'rounded-t-[12px] border border-transparent bg-transparent hover:border-[color-mix(in_srgb,var(--color-border)_52%,transparent)] hover:bg-[color-mix(in_srgb,var(--color-surface-hover)_72%,transparent)] hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.10),0_8px_20px_rgba(0,0,0,0.08)]'
         }
-        ${isDragging ? 'opacity-95 shadow-[0_10px_24px_rgba(0,0,0,0.18)] ring-1 ring-[var(--color-border)]' : ''}
+        ${isDragging ? 'z-30 opacity-[0.98] will-change-transform ring-1 ring-[color-mix(in_srgb,var(--color-brand)_35%,var(--color-border))]' : ''}
         ${isDragOver ? 'before:absolute before:left-0 before:top-[4px] before:bottom-[4px] before:w-[3px] before:bg-[var(--color-brand)] before:rounded-full before:shadow-[0_0_0_1px_rgba(255,255,255,0.25)]' : ''}
       `}
       style={{
         width: TAB_WIDTH,
         maxWidth: TAB_WIDTH,
-        transform: isDragging ? `translateX(${dragOffsetX}px) scale(1.02)` : undefined,
+        transitionProperty: isDragging
+          ? 'background-color,opacity,transform'
+          : undefined,
+        transitionDuration: isDragging ? '0ms' : undefined,
+        transitionTimingFunction: dragNudgeDirection !== 0
+          ? 'cubic-bezier(0.2, 0.8, 0.2, 1)'
+          : undefined,
+        transform: dragNudgeDirection !== 0
+          ? `translateX(${dragNudgeDirection * DRAG_SLOT_SHIFT}px)`
+          : undefined,
       }}
     >
       {tab.type === 'session' && isRunning && (

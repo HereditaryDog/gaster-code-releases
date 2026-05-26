@@ -1,5 +1,5 @@
-import { beforeEach, describe, it, expect, vi } from 'vitest'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import '@testing-library/jest-dom'
 
 vi.mock('../chat/CodeViewer', () => ({
@@ -25,6 +25,10 @@ function visibleMathText(container: HTMLElement): string {
 }
 
 describe('MarkdownRenderer', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it('applies document prose classes and custom width classes', () => {
     const { container } = render(
       <MarkdownRenderer
@@ -42,6 +46,43 @@ describe('MarkdownRenderer', () => {
     expect(root.className).toContain('max-w-[72ch]')
     expect(screen.getByText('Skill Title')).toBeInTheDocument()
     expect(screen.getByText('Readable paragraph text.')).toBeInTheDocument()
+  })
+
+  it('progressively mounts very large finalized documents after the first paint', async () => {
+    vi.useFakeTimers()
+    const content = Array.from({ length: 90 }, (_, index) => [
+      `## Section ${index}`,
+      '',
+      `Long paragraph ${index} ${'readable body copy '.repeat(45)}`,
+    ].join('\n')).join('\n\n')
+
+    render(<MarkdownRenderer content={content} variant="document" />)
+
+    expect(screen.getByText('Section 0')).toBeInTheDocument()
+    expect(screen.queryByText('Section 89')).not.toBeInTheDocument()
+
+    for (let i = 0; i < 40; i++) {
+      await act(async () => {
+        vi.runOnlyPendingTimers()
+        await Promise.resolve()
+      })
+    }
+
+    expect(screen.getByText('Section 89')).toBeInTheDocument()
+  })
+
+  it('progressively mounts medium finalized documents before desktop WebViews stall', () => {
+    vi.useFakeTimers()
+    const content = Array.from({ length: 30 }, (_, index) => [
+      `## Medium Section ${index}`,
+      '',
+      `Document paragraph ${index} ${'body copy for a local document preview '.repeat(12)}`,
+    ].join('\n')).join('\n\n')
+
+    render(<MarkdownRenderer content={content} variant="document" />)
+
+    expect(screen.getByText('Medium Section 0')).toBeInTheDocument()
+    expect(screen.queryByText('Medium Section 29')).not.toBeInTheDocument()
   })
 
   it('keeps default variant free of document-only typography classes', () => {
