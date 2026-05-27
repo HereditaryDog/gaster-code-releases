@@ -121,6 +121,20 @@ describe('TabBar', () => {
       value: scrollIntoViewMock,
     })
 
+    let animationFrameId = 0
+    Object.defineProperty(window, 'requestAnimationFrame', {
+      configurable: true,
+      value: vi.fn((callback: FrameRequestCallback) => {
+        animationFrameId += 1
+        window.setTimeout(() => callback(performance.now()), 0)
+        return animationFrameId
+      }),
+    })
+    Object.defineProperty(window, 'cancelAnimationFrame', {
+      configurable: true,
+      value: vi.fn(),
+    })
+
     startDraggingMock.mockClear()
     getCurrentWindowMock.mockClear()
     scrollIntoViewMock.mockClear()
@@ -287,7 +301,10 @@ describe('TabBar', () => {
       render(<TabBar />)
     })
 
-    expect(screen.getByTestId('tab-bar')).not.toHaveAttribute('data-tauri-drag-region')
+    const tabBar = screen.getByTestId('tab-bar')
+    expect(tabBar).not.toHaveAttribute('data-tauri-drag-region')
+    expect(tabBar).not.toHaveClass('border-b')
+    expect(tabBar).toHaveClass('tab-bar-shell')
     expect(screen.getByTestId('tab-bar-drag-gutter')).toHaveAttribute('data-tauri-drag-region')
   })
 
@@ -317,6 +334,38 @@ describe('TabBar', () => {
     expect(tabBar).toHaveClass('min-h-11')
     expect(tab).toHaveClass('min-h-11')
     expect(screen.getByTestId('tab-bar-drag-gutter')).toHaveClass('min-h-11')
+  })
+
+  it('renders the active tab as a frosted raised tab instead of a bottom-rule tab', async () => {
+    const { TabBar } = await import('./TabBar')
+    const { useTabStore } = await import('../../stores/tabStore')
+    const { useChatStore } = await import('../../stores/chatStore')
+
+    useTabStore.setState({
+      tabs: [
+        { sessionId: 'tab-1', title: 'Untitled Session', type: 'session', status: 'idle' },
+        { sessionId: 'tab-2', title: 'Settings', type: 'settings', status: 'idle' },
+      ],
+      activeTabId: 'tab-1',
+    })
+    useChatStore.setState({
+      sessions: {},
+      disconnectSession: vi.fn(),
+    } as Partial<ReturnType<typeof useChatStore.getState>>)
+
+    await act(async () => {
+      render(<TabBar />)
+    })
+
+    const activeTab = screen.getByText('Untitled Session').closest('.tab-bar-hit-area')
+
+    expect(activeTab).toHaveClass('rounded-t-[13px]', 'border-x', 'border-t', 'border-b-0')
+    expect(activeTab?.className).toContain('bg-[color-mix(in_srgb,var(--color-surface)_90%,transparent)]')
+    expect(activeTab?.className).toContain('border-[color-mix(in_srgb,var(--color-brand)_34%,var(--color-border))]')
+    expect(activeTab?.className).toContain('inset_0_2px_0_var(--color-brand)')
+    expect(activeTab?.className).toContain('0_0_18px_color-mix(in_srgb,var(--color-brand)_14%,transparent)')
+    expect(activeTab?.className).toContain('inset_0_1px_0_rgba(255,255,255,0.14)')
+    expect(activeTab?.className).not.toContain('inset_0_-2px_0_var(--color-brand)')
   })
 
   it('passes the active session workdir into the open-project control', async () => {
@@ -590,11 +639,358 @@ describe('TabBar', () => {
     fireEvent.mouseDown(firstTab!, { button: 0, clientX: 20, clientY: 10 })
     fireEvent.mouseMove(window, { clientX: 260, clientY: 10 })
 
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 0))
+    })
+
     expect(firstTab).toHaveAttribute('data-dragging', 'true')
 
     fireEvent.mouseUp(window)
 
     expect(useTabStore.getState().tabs.map((tab) => tab.sessionId)).toEqual(['tab-2', 'tab-1'])
+  })
+
+  it('lifts the dragged tab and slides the tab it collides with into the open slot', async () => {
+    const { TabBar } = await import('./TabBar')
+    const { useTabStore } = await import('../../stores/tabStore')
+    const { useChatStore } = await import('../../stores/chatStore')
+
+    useTabStore.setState({
+      tabs: [
+        { sessionId: 'tab-1', title: 'First Session', type: 'session', status: 'idle' },
+        { sessionId: 'tab-2', title: 'Second Session', type: 'session', status: 'idle' },
+      ],
+      activeTabId: 'tab-2',
+    })
+    useChatStore.setState({
+      sessions: {},
+      disconnectSession: vi.fn(),
+    } as Partial<ReturnType<typeof useChatStore.getState>>)
+
+    await act(async () => {
+      render(<TabBar />)
+    })
+
+    const firstTab = screen.getByText('First Session').closest('.tab-bar-hit-area')
+    const secondTab = screen.getByText('Second Session').closest('.tab-bar-hit-area')
+
+    expect(firstTab).toBeTruthy()
+    expect(secondTab).toBeTruthy()
+
+    Object.defineProperty(firstTab!, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({ left: 0, width: 180 }),
+    })
+    Object.defineProperty(secondTab!, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({ left: 180, width: 180 }),
+    })
+
+    fireEvent.mouseDown(secondTab!, { button: 0, clientX: 220, clientY: 10 })
+    fireEvent.mouseMove(window, { clientX: 40, clientY: 10 })
+
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 0))
+    })
+
+    expect(secondTab).toHaveAttribute('data-dragging', 'true')
+    expect(secondTab).toHaveClass('z-30', 'will-change-transform')
+    expect(secondTab?.className).not.toContain('shadow-[0_16px')
+    expect(secondTab).not.toHaveStyle({ transitionProperty: 'box-shadow' })
+    expect(secondTab).not.toHaveStyle({ transitionProperty: 'width' })
+    expect(secondTab).toHaveStyle({ transform: 'translate3d(-180px, -3px, 0) scale(1.035)' })
+    expect(firstTab).toHaveStyle({ transform: 'translateX(160px)' })
+  })
+
+  it('coalesces high-frequency drag moves into one animation frame', async () => {
+    const { TabBar } = await import('./TabBar')
+    const { useTabStore } = await import('../../stores/tabStore')
+    const { useChatStore } = await import('../../stores/chatStore')
+
+    useTabStore.setState({
+      tabs: [
+        { sessionId: 'tab-1', title: 'First Session', type: 'session', status: 'idle' },
+        { sessionId: 'tab-2', title: 'Second Session', type: 'session', status: 'idle' },
+      ],
+      activeTabId: 'tab-1',
+    })
+    useChatStore.setState({
+      sessions: {},
+      disconnectSession: vi.fn(),
+    } as Partial<ReturnType<typeof useChatStore.getState>>)
+
+    await act(async () => {
+      render(<TabBar />)
+    })
+
+    const firstTab = screen.getByText('First Session').closest('.tab-bar-hit-area')
+    const secondTab = screen.getByText('Second Session').closest('.tab-bar-hit-area')
+
+    expect(firstTab).toBeTruthy()
+    expect(secondTab).toBeTruthy()
+
+    Object.defineProperty(firstTab!, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({ left: 0, right: 180, width: 180 }),
+    })
+    Object.defineProperty(secondTab!, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({ left: 180, right: 360, width: 180 }),
+    })
+
+    const rafMock = vi.mocked(window.requestAnimationFrame)
+    rafMock.mockClear()
+
+    fireEvent.mouseDown(firstTab!, { button: 0, clientX: 20, clientY: 10 })
+    fireEvent.mouseMove(window, { clientX: 80, clientY: 10 })
+    fireEvent.mouseMove(window, { clientX: 160, clientY: 10 })
+    fireEvent.mouseMove(window, { clientX: 260, clientY: 10 })
+
+    expect(rafMock).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 0))
+    })
+
+    expect(firstTab).toHaveStyle({ transform: 'translate3d(240px, -3px, 0) scale(1.035)' })
+    expect(secondTab).toHaveStyle({ transform: 'translateX(-160px)' })
+  })
+
+  it('uses cached tab bounds while dragging to avoid layout reads on mousemove', async () => {
+    const { TabBar } = await import('./TabBar')
+    const { useTabStore } = await import('../../stores/tabStore')
+    const { useChatStore } = await import('../../stores/chatStore')
+
+    useTabStore.setState({
+      tabs: [
+        { sessionId: 'tab-1', title: 'First Session', type: 'session', status: 'idle' },
+        { sessionId: 'tab-2', title: 'Second Session', type: 'session', status: 'idle' },
+        { sessionId: 'tab-3', title: 'Third Session', type: 'session', status: 'idle' },
+      ],
+      activeTabId: 'tab-2',
+    })
+    useChatStore.setState({
+      sessions: {},
+      disconnectSession: vi.fn(),
+    } as Partial<ReturnType<typeof useChatStore.getState>>)
+
+    await act(async () => {
+      render(<TabBar />)
+    })
+
+    const firstTab = screen.getByText('First Session').closest('.tab-bar-hit-area')
+    const secondTab = screen.getByText('Second Session').closest('.tab-bar-hit-area')
+    const thirdTab = screen.getByText('Third Session').closest('.tab-bar-hit-area')
+
+    expect(firstTab).toBeTruthy()
+    expect(secondTab).toBeTruthy()
+    expect(thirdTab).toBeTruthy()
+
+    const firstRect = vi.fn(() => ({ left: 0, right: 180, width: 180 }))
+    const secondRect = vi.fn(() => ({ left: 180, right: 360, width: 180 }))
+    const thirdRect = vi.fn(() => ({ left: 360, right: 540, width: 180 }))
+    Object.defineProperty(firstTab!, 'getBoundingClientRect', {
+      configurable: true,
+      value: firstRect,
+    })
+    Object.defineProperty(secondTab!, 'getBoundingClientRect', {
+      configurable: true,
+      value: secondRect,
+    })
+    Object.defineProperty(thirdTab!, 'getBoundingClientRect', {
+      configurable: true,
+      value: thirdRect,
+    })
+
+    fireEvent.mouseDown(secondTab!, { button: 0, clientX: 220, clientY: 10 })
+    firstRect.mockClear()
+    secondRect.mockClear()
+    thirdRect.mockClear()
+
+    fireEvent.mouseMove(window, { clientX: 40, clientY: 10 })
+
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 0))
+    })
+
+    expect(firstRect).not.toHaveBeenCalled()
+    expect(secondRect).not.toHaveBeenCalled()
+    expect(thirdRect).not.toHaveBeenCalled()
+  })
+
+  it('updates the dragged tab position without rerendering the tab bar on every drag frame', async () => {
+    const { TabBar } = await import('./TabBar')
+    const { useTabStore } = await import('../../stores/tabStore')
+    const { useChatStore } = await import('../../stores/chatStore')
+    const { useSessionStore } = await import('../../stores/sessionStore')
+
+    useTabStore.setState({
+      tabs: [
+        { sessionId: 'tab-1', title: 'First Session', type: 'session', status: 'idle' },
+        { sessionId: 'tab-2', title: 'Second Session', type: 'session', status: 'idle' },
+      ],
+      activeTabId: 'tab-1',
+    })
+    useChatStore.setState({
+      sessions: {},
+      disconnectSession: vi.fn(),
+    } as Partial<ReturnType<typeof useChatStore.getState>>)
+    useSessionStore.setState({
+      sessions: [{
+        id: 'tab-1',
+        title: 'First Session',
+        createdAt: '2026-05-13T00:00:00.000Z',
+        modifiedAt: '2026-05-13T00:00:00.000Z',
+        messageCount: 0,
+        projectPath: '/repo',
+        workDir: '/repo/worktree',
+        workDirExists: true,
+      }],
+      activeSessionId: 'tab-1',
+    })
+
+    await act(async () => {
+      render(<TabBar />)
+    })
+
+    const firstTab = screen.getByText('First Session').closest('.tab-bar-hit-area')
+    const secondTab = screen.getByText('Second Session').closest('.tab-bar-hit-area')
+
+    expect(firstTab).toBeTruthy()
+    expect(secondTab).toBeTruthy()
+
+    Object.defineProperty(firstTab!, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({ left: 0, right: 180, width: 180 }),
+    })
+    Object.defineProperty(secondTab!, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({ left: 180, right: 360, width: 180 }),
+    })
+
+    fireEvent.mouseDown(firstTab!, { button: 0, clientX: 20, clientY: 10 })
+    fireEvent.mouseMove(window, { clientX: 60, clientY: 10 })
+
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 0))
+    })
+
+    openProjectMenuMock.paths = []
+    fireEvent.mouseMove(window, { clientX: 70, clientY: 10 })
+
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 0))
+    })
+
+    expect(firstTab).toHaveStyle({ transform: 'translate3d(50px, -3px, 0) scale(1.035)' })
+    expect(openProjectMenuMock.paths).toEqual([])
+  })
+
+  it('moves the last tab to the first position when dragged past the first slot', async () => {
+    const { TabBar } = await import('./TabBar')
+    const { useTabStore } = await import('../../stores/tabStore')
+    const { useChatStore } = await import('../../stores/chatStore')
+
+    useTabStore.setState({
+      tabs: [
+        { sessionId: 'tab-1', title: 'First Session', type: 'session', status: 'idle' },
+        { sessionId: 'tab-2', title: 'Second Session', type: 'session', status: 'idle' },
+        { sessionId: 'tab-3', title: 'Third Session', type: 'session', status: 'idle' },
+      ],
+      activeTabId: 'tab-3',
+    })
+    useChatStore.setState({
+      sessions: {},
+      disconnectSession: vi.fn(),
+    } as Partial<ReturnType<typeof useChatStore.getState>>)
+
+    await act(async () => {
+      render(<TabBar />)
+    })
+
+    const firstTab = screen.getByText('First Session').closest('.tab-bar-hit-area')
+    const secondTab = screen.getByText('Second Session').closest('.tab-bar-hit-area')
+    const thirdTab = screen.getByText('Third Session').closest('.tab-bar-hit-area')
+
+    expect(firstTab).toBeTruthy()
+    expect(secondTab).toBeTruthy()
+    expect(thirdTab).toBeTruthy()
+
+    Object.defineProperty(firstTab!, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({ left: 0, right: 180, width: 180 }),
+    })
+    Object.defineProperty(secondTab!, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({ left: 180, right: 360, width: 180 }),
+    })
+    Object.defineProperty(thirdTab!, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({ left: 360, right: 540, width: 180 }),
+    })
+
+    fireEvent.mouseDown(thirdTab!, { button: 0, clientX: 400, clientY: 10 })
+    fireEvent.mouseMove(window, { clientX: 20, clientY: 10 })
+    fireEvent.mouseUp(window)
+
+    expect(useTabStore.getState().tabs.map((tab) => tab.sessionId)).toEqual(['tab-3', 'tab-1', 'tab-2'])
+  })
+
+  it('uses the dragged tab center to place it accurately between middle tabs', async () => {
+    const { TabBar } = await import('./TabBar')
+    const { useTabStore } = await import('../../stores/tabStore')
+    const { useChatStore } = await import('../../stores/chatStore')
+
+    useTabStore.setState({
+      tabs: [
+        { sessionId: 'tab-1', title: 'First Session', type: 'session', status: 'idle' },
+        { sessionId: 'tab-2', title: 'Second Session', type: 'session', status: 'idle' },
+        { sessionId: 'tab-3', title: 'Third Session', type: 'session', status: 'idle' },
+        { sessionId: 'tab-4', title: 'Fourth Session', type: 'session', status: 'idle' },
+      ],
+      activeTabId: 'tab-4',
+    })
+    useChatStore.setState({
+      sessions: {},
+      disconnectSession: vi.fn(),
+    } as Partial<ReturnType<typeof useChatStore.getState>>)
+
+    await act(async () => {
+      render(<TabBar />)
+    })
+
+    const firstTab = screen.getByText('First Session').closest('.tab-bar-hit-area')
+    const secondTab = screen.getByText('Second Session').closest('.tab-bar-hit-area')
+    const thirdTab = screen.getByText('Third Session').closest('.tab-bar-hit-area')
+    const fourthTab = screen.getByText('Fourth Session').closest('.tab-bar-hit-area')
+
+    expect(firstTab).toBeTruthy()
+    expect(secondTab).toBeTruthy()
+    expect(thirdTab).toBeTruthy()
+    expect(fourthTab).toBeTruthy()
+
+    Object.defineProperty(firstTab!, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({ left: 0, right: 180, width: 180 }),
+    })
+    Object.defineProperty(secondTab!, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({ left: 184, right: 364, width: 180 }),
+    })
+    Object.defineProperty(thirdTab!, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({ left: 368, right: 548, width: 180 }),
+    })
+    Object.defineProperty(fourthTab!, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({ left: 552, right: 732, width: 180 }),
+    })
+
+    fireEvent.mouseDown(fourthTab!, { button: 0, clientX: 712, clientY: 10 })
+    fireEvent.mouseMove(window, { clientX: 526, clientY: 10 })
+    fireEvent.mouseUp(window)
+
+    expect(useTabStore.getState().tabs.map((tab) => tab.sessionId)).toEqual(['tab-1', 'tab-2', 'tab-4', 'tab-3'])
   })
 
   it('does not reorder on a simple click without dragging', async () => {

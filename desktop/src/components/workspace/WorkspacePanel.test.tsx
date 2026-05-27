@@ -961,6 +961,50 @@ describe('WorkspacePanel', () => {
     expect(view.queryByTestId('workspace-code')).toBeNull()
   })
 
+  it('caps large markdown previews until the user expands the loaded content', async () => {
+    const longMarkdown = Array.from({ length: 1100 }, (_, index) => `line ${index + 1}`).join('\n')
+
+    await setWorkspaceState((state) => ({
+      ...state,
+      panelBySession: {
+        ...state.panelBySession,
+        'session-large-markdown-preview': {
+          isOpen: true,
+          activeView: 'all',
+        },
+      },
+      previewTabsBySession: {
+        ...state.previewTabsBySession,
+        'session-large-markdown-preview': [{
+          id: 'file:README.md',
+          path: 'README.md',
+          kind: 'file',
+          title: 'README.md',
+          language: 'markdown',
+          content: longMarkdown,
+          previewType: 'text',
+          state: 'ok',
+        }],
+      },
+      activePreviewTabIdBySession: {
+        ...state.activePreviewTabIdBySession,
+        'session-large-markdown-preview': 'file:README.md',
+      },
+    }))
+
+    const view = await renderPanel('session-large-markdown-preview')
+
+    expect(view.container.textContent).toContain('line 1')
+    expect(view.container.textContent).toContain('line 800')
+    expect(view.container.textContent).not.toContain('line 801')
+    await clickElement(view.getByRole('button', { name: 'Show all loaded lines' }))
+
+    await waitFor(() => {
+      expect(view.container.textContent).toContain('line 1100')
+    })
+    expect(view.getByRole('button', { name: 'Collapse preview' })).toBeTruthy()
+  })
+
   it('opens a context menu for preview tabs and closes tabs to the right', async () => {
     await setWorkspaceState((state) => ({
       ...state,

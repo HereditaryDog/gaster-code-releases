@@ -31,6 +31,8 @@ type WorkspacePanelProps = {
   sessionId: string
 }
 
+const WORKSPACE_MARKDOWN_PREVIEW_LINE_LIMIT = 800
+
 type TreeNodeProps = {
   sessionId: string
   entry: WorkspaceTreeEntry
@@ -654,11 +656,17 @@ function MarkdownSurface({
   value: string
   onAddSelection: (selection: WorkspaceTextSelection) => void
 }) {
+  const t = useTranslation()
   const surfaceRef = useRef<HTMLDivElement>(null)
   const selectionMenuRef = useRef<HTMLButtonElement>(null)
+  const [showAllLines, setShowAllLines] = useState(false)
   const [selectionMenu, setSelectionMenu] = useState<FloatingSelectionMenuState | null>(null)
+  const lines = value.split('\n')
+  const visibleLines = showAllLines ? lines : lines.slice(0, WORKSPACE_MARKDOWN_PREVIEW_LINE_LIMIT)
+  const visibleMarkdown = visibleLines.join('\n')
 
   useEffect(() => {
+    setShowAllLines(false)
     setSelectionMenu(null)
   }, [value])
 
@@ -702,11 +710,27 @@ function MarkdownSurface({
     >
       <div className="mx-auto w-full max-w-[860px] px-6 py-5">
         <MarkdownRenderer
-          content={value}
+          content={visibleMarkdown}
           variant="document"
           className="workspace-markdown-preview prose-p:text-[14px] prose-p:leading-7 prose-h1:text-[24px] prose-h2:text-[18px] prose-h3:text-[15px] prose-code:text-[12px] prose-pre:my-4"
         />
       </div>
+      {lines.length > WORKSPACE_MARKDOWN_PREVIEW_LINE_LIMIT && (
+        <div className="sticky bottom-0 flex items-center gap-3 border-t border-[var(--color-border)] bg-[var(--color-surface-glass)] px-3 py-2 text-xs text-[var(--color-text-tertiary)] backdrop-blur">
+          <span>
+            {showAllLines
+              ? t('workspace.previewAllLines', { total: lines.length })
+              : t('workspace.previewLineLimit', { count: visibleLines.length, total: lines.length })}
+          </span>
+          <button
+            type="button"
+            onClick={() => setShowAllLines((current) => !current)}
+            className="ml-auto rounded-[6px] px-2 py-1 text-[12px] font-medium text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
+          >
+            {showAllLines ? t('workspace.collapsePreview') : t('workspace.showAllLoadedLines')}
+          </button>
+        </div>
+      )}
       <FloatingSelectionMenu selection={selectionMenu} onAdd={addCurrentSelectionToChat} popoverRef={selectionMenuRef} />
     </div>
   )

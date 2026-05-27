@@ -1,4 +1,4 @@
-import { memo, useMemo, useCallback } from 'react'
+import { memo, useEffect, useMemo, useCallback, useState } from 'react'
 import type { MouseEvent as ReactMouseEvent } from 'react'
 import DOMPurify from 'dompurify'
 import katex from 'katex'
@@ -38,6 +38,10 @@ const PLAINTEXT_LANGUAGES = new Set(['', 'text', 'plaintext', 'plain'])
 const MERMAID_DIAGRAM_START = /^(graph|flowchart|sequenceDiagram|classDiagram|stateDiagram(?:-v2)?|erDiagram|journey|gantt|pie|gitGraph|mindmap|timeline|requirementDiagram|quadrantChart|xychart-beta|sankey-beta|block-beta|packet-beta|architecture|kanban)\b/i
 const CODE_FENCE_START = /^ {0,3}(`{3,}|~{3,})/
 const MATH_RENDER_CACHE_LIMIT = 200
+const PROGRESSIVE_DOCUMENT_MIN_CHARS = 8_000
+const PROGRESSIVE_DOCUMENT_CHUNK_CHARS = 6_000
+const PROGRESSIVE_DOCUMENT_INITIAL_CHUNKS = 1
+const PROGRESSIVE_DOCUMENT_BATCH_CHUNKS = 2
 const mathRenderCache = new Map<string, string>()
 
 function normalizeCodeLanguage(language: string | undefined): string | undefined {
@@ -451,17 +455,93 @@ function getProseClasses(variant: 'default' | 'document' | 'compact', className?
     .join(' ')
 }
 
-export const MarkdownRenderer = memo(function MarkdownRenderer({ content, variant = 'default', className, cache = true, streaming = false, onLinkClick }: Props) {
+function shouldUseProgressiveDocumentRender(content: string, variant: 'default' | 'document' | 'compact', streaming: boolean) {
+  return variant === 'document' && !streaming && content.length >= PROGRESSIVE_DOCUMENT_MIN_CHARS
+}
+
+function splitProgressiveMarkdownChunks(content: string): string[] {
+  if (content.length <= PROGRESSIVE_DOCUMENT_CHUNK_CHARS) return [content]
+
+  const lines = content.match(/[^\n]*\n|[^\n]+/g) ?? [content]
+  const chunks: string[] = []
+  let current = ''
+  let inFence: string | null = null
+
+  const flushCurrent = () => {
+    const chunk = current.trimEnd()
+    if (chunk) chunks.push(chunk)
+    current = ''
+  }
+
+  for (const line of lines) {
+    if (!inFence && line.length >= PROGRESSIVE_DOCUMENT_CHUNK_CHARS) {
+      if (current.trim()) flushCurrent()
+      for (let index = 0; index < line.length; index += PROGRESSIVE_DOCUMENT_CHUNK_CHARS) {
+        const chunk = line.slice(index, index + PROGRESSIVE_DOCUMENT_CHUNK_CHARS).trimEnd()
+        if (chunk) chunks.push(chunk)
+      }
+      continue
+    }
+
+    const startsHeading = !inFence && /^ {0,3}#{1,6}\s/.test(line)
+    if (startsHeading && current.trim() && current.length >= PROGRESSIVE_DOCUMENT_CHUNK_CHARS / 2) {
+      flushCurrent()
+    }
+
+    current += line
+
+    const fenceMatch = CODE_FENCE_START.exec(line)
+    if (fenceMatch) {
+      const marker = fenceMatch[1]!.charAt(0)
+      if (!inFence) {
+        inFence = marker
+      } else if (inFence === marker) {
+        inFence = null
+      }
+    }
+
+    if (!inFence && /^\s*$/.test(line) && current.length >= PROGRESSIVE_DOCUMENT_CHUNK_CHARS) {
+      flushCurrent()
+    }
+  }
+
+  flushCurrent()
+  return chunks.length > 0 ? chunks : [content]
+}
+
+function estimateUnrenderedChunkHeight(chunks: string[], fromIndex: number): number {
+  let remainingChars = 0
+  for (let i = fromIndex; i < chunks.length; i += 1) {
+    remainingChars += chunks[i]?.length ?? 0
+  }
+  if (remainingChars <= 0) return 0
+  return Math.min(18_000, Math.max(320, Math.ceil(remainingChars / 78) * 24))
+}
+
+function scheduleProgressiveMarkdownChunk(callback: () => void): () => void {
+  const win = typeof window === 'undefined'
+    ? undefined
+    : window as typeof window & {
+      requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number
+      cancelIdleCallback?: (handle: number) => void
+    }
+
+  if (win?.requestIdleCallback) {
+    const handle = win.requestIdleCallback(callback, { timeout: 120 })
+    return () => win.cancelIdleCallback?.(handle)
+  }
+
+  const handle = window.setTimeout(callback, 16)
+  return () => window.clearTimeout(handle)
+}
+
+function useMarkdownParts(content: string, cache: boolean, streaming: boolean) {
   const { html, codeBlocks, mathBlocks } = useMemo(
     () => cache ? getCachedMarkdownParse(content, streaming) : parseMarkdown(content),
     [cache, content, streaming],
   )
-  const proseClasses = useMemo(
-    () => getProseClasses(variant, className),
-    [variant, className],
-  )
 
-  const parts = useMemo(() => {
+  return useMemo(() => {
     if (codeBlocks.length === 0) {
       return [{ type: 'html' as const, content: enhanceMarkdownHtml(html, mathBlocks) }]
     }
@@ -488,8 +568,10 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({ content, varian
 
     return result
   }, [html, codeBlocks, mathBlocks])
+}
 
-  const handleClick = useCallback(async (event: ReactMouseEvent<HTMLDivElement>) => {
+function useMarkdownClickHandler(onLinkClick?: Props['onLinkClick']) {
+  return useCallback(async (event: ReactMouseEvent<HTMLDivElement>) => {
     const target = event.target as HTMLElement | null
     const button = target?.closest<HTMLButtonElement>('[data-copy-code]')
     if (!button) {
@@ -516,19 +598,20 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({ content, varian
       button.textContent = original
     }, 1500)
   }, [onLinkClick])
+}
 
-  if (codeBlocks.length === 0) {
+function MarkdownParts({ parts }: { parts: MarkdownPart[] }) {
+  if (parts.length === 1 && parts[0]?.type === 'html') {
+    const first = parts[0]
     return (
       <div
-        className={proseClasses}
-        dangerouslySetInnerHTML={{ __html: parts[0]?.type === 'html' ? parts[0].content : '' }}
-        onClick={handleClick}
+        dangerouslySetInnerHTML={{ __html: first.content }}
       />
     )
   }
 
   return (
-    <div className={proseClasses} onClick={handleClick}>
+    <>
       {parts.map((part, i) =>
         part.type === 'html' ? (
           <div key={i} dangerouslySetInnerHTML={{ __html: part.content }} />
@@ -543,6 +626,106 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({ content, varian
           </div>
         )
       )}
+    </>
+  )
+}
+
+function MarkdownContent({
+  content,
+  cache,
+  streaming,
+}: {
+  content: string
+  cache: boolean
+  streaming: boolean
+}) {
+  const parts = useMarkdownParts(content, cache, streaming)
+  return <MarkdownParts parts={parts} />
+}
+
+function ProgressiveMarkdownDocument({
+  content,
+  proseClasses,
+  cache,
+  onLinkClick,
+}: {
+  content: string
+  proseClasses: string
+  cache: boolean
+  onLinkClick?: Props['onLinkClick']
+}) {
+  const chunks = useMemo(() => splitProgressiveMarkdownChunks(content), [content])
+  const initialVisibleCount = Math.min(PROGRESSIVE_DOCUMENT_INITIAL_CHUNKS, chunks.length)
+  const [progress, setProgress] = useState({ content, visibleCount: initialVisibleCount })
+  const visibleCount = progress.content === content ? progress.visibleCount : initialVisibleCount
+  const handleClick = useMarkdownClickHandler(onLinkClick)
+
+  useEffect(() => {
+    setProgress({ content, visibleCount: initialVisibleCount })
+  }, [content, initialVisibleCount])
+
+  useEffect(() => {
+    if (visibleCount >= chunks.length) return undefined
+
+    return scheduleProgressiveMarkdownChunk(() => {
+      setProgress((current) => {
+        if (current.content !== content) return current
+        return {
+          content,
+          visibleCount: Math.min(chunks.length, current.visibleCount + PROGRESSIVE_DOCUMENT_BATCH_CHUNKS),
+        }
+      })
+    })
+  }, [chunks.length, content, visibleCount])
+
+  const unrenderedHeight = estimateUnrenderedChunkHeight(chunks, visibleCount)
+
+  return (
+    <div className={proseClasses} onClick={handleClick}>
+      {chunks.slice(0, visibleCount).map((chunk, index) => (
+        <div
+          key={`${index}-${chunk.length}`}
+          data-progressive-markdown-chunk={index}
+          style={index === 0 ? undefined : {
+            contentVisibility: 'auto',
+            containIntrinsicSize: '0 720px',
+          }}
+        >
+          <MarkdownContent content={chunk} cache={cache} streaming={false} />
+        </div>
+      ))}
+      {unrenderedHeight > 0 ? (
+        <div
+          data-progressive-markdown-spacer
+          aria-hidden="true"
+          style={{ height: unrenderedHeight }}
+        />
+      ) : null}
+    </div>
+  )
+}
+
+export const MarkdownRenderer = memo(function MarkdownRenderer({ content, variant = 'default', className, cache = true, streaming = false, onLinkClick }: Props) {
+  const proseClasses = useMemo(
+    () => getProseClasses(variant, className),
+    [variant, className],
+  )
+  const handleClick = useMarkdownClickHandler(onLinkClick)
+
+  if (shouldUseProgressiveDocumentRender(content, variant, streaming)) {
+    return (
+      <ProgressiveMarkdownDocument
+        content={content}
+        proseClasses={proseClasses}
+        cache={cache}
+        onLinkClick={onLinkClick}
+      />
+    )
+  }
+
+  return (
+    <div className={proseClasses} onClick={handleClick}>
+      <MarkdownContent content={content} cache={cache} streaming={streaming} />
     </div>
   )
 })
