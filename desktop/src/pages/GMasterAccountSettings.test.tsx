@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import '@testing-library/jest-dom'
 
@@ -47,8 +47,11 @@ describe('GMasterAccountSettings', () => {
   })
 
   afterEach(() => {
-    useGMasterAuthStore.getState().stopPolling()
-    useGMasterAuthStore.setState(useGMasterAuthStore.getInitialState(), true)
+    cleanup()
+    act(() => {
+      useGMasterAuthStore.getState().stopPolling()
+      useGMasterAuthStore.setState(useGMasterAuthStore.getInitialState(), true)
+    })
     delete (window as Window & { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__
     vi.restoreAllMocks()
   })
@@ -61,18 +64,27 @@ describe('GMasterAccountSettings', () => {
   })
 
   it('starts auth with register intent from the registration action', async () => {
+    mockAuthStoreActions()
     render(<GMasterAccountSettings />)
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Create G-Master account' }))
+    const registerButton = await screen.findByRole('button', { name: 'Create G-Master account' })
+    await act(async () => {
+      fireEvent.click(registerButton)
+      await flushAsyncUpdates()
+    })
 
     await waitFor(() => {
       expect(mocks.start).toHaveBeenCalledWith('register')
     })
-    expect(mocks.openExternal).toHaveBeenCalledWith('https://gmapi.example.test/gaster-code/desktop-login?state=abc')
+    await waitFor(() => {
+      expect(mocks.openExternal).toHaveBeenCalledWith('https://gmapi.example.test/gaster-code/desktop-login?state=abc')
+      expect(registerButton).toBeEnabled()
+    })
   })
 
   it('reserves a browser popup before waiting for the registration URL when shell open is unavailable', async () => {
     delete (window as Window & { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__
+    mockAuthStoreActions()
     let resolveStart: (value: { authorizeUrl: string; state: string }) => void = () => {}
     mocks.start.mockReturnValueOnce(new Promise((resolve) => {
       resolveStart = resolve
@@ -88,17 +100,42 @@ describe('GMasterAccountSettings', () => {
 
     render(<GMasterAccountSettings />)
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Create G-Master account' }))
+    const registerButton = await screen.findByRole('button', { name: 'Create G-Master account' })
+    await act(async () => {
+      fireEvent.click(registerButton)
+      await Promise.resolve()
+    })
 
     expect(openSpy).toHaveBeenCalledWith('about:blank', '_blank')
 
-    resolveStart({
-      authorizeUrl: 'https://gmapi.example.test/register?redirect=%2Fgaster-code%2Fdesktop-login',
-      state: 'abc',
+    await act(async () => {
+      resolveStart({
+        authorizeUrl: 'https://gmapi.example.test/register?redirect=%2Fgaster-code%2Fdesktop-login',
+        state: 'abc',
+      })
+      await flushAsyncUpdates()
     })
 
     await waitFor(() => {
       expect(popup.location.href).toBe('https://gmapi.example.test/register?redirect=%2Fgaster-code%2Fdesktop-login')
+      expect(registerButton).toBeEnabled()
     })
   })
 })
+
+async function flushAsyncUpdates() {
+  await Promise.resolve()
+  await Promise.resolve()
+  await new Promise((resolve) => setTimeout(resolve, 0))
+}
+
+function mockAuthStoreActions() {
+  type AuthState = ReturnType<typeof useGMasterAuthStore.getState>
+  const login: AuthState['login'] = vi.fn(async (intent) => {
+    const res = await mocks.start(intent)
+    return { authorizeUrl: res.authorizeUrl }
+  })
+  const startPolling: AuthState['startPolling'] = vi.fn()
+  useGMasterAuthStore.setState({ login, startPolling })
+  return { login, startPolling }
+}
