@@ -33,7 +33,7 @@
 
 ## Project Note
 
-Gaster Code is now maintained as a public open-source project. The current source hotfix version is **v1.0.4** and includes the Drawing complex-prompt timeout fix, long conversation switching performance improvements, session streaming state fixes, H5 diagnostics, network timeout/proxy settings, and remote adapter output stability improvements; the current downloadable installer release is still **v1.0.0** until the matching GitHub Actions release workflow succeeds.
+Gaster Code is now maintained as a public open-source project. The current source and downloadable installer version is **v1.0.6** and includes the Drawing complex-prompt timeout fix, long conversation switching performance improvements, Markdown render caching and progressive loading, tab drag performance improvements, session streaming state fixes, H5 diagnostics, network timeout/proxy settings, and remote adapter output stability improvements.
 
 **Source transparency note:** this project is based on community research and organization of leaked Claude Code source code, with product and development inspiration from the `cc-haha` project. Gaster Code is not an official Anthropic, Claude Code, or `cc-haha` project, and is not affiliated with those projects or organizations.
 
@@ -41,20 +41,20 @@ The repository is public so developers can inspect the code, reproduce the build
 
 ## Download
 
-Latest source version: **v1.0.4**
-Current downloadable installer release: **v1.0.0**
+Latest source version: **v1.0.6**
+Current downloadable installer release: **v1.0.6**
 
 - [GitHub Release](https://github.com/HereditaryDog/gaster-code-releases/releases/latest)
 - [latest.json](https://github.com/HereditaryDog/gaster-code-releases/releases/latest/download/latest.json)
 
 | Platform | Installer |
 | --- | --- |
-| macOS Apple Silicon | `Gaster-Code_1.0.0_macos_arm64_dmg.dmg` |
-| macOS Intel | `Gaster-Code_1.0.0_macos_x64_dmg.dmg` |
-| Windows x64 | `Gaster-Code_1.0.0_windows_x64_nsis.exe` |
-| Linux x64 | `Gaster-Code_1.0.0_linux_x64_deb.deb` |
+| macOS Apple Silicon | `Gaster-Code_1.0.6_macos_arm64_dmg.dmg` |
+| macOS Intel | `Gaster-Code_1.0.6_macos_x64_dmg.dmg` |
+| Windows x64 | `Gaster-Code_1.0.6_windows_x64_nsis.exe` |
+| Linux x64 | `Gaster-Code_1.0.6_linux_x64_deb.deb` |
 
-`v1.0.4` source, docs, and release notes are maintained through `main` and the later `v1.0.4` tag. Installer publication requires the release workflow to finish signing, packaging, and public asset synchronization. Local Apple Silicon test packages use the `Gaster Code-a 1.0.4.dmg` name.
+`v1.0.6` source, docs, release notes, updater metadata, and installer assets are maintained through `main`, the `v1.0.6` tag, and GitHub Release. Local Apple Silicon test packages use the `Gaster Code-a 1.0.6.dmg` name.
 
 If macOS blocks the first launch, run:
 

@@ -1,8 +1,8 @@
 # 安装指南
 
-当前源码补丁版本：**V 1.0.4**。这个版本在 1.0.0 正式公开版本基础上包含复杂提示词绘图超时修复，并优化长对话会话切换性能，让桌面端切换历史会话时更快先显示页面、再渐进加载内容；同时补充会话流式状态、H5 诊断、网络超时/代理设置和远程适配器输出稳定性改进。
+当前源码补丁版本：**V 1.0.6**。这个版本在 1.0.0 正式公开版本基础上包含复杂提示词绘图超时修复，并继续优化长对话会话切换性能、Markdown 渲染缓存和渐进加载、标签拖拽性能以及大型工作区 Markdown 预览；同时补充会话流式状态、H5 诊断、网络超时/代理设置和远程适配器输出稳定性改进。
 
-> 当前公开可下载安装包版本：**V 1.0.4**。正式安装包由 release workflow 完成签名、打包和公开资产同步；本地 Apple Silicon 测试包使用 `Gaster Code-a 1.0.4.dmg` 命名。
+> 当前公开可下载安装包版本：**V 1.0.6**。正式安装包由 release workflow 完成签名、打包和公开资产同步；本地 Apple Silicon 测试包使用 `Gaster Code-a 1.0.6.dmg` 命名。
 
 ## 下载
 
@@ -10,10 +10,10 @@
 
 | 平台 | 文件 |
 |------|------|
-| macOS (Apple Silicon) | `Gaster-Code_1.0.4_macos_arm64_dmg.dmg` |
-| macOS (Intel) | `Gaster-Code_1.0.4_macos_x64_dmg.dmg` |
-| Windows x64 | `Gaster-Code_1.0.4_windows_x64_nsis.exe` |
-| Linux x64 | `Gaster-Code_1.0.4_linux_x64_deb.deb` |
+| macOS (Apple Silicon) | `Gaster-Code_1.0.6_macos_arm64_dmg.dmg` |
+| macOS (Intel) | `Gaster-Code_1.0.6_macos_x64_dmg.dmg` |
+| Windows x64 | `Gaster-Code_1.0.6_windows_x64_nsis.exe` |
+| Linux x64 | `Gaster-Code_1.0.6_linux_x64_deb.deb` |
 
 > 发布策略：不拆平台代码分支。当前 tag 自动发布默认构建 macOS ARM64、macOS x64、Windows x64 和 Linux x64；Linux ARM64 可以在手动发布工作流中按需启用。
 

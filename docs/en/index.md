@@ -4,7 +4,7 @@ layout: home
 hero:
   name: Gaster Code
   text: Public Local AI Coding Assistant
-  tagline: v1.0.4 source hotfix improves long conversation switching, session streaming state, H5 diagnostics, and network settings while keeping CLI / TUI, desktop app, multi-session workspaces, MCP, Skills, Agents, remote adapters, and task automation
+  tagline: v1.0.6 source hotfix improves long conversation switching, Markdown rendering, tab dragging, and workspace previews while keeping CLI / TUI, desktop app, multi-session workspaces, MCP, Skills, Agents, remote adapters, and task automation
   image:
     src: /images/logo-horizontal.png
     alt: Gaster Code
@@ -58,7 +58,7 @@ Starting with **v1.0.0**, this repository is publicly maintained so developers c
 
 ## Current Version
 
-- Latest source version: [Gaster Code v1.0.4](https://github.com/HereditaryDog/gaster-code-releases/releases/tag/v1.0.4)
-- Current downloadable installer release: [Gaster Code v1.0.4](https://github.com/HereditaryDog/gaster-code-releases/releases/latest)
+- Latest source version: [Gaster Code v1.0.6](https://github.com/HereditaryDog/gaster-code-releases/releases/tag/v1.0.6)
+- Current downloadable installer release: [Gaster Code v1.0.6](https://github.com/HereditaryDog/gaster-code-releases/releases/latest)
 - Updater metadata: [latest.json](https://github.com/HereditaryDog/gaster-code-releases/releases/latest/download/latest.json)
 - Public source: [HereditaryDog/gaster-code-releases](https://github.com/HereditaryDog/gaster-code-releases)

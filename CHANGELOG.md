@@ -1,5 +1,38 @@
 # 更新日志
 
+## 1.0.6 - 2026-05-27
+
+### Highlight
+
+- 桌面渲染性能继续优化：长 Markdown、工作区预览和标签拖拽都减少主线程压力，让长上下文会话之间切换更稳定、更顺滑。
+
+### 主要更新
+
+- Markdown 渲染新增 finalized/streaming 分层解析缓存，并对大型文档启用渐进分块渲染和空闲调度。
+- 标签栏拖拽改为缓存标签位置、合并高频 pointer move 到 animation frame，并直接更新拖拽元素 transform，减少布局读取和 React 重渲染。
+- 工作区 Markdown 文件预览默认先展示前 800 行，用户需要时再展开全部已加载内容。
+- 补充 TabBar、MarkdownRenderer 和 WorkspacePanel 的性能回归测试覆盖。
+- 对齐 root package、desktop package、Tauri、Rust、lockfile 和 About 页面显示版本到 `1.0.6`。
+
+### 问题修复
+
+- 修复长 Markdown 文档一次性解析和挂载导致桌面 WebView 卡顿的问题。
+- 修复标签拖拽过程中高频布局读取和重渲染导致的交互卡顿。
+- 修复大型工作区 Markdown 预览一次性渲染过多内容导致文件面板响应变慢的问题。
+
+### 安装说明
+
+- 无需用户数据迁移。
+- 当前公开安装包版本为 `1.0.6`。
+- 本地 Apple Silicon 测试包命名为 `Gaster Code-a 1.0.6.dmg`。
+- macOS 用户如果首次启动时提示“已损坏，无法打开”或“此文件已损坏”，请先将 `Gaster Code.app` 拖入 `Applications` 文件夹，然后打开终端执行：
+
+  ```bash
+  xattr -cr /Applications/Gaster\ Code.app
+  ```
+
+- 正式安装包在 GitHub Release 提供 macOS Apple Silicon、macOS Intel、Windows x64 和 Linux x64 版本。
+
 ## 1.0.4 - 2026-05-24
 
 ### Highlight
