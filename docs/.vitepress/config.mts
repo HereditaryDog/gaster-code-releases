@@ -193,6 +193,27 @@ export default withMermaid(defineConfig({
     },
   },
 
+  vite: {
+    build: {
+      chunkSizeWarningLimit: 4096,
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (!id.includes('/node_modules/')) return
+            if (
+              id.includes('/mermaid/')
+              || id.includes('/@mermaid-js/')
+              || id.includes('/d3')
+              || id.includes('/dagre')
+              || id.includes('/cytoscape')
+            ) return 'vendor-diagrams'
+            if (id.includes('/minisearch/') || id.includes('/mark.js/')) return 'vendor-search'
+          },
+        },
+      },
+    },
+  },
+
   head: [
     ['script', { async: '', src: 'https://www.googletagmanager.com/gtag/js?id=G-D42DM82263' }],
     ['script', {}, `window.dataLayer = window.dataLayer || [];\nfunction gtag(){dataLayer.push(arguments);}\ngtag('js', new Date());\ngtag('config', 'G-D42DM82263');`],
