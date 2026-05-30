@@ -134,8 +134,11 @@ async function initializeBrowserServerUrl(fallbackUrl: string) {
   const query = typeof window !== 'undefined'
     ? new URLSearchParams(window.location.search)
     : null
-  const queryUrl = query?.get('serverUrl') ?? null
-  const queryToken = normalizeToken(query?.get('h5Token') ?? query?.get('token'))
+  const hash = typeof window !== 'undefined'
+    ? new URLSearchParams(window.location.hash.replace(/^#/, ''))
+    : null
+  const queryUrl = query?.get('serverUrl') ?? hash?.get('serverUrl') ?? null
+  const queryToken = normalizeToken(hash?.get('h5Token') ?? hash?.get('token') ?? query?.get('h5Token') ?? query?.get('token'))
   const stored = readStoredH5Connection()
   const configuredUrl = getConfiguredBrowserServerUrl(fallbackUrl)
   const requestedUrl =

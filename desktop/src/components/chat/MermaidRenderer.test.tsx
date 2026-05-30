@@ -56,6 +56,18 @@ describe('MermaidRenderer', () => {
     })
   })
 
+  it('sanitizes rendered Mermaid SVG before insertion', async () => {
+    renderMock.mockResolvedValueOnce({
+      svg: '<svg viewBox="0 0 100 50"><script>alert(1)</script><g onclick="alert(2)"><rect width="100" height="50"></rect></g></svg>',
+    })
+
+    const { container } = render(<MermaidRenderer code={'graph TB\nA-->B'} />)
+
+    await screen.findByRole('button', { name: /preview/i })
+    expect(container.querySelector('script')).not.toBeInTheDocument()
+    expect(container.querySelector('[onclick]')).not.toBeInTheDocument()
+  })
+
   it('enters and exits dragging state while panning the preview viewport', async () => {
     render(<MermaidRenderer code={'graph TB\nA-->B'} />)
 

@@ -1,5 +1,4 @@
-import { useMemo, useState } from 'react'
-import { CodeViewer } from './CodeViewer'
+import { lazy, Suspense, useMemo, useState } from 'react'
 import { DiffViewer } from './DiffViewer'
 import { TerminalChrome } from './TerminalChrome'
 import { CopyButton } from '../shared/CopyButton'
@@ -15,6 +14,19 @@ type Props = {
   agentTaskNotification?: AgentTaskNotification
   compact?: boolean
 }
+
+type CodeViewerProps = {
+  code: string
+  language?: string
+  maxLines?: number
+  showLineNumbers?: boolean
+}
+
+const LazyCodeViewer = lazy(() =>
+  import('./CodeViewer').then((module) => ({
+    default: module.CodeViewer,
+  })),
+)
 
 const TOOL_ICONS: Record<string, string> = {
   Bash: 'terminal',
@@ -156,7 +168,7 @@ function renderPreview(
                 className="rounded-md border border-[var(--color-border)] px-2 py-1 text-[10px] normal-case tracking-normal text-[var(--color-text-tertiary)] transition-colors hover:text-[var(--color-text-primary)]"
               />
             </div>
-            <CodeViewer code={text} language="plaintext" maxLines={18} />
+            <DeferredCodeViewer code={text} language="plaintext" maxLines={18} />
           </div>
         </>
       )
@@ -181,8 +193,22 @@ function renderDetails(toolName: string, obj: Record<string, unknown>, t?: (key:
           className="rounded-md border border-[var(--color-border)] px-2 py-1 text-[10px] normal-case tracking-normal text-[var(--color-text-tertiary)] transition-colors hover:text-[var(--color-text-primary)]"
         />
       </div>
-      <CodeViewer code={text} language="json" maxLines={18} />
+      <DeferredCodeViewer code={text} language="json" maxLines={18} />
     </div>
+  )
+}
+
+function DeferredCodeViewer(props: CodeViewerProps) {
+  return (
+    <Suspense
+      fallback={
+        <div className="bg-[var(--color-code-bg)] px-3 py-2 font-[var(--font-mono)] text-[11px] text-[var(--color-code-fg)]">
+          Code
+        </div>
+      }
+    >
+      <LazyCodeViewer {...props} />
+    </Suspense>
   )
 }
 

@@ -32,11 +32,15 @@ const terminalMocks = vi.hoisted(() => {
 })
 
 vi.mock('@xterm/xterm', () => ({
-  Terminal: vi.fn(() => terminalMocks.terminalInstance),
+  Terminal: vi.fn(function Terminal() {
+    return terminalMocks.terminalInstance
+  }),
 }))
 
 vi.mock('@xterm/addon-fit', () => ({
-  FitAddon: vi.fn(() => terminalMocks.fitInstance),
+  FitAddon: vi.fn(function FitAddon() {
+    return terminalMocks.fitInstance
+  }),
 }))
 
 vi.mock('../api/terminal', () => ({

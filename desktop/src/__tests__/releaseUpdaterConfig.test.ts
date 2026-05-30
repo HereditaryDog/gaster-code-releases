@@ -1,8 +1,27 @@
 /// <reference types="vite/client" />
 import { describe, expect, it } from 'vitest'
-import releaseWorkflowYaml from '../../../.github/workflows/release-desktop.yml?raw'
-import releaseConfigJson from '../../src-tauri/tauri.release-ci.json?raw'
-import tauriConfigJson from '../../src-tauri/tauri.conf.json?raw'
+
+declare const process: {
+  cwd(): string
+}
+
+// @ts-expect-error desktop build does not include Node types, but Vitest runs this file in Node.
+const { readFileSync } = await import('node:fs')
+// @ts-expect-error desktop build does not include Node types, but Vitest runs this file in Node.
+const { resolve } = await import('node:path')
+
+const releaseWorkflowYaml = readFileSync(
+  resolve(process.cwd(), '../.github/workflows/release-desktop.yml'),
+  'utf8',
+)
+const releaseConfigJson = readFileSync(
+  resolve(process.cwd(), 'src-tauri/tauri.release-ci.json'),
+  'utf8',
+)
+const tauriConfigJson = readFileSync(
+  resolve(process.cwd(), 'src-tauri/tauri.conf.json'),
+  'utf8',
+)
 
 const GASTER_CODE_UPDATER_PUBLIC_KEY =
   'dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDI4ODI2NDJBRkFBNTlBMzAKUldRd21xWDZLbVNDS0UwbzkyMXF5ZExwaWg0U1YrdkRtbC9jMnVtdWpZR3crNFlOb0JyMjZack8K'

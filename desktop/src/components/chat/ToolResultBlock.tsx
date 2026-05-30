@@ -1,5 +1,4 @@
-import { CodeViewer } from './CodeViewer'
-import { useState } from 'react'
+import { lazy, Suspense, useState } from 'react'
 import { useTranslation } from '../../i18n'
 import { InlineImageGallery } from './InlineImageGallery'
 
@@ -9,6 +8,19 @@ type Props = {
   toolName?: string
   standalone?: boolean
 }
+
+type CodeViewerProps = {
+  code: string
+  language?: string
+  maxLines?: number
+  showLineNumbers?: boolean
+}
+
+const LazyCodeViewer = lazy(() =>
+  import('./CodeViewer').then((module) => ({
+    default: module.CodeViewer,
+  })),
+)
 
 /**
  * Standalone tool result block — only shown when not already rendered
@@ -67,7 +79,7 @@ export function ToolResultBlock({ content, isError, toolName, standalone = true 
             {text}
           </div>
         ) : (
-          <CodeViewer
+          <DeferredCodeViewer
             code={text}
             language="plaintext"
             maxLines={12}
@@ -89,6 +101,20 @@ export function ToolResultBlock({ content, isError, toolName, standalone = true 
         </button>
       )}
     </div>
+  )
+}
+
+function DeferredCodeViewer(props: CodeViewerProps) {
+  return (
+    <Suspense
+      fallback={
+        <div className="bg-[var(--color-code-bg)] px-3 py-2 font-[var(--font-mono)] text-[11px] text-[var(--color-code-fg)]">
+          Code
+        </div>
+      }
+    >
+      <LazyCodeViewer {...props} />
+    </Suspense>
   )
 }
 

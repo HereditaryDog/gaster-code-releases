@@ -11,7 +11,7 @@
 [![GitHub Issues](https://img.shields.io/github/issues/HereditaryDog/gaster-code)](https://github.com/HereditaryDog/gaster-code/issues)
 [![GitHub Pull Requests](https://img.shields.io/github/issues-pr/HereditaryDog/gaster-code)](https://github.com/HereditaryDog/gaster-code/pulls)
 [![License](https://img.shields.io/github/license/HereditaryDog/gaster-code)](https://github.com/HereditaryDog/gaster-code/blob/main/LICENSE)
-[![Current Version](https://img.shields.io/badge/version-V%201.0.7-blue)](release-notes/v1.0.7.md)
+[![Current Version](https://img.shields.io/badge/version-V%201.0.8-blue)](release-notes/v1.0.8.md)
 [![中文](https://img.shields.io/badge/中文-当前-blue)](README.md)
 [![English](https://img.shields.io/badge/English-Available-green)](README.en.md)
 
@@ -19,7 +19,7 @@
 
 Gaster Code 是一个面向本地开发场景的 AI 编码助手，提供命令行/TUI、图形化桌面端、多会话工作区、MCP 集成、自动化任务和远程适配能力，适合在真实代码仓库里完成修改、调试、审查和日常开发协作。
 
-> 当前稳定版本：**V 1.0.7**。这个版本合并桌面渲染性能优化、G-Master API 账号中心与计费能力、release hygiene 文档修复，并继续保留 GPT Image 2 异步绘图和原始提示词提交路径。
+> 当前稳定版本：**V 1.0.8**。这个版本完成依赖审计修复，进一步懒加载 Markdown 重型渲染器，收紧可信 H5 启动 Token 暴露面，并继续保留 G-Master API 账号中心与 GPT Image 2 异步绘图路径。
 
 <p align="center">
   <a href="#功能">功能</a> ·
@@ -148,7 +148,7 @@ http://127.0.0.1:2024
 
 ## 打包与发布
 
-当前桌面版本：`V 1.0.7`。
+当前桌面版本：`V 1.0.8`。
 
 ### Windows
 
@@ -172,10 +172,10 @@ powershell -ExecutionPolicy Bypass -File .\scripts\build-windows-x64.ps1
 
 | 平台 | 安装包 |
 |------|--------|
-| macOS Apple Silicon | `Gaster-Code_1.0.7_macos_arm64_dmg.dmg` |
-| macOS Intel | `Gaster-Code_1.0.7_macos_x64_dmg.dmg` |
-| Windows x64 | `Gaster-Code_1.0.7_windows_x64_nsis.exe` |
-| Linux x64 | `Gaster-Code_1.0.7_linux_x64_deb.deb` |
+| macOS Apple Silicon | `Gaster-Code_1.0.8_macos_arm64_dmg.dmg` |
+| macOS Intel | `Gaster-Code_1.0.8_macos_x64_dmg.dmg` |
+| Windows x64 | `Gaster-Code_1.0.8_windows_x64_nsis.exe` |
+| Linux x64 | `Gaster-Code_1.0.8_linux_x64_deb.deb` |
 
 ### macOS
 
@@ -213,7 +213,7 @@ sudo xattr -cr /Applications/Gaster\ Code.app
 .github/workflows/release-desktop.yml
 ```
 
-它会根据 tag 版本构建 macOS ARM64、macOS x64、Windows x64 和 Linux x64 桌面产物，主仓库保持私有，最终安装包和 `latest.json` 会同步到公开的 `HereditaryDog/gaster-code-releases` release-only 仓库，供桌面端 updater 访问。Linux ARM64 可以在手动发布工作流中按需启用。当前版本发布说明见 [release-notes/v1.0.7.md](release-notes/v1.0.7.md)。
+它会根据 tag 版本构建 macOS ARM64、macOS x64、Windows x64 和 Linux x64 桌面产物，主仓库保持私有，最终安装包和 `latest.json` 会同步到公开的 `HereditaryDog/gaster-code-releases` release-only 仓库，供桌面端 updater 访问。Linux ARM64 可以在手动发布工作流中按需启用。当前版本发布说明见 [release-notes/v1.0.8.md](release-notes/v1.0.8.md)。
 
 ---
 

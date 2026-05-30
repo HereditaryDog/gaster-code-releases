@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import '@testing-library/jest-dom'
 
-import { Settings } from '../pages/Settings'
+import { Settings, buildH5LaunchUrl } from '../pages/Settings'
 import { useSettingsStore } from '../stores/settingsStore'
 import { useUIStore } from '../stores/uiStore'
 import { useUpdateStore } from '../stores/updateStore'
@@ -408,6 +408,15 @@ describe('Settings > General tab', () => {
     })
     expect(await screen.findByText(/serverUrl=/)).toBeInTheDocument()
   })
+
+  it('builds H5 launch URLs with the token in the hash', () => {
+    const launchUrl = buildH5LaunchUrl('https://public.example.com/app', 'qr-token')
+
+    expect(launchUrl).toBe(
+      'https://public.example.com/app?serverUrl=https%3A%2F%2Fpublic.example.com%2Fapp#h5Token=qr-token',
+    )
+    expect(launchUrl).not.toContain('&h5Token=')
+  })
 })
 
 describe('Settings > Providers tab', () => {
@@ -691,9 +700,9 @@ describe('Settings > About tab', () => {
     expect(logo).toHaveClass('hero-brand-logo')
 
     expect(screen.getByText('HereditaryDog')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /HereditaryDog GitHub/ })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Till3005 GitHub/ })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /jackkkkswwk GitHub/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /HereditaryDog.*GitHub/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Till3005.*GitHub/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /jackkkkswwk.*GitHub/ })).toBeInTheDocument()
     expect(screen.getByText('Original Project')).toBeInTheDocument()
     expect(screen.getByText('NanmiCoder/cc-haha')).toBeInTheDocument()
 

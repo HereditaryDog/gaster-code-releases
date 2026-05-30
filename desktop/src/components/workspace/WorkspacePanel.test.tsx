@@ -957,7 +957,9 @@ describe('WorkspacePanel', () => {
 
     expect(view.getByRole('heading', { name: 'Project Notes', level: 1 })).toBeTruthy()
     expect(view.getByText('Done')).toBeTruthy()
-    expect(view.container.textContent).toContain('export const ok = true')
+    await waitFor(() => {
+      expect(view.container.textContent).toContain('export const ok = true')
+    })
     expect(view.queryByTestId('workspace-code')).toBeNull()
   })
 

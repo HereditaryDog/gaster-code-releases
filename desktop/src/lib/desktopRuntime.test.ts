@@ -255,7 +255,7 @@ describe('desktopRuntime browser H5 bootstrap', () => {
   })
 
   it('uses and persists an H5 token from the QR launch URL', async () => {
-    window.history.pushState({}, '', '/?serverUrl=https%3A%2F%2Fpublic.example.com%2Fapp&h5Token=qr-token')
+    window.history.pushState({}, '', '/?serverUrl=https%3A%2F%2Fpublic.example.com%2Fapp#h5Token=qr-token')
     globalThis.fetch = vi.fn().mockResolvedValue(
       healthOkResponse(),
     ) as typeof fetch
@@ -267,6 +267,21 @@ describe('desktopRuntime browser H5 bootstrap', () => {
     expect(clientMocks.setAuthToken).toHaveBeenLastCalledWith('qr-token')
     expect(clientMocks.postVerify).toHaveBeenCalledWith('/api/h5-access/verify')
     expect(window.localStorage.getItem(H5_TOKEN_STORAGE_KEY)).toBe('qr-token')
+  })
+
+  it('continues to use and persist legacy H5 tokens from the query string', async () => {
+    window.history.pushState({}, '', '/?serverUrl=https%3A%2F%2Fpublic.example.com%2Fapp&h5Token=legacy-token')
+    globalThis.fetch = vi.fn().mockResolvedValue(
+      healthOkResponse(),
+    ) as typeof fetch
+    clientMocks.postVerify.mockResolvedValueOnce({ ok: true })
+
+    await expect(initializeDesktopServerUrl()).resolves.toBe('https://public.example.com/app')
+
+    expect(clientMocks.setBaseUrl).toHaveBeenLastCalledWith('https://public.example.com/app')
+    expect(clientMocks.setAuthToken).toHaveBeenLastCalledWith('legacy-token')
+    expect(clientMocks.postVerify).toHaveBeenCalledWith('/api/h5-access/verify')
+    expect(window.localStorage.getItem(H5_TOKEN_STORAGE_KEY)).toBe('legacy-token')
   })
 
   it('shows the H5 token recovery view when a local browser connects to an auth-required LAN server', async () => {

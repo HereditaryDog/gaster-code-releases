@@ -64,19 +64,21 @@ import {
 } from '../lib/providerSettingsJson'
 import { copyTextToClipboard } from '../components/chat/clipboard'
 
-function buildH5LaunchUrl(baseUrl: string | null, token: string | null): string | null {
+export function buildH5LaunchUrl(baseUrl: string | null, token: string | null): string | null {
   if (!baseUrl) return null
 
   try {
     const url = new URL(baseUrl)
     if (token) {
       url.searchParams.set('serverUrl', baseUrl)
-      url.searchParams.set('h5Token', token)
+      const hashParams = new URLSearchParams(url.hash.replace(/^#/, ''))
+      hashParams.set('h5Token', token)
+      url.hash = hashParams.toString()
     }
     return url.toString().replace(/\/$/, '')
   } catch {
     return token
-      ? `${baseUrl}${baseUrl.includes('?') ? '&' : '?'}serverUrl=${encodeURIComponent(baseUrl)}&h5Token=${encodeURIComponent(token)}`
+      ? `${baseUrl}${baseUrl.includes('?') ? '&' : '?'}serverUrl=${encodeURIComponent(baseUrl)}#h5Token=${encodeURIComponent(token)}`
       : baseUrl
   }
 }

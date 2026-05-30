@@ -11,7 +11,7 @@
 [![GitHub Issues](https://img.shields.io/github/issues/HereditaryDog/gaster-code)](https://github.com/HereditaryDog/gaster-code/issues)
 [![GitHub Pull Requests](https://img.shields.io/github/issues-pr/HereditaryDog/gaster-code)](https://github.com/HereditaryDog/gaster-code/pulls)
 [![License](https://img.shields.io/github/license/HereditaryDog/gaster-code)](https://github.com/HereditaryDog/gaster-code/blob/main/LICENSE)
-[![Current Version](https://img.shields.io/badge/version-V%201.0.7-blue)](release-notes/v1.0.7.md)
+[![Current Version](https://img.shields.io/badge/version-V%201.0.8-blue)](release-notes/v1.0.8.md)
 [![中文](https://img.shields.io/badge/中文-Available-green)](README.md)
 [![English](https://img.shields.io/badge/English-Current-blue)](README.en.md)
 
@@ -19,7 +19,7 @@
 
 Gaster Code is an AI coding assistant for local development workflows. It provides a CLI/TUI, a desktop app, multi-session workspaces, MCP integrations, task automation, and remote adapter capabilities for real software projects.
 
-> Current stable version: **V 1.0.7**. This release merges desktop rendering performance work, the G-Master API account and billing center, release hygiene documentation fixes, and keeps GPT Image 2 drawing on the async job path with original prompts preserved.
+> Current stable version: **V 1.0.8**. This release completes dependency audit remediation, further lazy-loads heavy Markdown renderers, reduces trusted H5 launch-token exposure, and keeps the G-Master API account center plus GPT Image 2 async drawing path in place.
 
 <p align="center">
   <a href="#features">Features</a> ·
@@ -148,7 +148,7 @@ http://127.0.0.1:2024
 
 ## Packaging And Release
 
-Current desktop version: `V 1.0.7`.
+Current desktop version: `V 1.0.8`.
 
 ### Windows
 
@@ -172,10 +172,10 @@ Public installers:
 
 | Platform | Installer |
 |----------|-----------|
-| macOS Apple Silicon | `Gaster-Code_1.0.7_macos_arm64_dmg.dmg` |
-| macOS Intel | `Gaster-Code_1.0.7_macos_x64_dmg.dmg` |
-| Windows x64 | `Gaster-Code_1.0.7_windows_x64_nsis.exe` |
-| Linux x64 | `Gaster-Code_1.0.7_linux_x64_deb.deb` |
+| macOS Apple Silicon | `Gaster-Code_1.0.8_macos_arm64_dmg.dmg` |
+| macOS Intel | `Gaster-Code_1.0.8_macos_x64_dmg.dmg` |
+| Windows x64 | `Gaster-Code_1.0.8_windows_x64_nsis.exe` |
+| Linux x64 | `Gaster-Code_1.0.8_linux_x64_deb.deb` |
 
 ### macOS
 
@@ -213,7 +213,7 @@ Desktop releases run through:
 .github/workflows/release-desktop.yml
 ```
 
-The workflow builds macOS ARM64, macOS x64, Windows x64, and Linux x64 desktop artifacts from version tags. The source repository stays private, while installers and `latest.json` are mirrored to the public `HereditaryDog/gaster-code-releases` release-only repository for the desktop updater. Linux ARM64 can be enabled from manual release workflow dispatch. See [release-notes/v1.0.7.md](release-notes/v1.0.7.md) for the current release notes.
+The workflow builds macOS ARM64, macOS x64, Windows x64, and Linux x64 desktop artifacts from version tags. The source repository stays private, while installers and `latest.json` are mirrored to the public `HereditaryDog/gaster-code-releases` release-only repository for the desktop updater. Linux ARM64 can be enabled from manual release workflow dispatch. See [release-notes/v1.0.8.md](release-notes/v1.0.8.md) for the current release notes.
 
 ---
 

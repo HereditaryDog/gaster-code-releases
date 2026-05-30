@@ -1,6 +1,6 @@
 # 安装指南
 
-当前稳定版本：**V 1.0.7**。这个版本合并桌面渲染性能优化、G-Master API 账号中心与计费能力、release hygiene 文档修复，并继续保留 GPT Image 2 异步绘图和原始提示词提交路径。
+当前稳定版本：**V 1.0.8**。这个版本完成依赖审计修复，进一步懒加载 Markdown 重型渲染器，收紧可信 H5 启动 Token 暴露面，并继续保留 G-Master API 账号中心与 GPT Image 2 异步绘图路径。
 
 > 本版本使用公开 release-only 仓库提供 updater 元数据和安装包下载。`0.2.1-gastercode.1` 及更早安装包仍内置私有主仓库 endpoint，无法自动发现本版本，需要手动下载安装一次；安装本版本之后，后续更新会从公开 release-only 仓库获取。
 
@@ -10,10 +10,10 @@
 
 | 平台 | 文件 |
 |------|------|
-| macOS (Apple Silicon) | `Gaster-Code_1.0.7_macos_arm64_dmg.dmg` |
-| macOS (Intel) | `Gaster-Code_1.0.7_macos_x64_dmg.dmg` |
-| Windows x64 | `Gaster-Code_1.0.7_windows_x64_nsis.exe` |
-| Linux x64 | `Gaster-Code_1.0.7_linux_x64_deb.deb` |
+| macOS (Apple Silicon) | `Gaster-Code_1.0.8_macos_arm64_dmg.dmg` |
+| macOS (Intel) | `Gaster-Code_1.0.8_macos_x64_dmg.dmg` |
+| Windows x64 | `Gaster-Code_1.0.8_windows_x64_nsis.exe` |
+| Linux x64 | `Gaster-Code_1.0.8_linux_x64_deb.deb` |
 
 > 发布策略：不拆平台代码分支。当前 tag 自动发布默认构建 macOS ARM64、macOS x64、Windows x64 和 Linux x64；Linux ARM64 可以在手动发布工作流中按需启用。
 

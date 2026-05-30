@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect } from 'react'
-import { ShikiHighlighter, createJavaScriptRegexEngine } from 'react-shiki'
+import { lazy, Suspense, useState, useRef, useEffect } from 'react'
+import type { CSSProperties } from 'react'
 import 'react-shiki/css'
 import { CopyButton } from '../shared/CopyButton'
 
@@ -47,7 +47,28 @@ const warmCodeTheme = {
 
 const CODE_AREA_PADDING = '0.5rem 12px'
 const CODE_LINE_HEIGHT = 1.3
-const shikiEngine = createJavaScriptRegexEngine({ forgiving: true })
+
+type LazyShikiHighlighterProps = {
+  language: string
+  theme: typeof warmCodeTheme
+  showLineNumbers: boolean
+  showLanguage: boolean
+  addDefaultStyles: boolean
+  style: CSSProperties
+  children: string
+}
+
+const LazyShikiHighlighter = lazy(async () => {
+  const module = await import('react-shiki')
+  const Highlighter = module.ShikiHighlighter
+  const shikiEngine = module.createJavaScriptRegexEngine({ forgiving: true })
+
+  return {
+    default: function LazyLoadedShikiHighlighter(props: LazyShikiHighlighterProps) {
+      return <Highlighter {...props} engine={shikiEngine} />
+    },
+  }
+})
 
 /**
  * Wraps ShikiHighlighter with a plain-text fallback so the code area
@@ -111,25 +132,26 @@ function CodeArea({ code, language, showLineNumbers }: { code: string; language?
                 opacity: 0,
                 pointerEvents: 'none',
                 padding: CODE_AREA_PADDING,
-              }
+            }
         }
       >
-        <ShikiHighlighter
-          language={language || 'text'}
-          theme={warmCodeTheme}
-          engine={shikiEngine}
-          showLineNumbers={showLineNumbers}
-          showLanguage={false}
-          addDefaultStyles={false}
-          style={{
-            margin: 0,
-            fontFamily: 'var(--font-mono)',
-            fontSize: '12px',
-            lineHeight: String(CODE_LINE_HEIGHT),
-          }}
-        >
-          {code}
-        </ShikiHighlighter>
+        <Suspense fallback={null}>
+          <LazyShikiHighlighter
+            language={language || 'text'}
+            theme={warmCodeTheme}
+            showLineNumbers={showLineNumbers}
+            showLanguage={false}
+            addDefaultStyles={false}
+            style={{
+              margin: 0,
+              fontFamily: 'var(--font-mono)',
+              fontSize: '12px',
+              lineHeight: String(CODE_LINE_HEIGHT),
+            }}
+          >
+            {code}
+          </LazyShikiHighlighter>
+        </Suspense>
       </div>
     </div>
   )

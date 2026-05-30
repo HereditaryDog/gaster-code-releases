@@ -477,7 +477,7 @@ describe('Settings > Skills tab', () => {
     expect(screen.getByText('Helpful quote')).toBeInTheDocument()
   })
 
-  it('keeps code files rendered in CodeViewer instead of markdown prose', () => {
+  it('keeps code files rendered in CodeViewer instead of markdown prose', async () => {
     useSkillStore.setState({
       selectedSkill: MOCK_SKILL_DETAIL,
       clearSelection: () => useSkillStore.setState({ selectedSkill: null }),
@@ -488,7 +488,7 @@ describe('Settings > Skills tab', () => {
 
     fireEvent.click(screen.getAllByText('helper.ts')[0]!)
 
-    expect(screen.getByTestId('code-viewer')).toHaveTextContent('export const helper = true')
+    expect(await screen.findByTestId('code-viewer')).toHaveTextContent('export const helper = true')
     expect(screen.queryByRole('heading', { name: 'Heading' })).not.toBeInTheDocument()
   })
 })

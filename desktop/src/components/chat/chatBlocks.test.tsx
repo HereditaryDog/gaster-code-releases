@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { ThinkingBlock } from './ThinkingBlock'
 import { ToolCallBlock } from './ToolCallBlock'
 import { PermissionDialog } from './PermissionDialog'
@@ -77,7 +77,7 @@ describe('chat blocks', () => {
     expect(container.textContent).toContain('fatal: unrecognized argument: --no-stat')
   })
 
-  it('expands tool errors so full Computer Use gate messages are readable', () => {
+  it('expands tool errors so full Computer Use gate messages are readable', async () => {
     const { container } = render(
       <ToolCallBlock
         toolName="mcp__computer-use__left_click"
@@ -94,8 +94,10 @@ describe('chat blocks', () => {
 
     fireEvent.click(screen.getByRole('button'))
 
-    expect(container.textContent).toContain('Take a new screenshot')
-    expect(container.textContent).toContain('allowed applications')
+    await waitFor(() => {
+      expect(container.textContent).toContain('Take a new screenshot')
+      expect(container.textContent).toContain('allowed applications')
+    })
   })
 
   it('shows a diff preview for edit permission requests', () => {

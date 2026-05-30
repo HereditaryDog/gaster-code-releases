@@ -127,32 +127,44 @@ describe('MarkdownRenderer', () => {
     expect(screen.getByText('claude-sonnet-4-6')).toBeInTheDocument()
   })
 
-  it('renders mermaid fenced blocks with the Mermaid renderer', () => {
+  it('renders mermaid fenced blocks with the Mermaid renderer', async () => {
     render(<MarkdownRenderer content={'```mermaid\ngraph TB\nA-->B\n```'} />)
 
-    expect(screen.getByTestId('mermaid-renderer')).toHaveTextContent(
+    expect(await screen.findByTestId('mermaid-renderer')).toHaveTextContent(
       /graph TB\s+A-->B/,
     )
     expect(screen.queryByTestId('code-viewer')).not.toBeInTheDocument()
   })
 
-  it('detects mermaid diagrams even when the fence has no language tag', () => {
+  it('detects mermaid diagrams even when the fence has no language tag', async () => {
     render(<MarkdownRenderer content={'```\ngraph TB\nA-->B\n```'} />)
 
-    expect(screen.getByTestId('mermaid-renderer')).toHaveTextContent(
+    expect(await screen.findByTestId('mermaid-renderer')).toHaveTextContent(
       /graph TB\s+A-->B/,
     )
     expect(screen.queryByTestId('code-viewer')).not.toBeInTheDocument()
   })
 
-  it('keeps non-mermaid code fences in the normal code viewer', () => {
+  it('keeps non-mermaid code fences in the normal code viewer', async () => {
     render(<MarkdownRenderer content={'```ts\nconst value = 1\n```'} />)
 
-    expect(screen.getByTestId('code-viewer')).toHaveAttribute(
+    expect(await screen.findByTestId('code-viewer')).toHaveAttribute(
       'data-language',
       'ts',
     )
     expect(screen.queryByTestId('mermaid-renderer')).not.toBeInTheDocument()
+  })
+
+  it('sanitizes markdown HTML before insertion', () => {
+    const { container } = render(
+      <MarkdownRenderer
+        content={'<img src="x" onerror="alert(1)" /><script>alert(2)</script><a href="javascript:alert(3)">bad</a>'}
+      />,
+    )
+
+    expect(container.querySelector('script')).not.toBeInTheDocument()
+    expect(container.querySelector('img')?.getAttribute('onerror')).toBeNull()
+    expect(container.querySelector('a')?.getAttribute('href') ?? '').not.toContain('javascript:')
   })
 
   it('renders inline and block LaTeX formulas with KaTeX', () => {
@@ -243,7 +255,7 @@ describe('MarkdownRenderer', () => {
     expect(container.textContent).toContain('$10')
   })
 
-  it('does not render LaTeX inside inline code or code fences', () => {
+  it('does not render LaTeX inside inline code or code fences', async () => {
     const { container } = render(
       <MarkdownRenderer
         content={'Keep `$E = mc^2$` as code.\n\n```text\n$$\\int_0^1 x^2 dx$$\n```'}
@@ -252,7 +264,7 @@ describe('MarkdownRenderer', () => {
 
     expect(container.querySelector('.katex')).not.toBeInTheDocument()
     expect(screen.getByText('$E = mc^2$')).toBeInTheDocument()
-    expect(screen.getByTestId('code-viewer')).toHaveTextContent('$$\\int_0^1 x^2 dx$$')
+    expect(await screen.findByTestId('code-viewer')).toHaveTextContent('$$\\int_0^1 x^2 dx$$')
   })
 
   it('wraps markdown tables for horizontal overflow handling', () => {

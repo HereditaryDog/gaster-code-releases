@@ -1,11 +1,9 @@
-import { memo, useEffect, useMemo, useCallback, useState } from 'react'
+import { lazy, memo, Suspense, useEffect, useMemo, useCallback, useState } from 'react'
 import type { MouseEvent as ReactMouseEvent } from 'react'
 import DOMPurify from 'dompurify'
 import katex from 'katex'
 import 'katex/dist/katex.min.css'
 import { marked, type Tokens } from 'marked'
-import { CodeViewer } from '../chat/CodeViewer'
-import { MermaidRenderer } from '../chat/MermaidRenderer'
 import { copyTextToClipboard } from '../chat/clipboard'
 
 type Props = {
@@ -42,6 +40,16 @@ const PROGRESSIVE_DOCUMENT_MIN_CHARS = 8_000
 const PROGRESSIVE_DOCUMENT_CHUNK_CHARS = 6_000
 const PROGRESSIVE_DOCUMENT_INITIAL_CHUNKS = 1
 const PROGRESSIVE_DOCUMENT_BATCH_CHUNKS = 2
+const LazyCodeViewer = lazy(() =>
+  import('../chat/CodeViewer').then((module) => ({
+    default: module.CodeViewer,
+  })),
+)
+const LazyMermaidRenderer = lazy(() =>
+  import('../chat/MermaidRenderer').then((module) => ({
+    default: module.MermaidRenderer,
+  })),
+)
 const mathRenderCache = new Map<string, string>()
 
 function normalizeCodeLanguage(language: string | undefined): string | undefined {
@@ -616,13 +624,30 @@ function MarkdownParts({ parts }: { parts: MarkdownPart[] }) {
         part.type === 'html' ? (
           <div key={i} dangerouslySetInnerHTML={{ __html: part.content }} />
         ) : shouldRenderAsMermaid(part.block) ? (
-          <MermaidRenderer key={part.block.id} code={part.block.code} />
+          <Suspense
+            key={part.block.id}
+            fallback={
+              <div className="my-4 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-container-low)] px-3 py-2 text-xs text-[var(--color-text-secondary)]">
+                Mermaid
+              </div>
+            }
+          >
+            <LazyMermaidRenderer code={part.block.code} />
+          </Suspense>
         ) : (
           <div key={part.block.id} className="my-4">
-            <CodeViewer
-              code={part.block.code}
-              language={part.block.language}
-            />
+            <Suspense
+              fallback={
+                <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface-container-low)] px-3 py-2 text-xs text-[var(--color-text-secondary)]">
+                  Code
+                </div>
+              }
+            >
+              <LazyCodeViewer
+                code={part.block.code}
+                language={part.block.language}
+              />
+            </Suspense>
           </div>
         )
       )}

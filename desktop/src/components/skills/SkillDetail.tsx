@@ -1,8 +1,7 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import { lazy, Suspense, useMemo, useState, type ReactNode } from 'react'
 import { useSkillStore } from '../../stores/skillStore'
 import { useTranslation } from '../../i18n'
 import { MarkdownRenderer } from '../markdown/MarkdownRenderer'
-import { CodeViewer } from '../chat/CodeViewer'
 import type { FileTreeNode, SkillFrontmatter } from '../../types/skill'
 import { useUIStore } from '../../stores/uiStore'
 
@@ -19,6 +18,19 @@ const META_PRIORITY = [
   'version',
   'user-invocable',
 ] as const
+
+type CodeViewerProps = {
+  code: string
+  language?: string
+  maxLines?: number
+  showLineNumbers?: boolean
+}
+
+const LazyCodeViewer = lazy(() =>
+  import('../chat/CodeViewer').then((module) => ({
+    default: module.CodeViewer,
+  })),
+)
 
 export function SkillDetail() {
   const { selectedSkill, selectedSkillReturnTab, isDetailLoading, clearSelection } = useSkillStore()
@@ -222,7 +234,7 @@ export function SkillDetail() {
                     className="mx-auto max-w-[72ch]"
                   />
                 ) : (
-                  <CodeViewer
+                  <DeferredCodeViewer
                     code={currentFile.content}
                     language={currentFile.language}
                     maxLines={9999}
@@ -235,6 +247,20 @@ export function SkillDetail() {
         </div>
       </section>
     </div>
+  )
+}
+
+function DeferredCodeViewer(props: CodeViewerProps) {
+  return (
+    <Suspense
+      fallback={
+        <div className="rounded-lg bg-[var(--color-code-bg)] px-3 py-2 font-[var(--font-mono)] text-[11px] text-[var(--color-code-fg)]">
+          Code
+        </div>
+      }
+    >
+      <LazyCodeViewer {...props} />
+    </Suspense>
   )
 }
 

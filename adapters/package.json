@@ -16,14 +16,17 @@
     "test:dingtalk": "bun test dingtalk/"
   },
   "dependencies": {
-    "@larksuiteoapi/node-sdk": "^1.60.0",
+    "@larksuiteoapi/node-sdk": "^1.66.0",
     "dingtalk-stream": "2.1.4",
-    "grammy": "^1.42.0",
-    "ws": "^8.18.0"
+    "grammy": "^1.43.0",
+    "ws": "^8.21.0"
   },
   "overrides": {
+    "axios": "^1.16.1",
     "follow-redirects": "^1.16.0",
-    "protobufjs": "^7.5.5"
+    "protobufjs": "^7.6.1",
+    "qs": "^6.15.2",
+    "ws": "^8.21.0"
   },
   "devDependencies": {
     "@types/ws": "^8.5.0",
