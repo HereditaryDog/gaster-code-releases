@@ -1,10 +1,26 @@
-import { useCallback, useEffect, useState } from 'react'
-import { gmasterAuthApi, type GMasterAccountInfo, type GMasterAuthIntent, type GMasterSubscriptionItem } from '../api/gmasterAuth'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import {
+  gmasterAuthApi,
+  type GMasterAccountInfo,
+  type GMasterAuthIntent,
+  type GMasterBillingKind,
+  type GMasterBillingPlan,
+  type GMasterBillingTransaction,
+  type GMasterCheckoutSession,
+} from '../api/gmasterAuth'
+import { ApiError } from '../api/client'
+import { AccountHeader } from '../components/account/AccountHeader'
+import { BillingHistory } from '../components/account/BillingHistory'
+import { PlanDialog } from '../components/account/PlanDialog'
+import { SubscriptionPanel } from '../components/account/SubscriptionPanel'
+import { WalletPanel } from '../components/account/WalletPanel'
 import { Button } from '../components/shared/Button'
 import { useTranslation } from '../i18n'
 import { useGMasterAuthStore } from '../stores/gmasterAuthStore'
 
 type AccountLoadState = 'loading' | 'ready' | 'signedOut' | 'error'
+type AuthAction = 'login' | 'register' | 'logout' | null
+type SubscriptionAction = 'cancel' | 'resume' | null
 
 type TauriWindow = Window & {
   __TAURI__?: unknown
@@ -59,20 +75,26 @@ async function openExternalUrl(url: string, reservedWindow: Window | null = null
   }
 }
 
-function formatAmount(value: number | null | undefined, unlimited = false) {
-  if (unlimited) return 'Unlimited'
-  if (value === null || value === undefined || Number.isNaN(value)) return '-'
-  return `${Math.max(0, value).toLocaleString()} tokens`
+function isTerminalCheckoutStatus(status: GMasterCheckoutSession['status']) {
+  return status === 'paid' || status === 'failed' || status === 'expired' || status === 'cancelled'
 }
 
-function formatDate(seconds: number) {
-  if (!seconds) return '-'
-  return new Date(seconds * 1000).toLocaleDateString()
+function getApiErrorCode(error: unknown): string | null {
+  if (!(error instanceof ApiError)) return null
+  const body = error.body
+  if (!body || typeof body !== 'object' || !('error' in body)) return null
+  const code = (body as { error?: unknown }).error
+  return typeof code === 'string' ? code : null
 }
 
-function formatSubscriptionUsage(item: GMasterSubscriptionItem) {
-  if (item.unlimited) return 'Unlimited'
-  return `${Math.max(0, item.amountRemaining).toLocaleString()} / ${Math.max(0, item.amountTotal).toLocaleString()} tokens`
+function getAccountErrorMessage(error: unknown, t: ReturnType<typeof useTranslation>) {
+  const code = getApiErrorCode(error)
+  if (code === 'GMASTER_AUTH_EXPIRED') return t('error.GMASTER_AUTH_EXPIRED')
+  if (code === 'GMASTER_BILLING_CHECKOUT_FAILED') return t('settings.account.checkoutFailed')
+  if (code === 'GMASTER_BILLING_PAYMENT_PENDING') return t('settings.account.billingPaymentPending')
+  if (code === 'GMASTER_BILLING_PLAN_UNAVAILABLE') return t('settings.account.billingPlanUnavailable')
+  if (code === 'GMASTER_BILLING_PROVIDER_UNAVAILABLE') return t('settings.account.billingProviderUnavailable')
+  return error instanceof Error ? error.message : String(error)
 }
 
 export function GMasterAccountSettings() {
@@ -80,39 +102,125 @@ export function GMasterAccountSettings() {
   const login = useGMasterAuthStore((s) => s.login)
   const startPolling = useGMasterAuthStore((s) => s.startPolling)
   const logout = useGMasterAuthStore((s) => s.logout)
+  const syncProvider = useGMasterAuthStore((s) => s.syncProvider)
+  const authStatus = useGMasterAuthStore((s) => s.status)
+  const isPolling = useGMasterAuthStore((s) => s.isPolling)
+  const authError = useGMasterAuthStore((s) => s.error)
+
   const [account, setAccount] = useState<GMasterAccountInfo | null>(null)
+  const [plans, setPlans] = useState<GMasterBillingPlan[]>([])
+  const [transactions, setTransactions] = useState<GMasterBillingTransaction[]>([])
   const [loadState, setLoadState] = useState<AccountLoadState>('loading')
+  const [billingLoading, setBillingLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [actionLoading, setActionLoading] = useState<'login' | 'register' | 'logout' | null>(null)
+  const [checkoutError, setCheckoutError] = useState<string | null>(null)
+  const [checkoutErrorCode, setCheckoutErrorCode] = useState<string | null>(null)
+  const [checkoutNotice, setCheckoutNotice] = useState<string | null>(null)
+  const [authAction, setAuthAction] = useState<AuthAction>(null)
+  const [subscriptionAction, setSubscriptionAction] = useState<SubscriptionAction>(null)
+  const [checkoutPlanId, setCheckoutPlanId] = useState<string | null>(null)
+  const [pendingCheckout, setPendingCheckout] = useState<GMasterCheckoutSession | null>(null)
+  const [topUpOpen, setTopUpOpen] = useState(false)
+  const [subscriptionOpen, setSubscriptionOpen] = useState(false)
+
+  const topUpPlans = useMemo(
+    () => plans.filter((plan) => plan.kind === 'topup'),
+    [plans],
+  )
+  const subscriptionPlans = useMemo(
+    () => plans.filter((plan) => plan.kind === 'subscription'),
+    [plans],
+  )
 
   const loadAccount = useCallback(async () => {
     setLoadState('loading')
+    setBillingLoading(true)
     setError(null)
+    setCheckoutError(null)
+    setCheckoutErrorCode(null)
     try {
       const status = await gmasterAuthApi.status()
       if (!status.loggedIn) {
         setAccount(null)
+        setPlans([])
+        setTransactions([])
         setLoadState('signedOut')
         return
       }
 
-      const nextAccount = await gmasterAuthApi.me()
+      const [nextAccount, planResult, transactionResult] = await Promise.all([
+        gmasterAuthApi.me(),
+        gmasterAuthApi.plans(),
+        gmasterAuthApi.transactions(),
+      ])
       setAccount(nextAccount)
+      setPlans(planResult.plans)
+      setTransactions(transactionResult.transactions)
       setLoadState('ready')
     } catch (err) {
       setAccount(null)
       setLoadState('error')
-      setError(err instanceof Error ? err.message : String(err))
+      setError(getAccountErrorMessage(err, t))
+    } finally {
+      setBillingLoading(false)
     }
-  }, [])
+  }, [t])
 
   useEffect(() => {
     void loadAccount()
   }, [loadAccount])
 
+  useEffect(() => {
+    if (authStatus?.loggedIn) void loadAccount()
+  }, [authStatus, loadAccount])
+
+  useEffect(() => {
+    if (!pendingCheckout || pendingCheckout.status !== 'pending') return
+    let cancelled = false
+    const timer = setInterval(() => {
+      void (async () => {
+        try {
+          const next = await gmasterAuthApi.checkoutStatus(pendingCheckout.id)
+          if (cancelled) return
+          if (!isTerminalCheckoutStatus(next.status)) {
+            setPendingCheckout(next)
+            return
+          }
+
+          setPendingCheckout(null)
+          if (next.status === 'paid') {
+            setCheckoutErrorCode(null)
+            setCheckoutNotice(t('settings.account.checkoutPaid'))
+            setTopUpOpen(false)
+            setSubscriptionOpen(false)
+            await syncProvider().catch(() => undefined)
+            await loadAccount()
+            return
+          }
+          const failureKey = next.status === 'failed'
+            ? 'settings.account.checkoutFailed'
+            : next.status === 'expired'
+              ? 'settings.account.checkoutExpired'
+              : 'settings.account.checkoutCancelled'
+          setCheckoutError(t(failureKey))
+          setCheckoutErrorCode(null)
+        } catch (err) {
+          if (!cancelled) {
+            setCheckoutError(getAccountErrorMessage(err, t))
+            setCheckoutErrorCode(getApiErrorCode(err))
+          }
+        }
+      })()
+    }, 2_000)
+    return () => {
+      cancelled = true
+      clearInterval(timer)
+    }
+  }, [loadAccount, pendingCheckout, syncProvider, t])
+
   const handleAuth = async (intent: GMasterAuthIntent) => {
     const reservedWindow = reserveBrowserWindow()
-    setActionLoading(intent)
+    setAuthAction(intent)
     setError(null)
     try {
       const { authorizeUrl } = await login(intent)
@@ -120,32 +228,89 @@ export function GMasterAccountSettings() {
       startPolling()
     } catch (err) {
       closeReservedWindow(reservedWindow)
-      setError(err instanceof Error ? err.message : String(err))
+      setError(getAccountErrorMessage(err, t))
     } finally {
-      setActionLoading(null)
+      setAuthAction(null)
     }
   }
 
   const handleLogout = async () => {
-    setActionLoading('logout')
+    setAuthAction('logout')
     setError(null)
     try {
       await logout()
       setAccount(null)
+      setPlans([])
+      setTransactions([])
       setLoadState('signedOut')
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
+      setError(getAccountErrorMessage(err, t))
     } finally {
-      setActionLoading(null)
+      setAuthAction(null)
+    }
+  }
+
+  const handleCheckout = async (kind: GMasterBillingKind, plan: GMasterBillingPlan) => {
+    setCheckoutError(null)
+    setCheckoutErrorCode(null)
+    setCheckoutNotice(null)
+    setCheckoutPlanId(plan.id)
+    try {
+      const session = await gmasterAuthApi.createCheckout({
+        kind,
+        planId: plan.id,
+        returnTo: 'account',
+      })
+      setPendingCheckout(session)
+      if (session.url) await openExternalUrl(session.url)
+      if (session.status === 'paid') {
+        await syncProvider().catch(() => undefined)
+        await loadAccount()
+      }
+    } catch (err) {
+      setCheckoutError(getAccountErrorMessage(err, t))
+      setCheckoutErrorCode(getApiErrorCode(err))
+    } finally {
+      setCheckoutPlanId(null)
+    }
+  }
+
+  const handleCancelSubscription = async () => {
+    setSubscriptionAction('cancel')
+    setCheckoutError(null)
+    setCheckoutErrorCode(null)
+    try {
+      await gmasterAuthApi.cancelSubscription()
+      await loadAccount()
+    } catch (err) {
+      setCheckoutError(getAccountErrorMessage(err, t))
+      setCheckoutErrorCode(getApiErrorCode(err))
+    } finally {
+      setSubscriptionAction(null)
+    }
+  }
+
+  const handleResumeSubscription = async () => {
+    setSubscriptionAction('resume')
+    setCheckoutError(null)
+    setCheckoutErrorCode(null)
+    try {
+      await gmasterAuthApi.resumeSubscription()
+      await loadAccount()
+    } catch (err) {
+      setCheckoutError(getAccountErrorMessage(err, t))
+      setCheckoutErrorCode(getApiErrorCode(err))
+    } finally {
+      setSubscriptionAction(null)
     }
   }
 
   return (
     <div className="max-w-4xl">
-      <div className="flex items-start justify-between gap-4 mb-5">
+      <div className="mb-5 flex items-start justify-between gap-4">
         <div>
           <h2 className="text-base font-semibold text-[var(--color-text-primary)]">{t('settings.account.title')}</h2>
-          <p className="text-sm text-[var(--color-text-tertiary)] mt-0.5">{t('settings.account.description')}</p>
+          <p className="mt-0.5 text-sm text-[var(--color-text-tertiary)]">{t('settings.account.description')}</p>
         </div>
         <Button variant="secondary" size="sm" onClick={loadAccount} disabled={loadState === 'loading'}>
           <span className="material-symbols-outlined text-[16px]" aria-hidden="true">refresh</span>
@@ -155,7 +320,7 @@ export function GMasterAccountSettings() {
 
       {loadState === 'loading' && (
         <div className="flex justify-center py-12">
-          <div className="animate-spin w-5 h-5 border-2 border-[var(--color-brand)] border-t-transparent rounded-full" />
+          <div className="h-5 w-5 animate-spin rounded-full border-2 border-[var(--color-brand)] border-t-transparent" />
         </div>
       )}
 
@@ -167,15 +332,21 @@ export function GMasterAccountSettings() {
           <h3 className="text-base font-semibold text-[var(--color-text-primary)]">{t('settings.account.notSignedIn')}</h3>
           <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[var(--color-text-tertiary)]">{t('settings.account.notSignedInDescription')}</p>
           <div className="mt-5 flex flex-col items-center justify-center gap-2 sm:flex-row">
-            <Button onClick={() => handleAuth('login')} loading={actionLoading === 'login'}>
+            <Button onClick={() => handleAuth('login')} loading={authAction === 'login'}>
               <span className="material-symbols-outlined text-[17px]" aria-hidden="true">login</span>
               {t('welcome.gmasterAction')}
             </Button>
-            <Button variant="secondary" onClick={() => handleAuth('register')} loading={actionLoading === 'register'}>
+            <Button variant="secondary" onClick={() => handleAuth('register')} loading={authAction === 'register'}>
               <span className="material-symbols-outlined text-[17px]" aria-hidden="true">person_add</span>
               {t('welcome.gmasterRegisterAction')}
             </Button>
           </div>
+          {isPolling && (
+            <p className="mt-4 text-sm text-[var(--color-text-tertiary)]">{t('settings.account.waitingForAuth')}</p>
+          )}
+          {authError && (
+            <p className="mt-3 text-xs text-[var(--color-error)]">{authError}</p>
+          )}
         </div>
       )}
 
@@ -188,118 +359,134 @@ export function GMasterAccountSettings() {
 
       {loadState === 'ready' && account && (
         <div className="space-y-4">
-          <section className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-container)] p-5">
-            <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-              <div className="flex min-w-0 items-center gap-4">
-                <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-2xl bg-[#2a2118] text-2xl font-semibold text-[#fff8ec]">
-                  G
+          {(checkoutError || checkoutNotice || pendingCheckout) && (
+            <div className={`rounded-xl border px-4 py-3 text-sm ${
+              checkoutError
+                ? 'border-[var(--color-error)]/30 bg-[var(--color-error)]/10 text-[var(--color-error)]'
+                : 'border-[var(--color-success)]/30 bg-[var(--color-success)]/10 text-[var(--color-success)]'
+            }`}
+            >
+              <div>{checkoutError || checkoutNotice || t('settings.account.checkoutPending')}</div>
+              {checkoutError && (
+                <div className="mt-3">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => {
+                      if (checkoutErrorCode === 'GMASTER_AUTH_EXPIRED') {
+                        void handleAuth('login')
+                        return
+                      }
+                      void loadAccount()
+                    }}
+                  >
+                    {checkoutErrorCode === 'GMASTER_AUTH_EXPIRED'
+                      ? t('settings.account.signInAgain')
+                      : t('settings.account.refreshPlans')}
+                  </Button>
                 </div>
-                <div className="min-w-0">
-                  <h3 className="truncate text-xl font-semibold tracking-[-0.03em] text-[var(--color-text-primary)]">{account.user.displayName || account.user.username}</h3>
-                  <p className="mt-0.5 text-sm text-[var(--color-text-tertiary)]">@{account.user.username}</p>
-                  {account.user.email && (
-                    <p className="mt-1 text-sm text-[var(--color-text-secondary)]">{account.user.email}</p>
-                  )}
-                </div>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => account.accountUrl && void openExternalUrl(account.accountUrl)}
-                  disabled={!account.accountUrl}
-                >
-                  {t('settings.account.manageAccount')}
-                </Button>
-                <Button
-                  size="sm"
-                  onClick={() => account.billingUrl && void openExternalUrl(account.billingUrl)}
-                  disabled={!account.billingUrl}
-                >
-                  {t('settings.account.manageSubscription')}
-                </Button>
-                <Button variant="ghost" size="sm" onClick={handleLogout} loading={actionLoading === 'logout'}>
-                  {t('settings.account.signOut')}
-                </Button>
-              </div>
+              )}
             </div>
+          )}
 
-            <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <MetricCard label={t('settings.account.userGroup')} value={account.user.group || '-'} />
-              <MetricCard label={t('settings.account.remainingQuota')} value={formatAmount(account.quota?.remaining, account.quota?.unlimited)} />
-              <MetricCard label={t('settings.account.usedQuota')} value={formatAmount(account.quota?.used)} />
-              <MetricCard
-                label={t('settings.account.builtinProvider')}
-                value={account.canUseBuiltinProvider ? t('settings.account.available') : t('settings.account.unavailable')}
-              />
-            </div>
-          </section>
+          <AccountHeader
+            account={account}
+            labels={{
+              manageAccount: t('settings.account.manageAccount'),
+              signOut: t('settings.account.signOut'),
+              userGroup: t('settings.account.userGroup'),
+              remainingQuota: t('settings.account.remainingQuota'),
+              usedQuota: t('settings.account.usedQuota'),
+              builtinProvider: t('settings.account.builtinProvider'),
+              available: t('settings.account.available'),
+              unavailable: t('settings.account.unavailable'),
+            }}
+            onManageAccount={() => account.accountUrl && void openExternalUrl(account.accountUrl)}
+            onSignOut={handleLogout}
+            signOutLoading={authAction === 'logout'}
+          />
 
-          <section className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-container)] p-5">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <h3 className="text-sm font-semibold text-[var(--color-text-primary)]">{t('settings.account.subscriptionTitle')}</h3>
-                <p className="mt-0.5 text-xs text-[var(--color-text-tertiary)]">
-                  {account.subscription?.active ? t('settings.account.subscriptionActive') : t('settings.account.subscriptionInactive')}
-                </p>
-              </div>
-              <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
-                account.subscription?.active
-                  ? 'bg-[var(--color-success)]/12 text-[var(--color-success)]'
-                  : 'bg-[var(--color-surface-container-high)] text-[var(--color-text-tertiary)]'
-              }`}
-              >
-                {account.subscription?.active ? t('settings.account.active') : t('settings.account.inactive')}
-              </span>
-            </div>
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
+            <WalletPanel
+              wallet={account.wallet}
+              topUpPlans={topUpPlans}
+              isLoading={billingLoading}
+              labels={{
+                title: t('settings.account.walletTitle'),
+                description: t('settings.account.walletDescription'),
+                balance: t('settings.account.walletBalance'),
+                lowBalance: t('settings.account.walletLowBalance'),
+                topUp: t('settings.account.topUp'),
+                plansLoading: t('settings.account.plansLoading'),
+                noPlans: t('settings.account.noTopUpPlans'),
+              }}
+              onTopUp={() => setTopUpOpen(true)}
+            />
 
-            {account.subscription?.items.length ? (
-              <div className="mt-4 space-y-2">
-                {account.subscription.items.map((item) => (
-                  <SubscriptionRow key={item.id} item={item} />
-                ))}
-              </div>
-            ) : (
-              <p className="mt-4 rounded-xl border border-dashed border-[var(--color-border)] px-4 py-5 text-center text-sm text-[var(--color-text-tertiary)]">
-                {t('settings.account.noSubscription')}
-              </p>
-            )}
-          </section>
+            <SubscriptionPanel
+              subscription={account.subscription}
+              subscriptionPlans={subscriptionPlans}
+              isLoading={billingLoading}
+              actionLoading={subscriptionAction}
+              labels={{
+                title: t('settings.account.subscriptionTitle'),
+                activeDescription: t('settings.account.subscriptionActive'),
+                inactiveDescription: t('settings.account.subscriptionInactive'),
+                active: t('settings.account.active'),
+                inactive: t('settings.account.inactive'),
+                noSubscription: t('settings.account.noSubscription'),
+                subscribe: t('settings.account.subscribe'),
+                changePlan: t('settings.account.changePlan'),
+                cancel: t('settings.account.cancelSubscription'),
+                resume: t('settings.account.resumeSubscription'),
+                cancelAtPeriodEnd: t('settings.account.cancelAtPeriodEnd'),
+                plansLoading: t('settings.account.plansLoading'),
+                noPlans: t('settings.account.noSubscriptionPlans'),
+              }}
+              onManage={() => setSubscriptionOpen(true)}
+              onCancel={handleCancelSubscription}
+              onResume={handleResumeSubscription}
+            />
+          </div>
+
+          <BillingHistory
+            transactions={transactions}
+            isLoading={billingLoading}
+            labels={{
+              title: t('settings.account.billingHistoryTitle'),
+              description: t('settings.account.billingHistoryDescription'),
+              loading: t('settings.account.billingHistoryLoading'),
+              empty: t('settings.account.billingHistoryEmpty'),
+            }}
+          />
         </div>
       )}
-    </div>
-  )
-}
 
-function MetricCard({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3">
-      <p className="text-xs text-[var(--color-text-tertiary)]">{label}</p>
-      <p className="mt-1 truncate text-sm font-semibold text-[var(--color-text-primary)]">{value}</p>
-    </div>
-  )
-}
+      <PlanDialog
+        open={topUpOpen}
+        title={t('settings.account.topUpDialogTitle')}
+        description={t('settings.account.topUpDialogDescription')}
+        emptyText={t('settings.account.noTopUpPlans')}
+        plans={topUpPlans}
+        actionLabel={t('settings.account.topUp')}
+        recommendedLabel={t('settings.account.recommendedPlan')}
+        loadingPlanId={checkoutPlanId}
+        onClose={() => setTopUpOpen(false)}
+        onSelectPlan={(plan) => void handleCheckout('topup', plan)}
+      />
 
-function SubscriptionRow({ item }: { item: GMasterSubscriptionItem }) {
-  return (
-    <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-semibold text-[var(--color-text-primary)]">Plan #{item.planId}</span>
-          <span className="rounded bg-[var(--color-surface-container-high)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--color-text-tertiary)]">
-            {item.status}
-          </span>
-          {item.upgradeGroup && (
-            <span className="rounded bg-[var(--color-brand)]/14 px-1.5 py-0.5 text-[10px] font-medium text-[var(--color-brand)]">
-              {item.upgradeGroup}
-            </span>
-          )}
-        </div>
-        <span className="text-sm font-semibold text-[var(--color-text-primary)]">{formatSubscriptionUsage(item)}</span>
-      </div>
-      <p className="mt-2 text-xs text-[var(--color-text-tertiary)]">
-        {formatDate(item.startTime)} - {formatDate(item.endTime)}
-      </p>
+      <PlanDialog
+        open={subscriptionOpen}
+        title={t('settings.account.subscriptionDialogTitle')}
+        description={t('settings.account.subscriptionDialogDescription')}
+        emptyText={t('settings.account.noSubscriptionPlans')}
+        plans={subscriptionPlans}
+        actionLabel={account?.subscription?.active ? t('settings.account.changePlan') : t('settings.account.subscribe')}
+        recommendedLabel={t('settings.account.recommendedPlan')}
+        loadingPlanId={checkoutPlanId}
+        onClose={() => setSubscriptionOpen(false)}
+        onSelectPlan={(plan) => void handleCheckout('subscription', plan)}
+      />
     </div>
   )
 }

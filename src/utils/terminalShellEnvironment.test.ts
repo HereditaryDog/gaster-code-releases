@@ -7,7 +7,7 @@ import {
   mergeTerminalShellEnvironment,
   resetTerminalShellEnvironmentCacheForTests,
 } from './terminalShellEnvironment.js'
-import { GASTER_ENV } from './gasterEnv.js'
+import { GASTER_ENV, LEGACY_GASTER_ENV } from './gasterEnv.js'
 
 let tmpDir: string
 
@@ -103,4 +103,14 @@ describe('terminal shell environment', () => {
     expect(env).toBeNull()
   })
 
+  it('accepts the legacy terminal shell disable env for compatibility', async () => {
+    const env = await getTerminalShellEnvironment({
+      HOME: tmpDir,
+      SHELL: path.join(tmpDir, 'zsh'),
+      PATH: '/usr/bin:/bin',
+      [LEGACY_GASTER_ENV.TERMINAL_SHELL_ENV_DISABLED]: '1',
+    })
+
+    expect(env).toBeNull()
+  })
 })

@@ -251,6 +251,7 @@ function trimRuns(data: RunsFile): void {
 
 const TASK_TIMEOUT_MS = 10 * 60 * 1000 // 10 minutes
 const GASTER_ROOT_ENV = 'GASTER_CODE_ROOT'
+const LEGACY_GASTER_ROOT_ENV = 'CC_HAHA_ROOT'
 
 type CronCliResolutionOptions = {
   cliPath?: string | null
@@ -288,7 +289,7 @@ export function resolveCronProjectRoot(
   options: CronCliResolutionOptions = {},
 ): string {
   const env = options.env ?? process.env
-  const explicitRoot = env[GASTER_ROOT_ENV]?.trim()
+  const explicitRoot = (env[GASTER_ROOT_ENV] ?? env[LEGACY_GASTER_ROOT_ENV])?.trim()
   if (explicitRoot && isSourceProjectRoot(path.resolve(explicitRoot))) {
     return path.resolve(explicitRoot)
   }
@@ -743,8 +744,8 @@ export class CronScheduler {
   private async buildOfficialOAuthEnv(): Promise<Record<string, string>> {
     const env: Record<string, string> = {}
     try {
-      const { gasterOAuthService } = await import('./gasterOAuthService.js')
-      const token = await gasterOAuthService.ensureFreshAccessToken()
+      const { hahaOAuthService } = await import('./hahaOAuthService.js')
+      const token = await hahaOAuthService.ensureFreshAccessToken()
       if (token) {
         env.CLAUDE_CODE_OAUTH_TOKEN = token
       }

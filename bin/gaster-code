@@ -12,7 +12,7 @@ cd "$ROOT_DIR"
 # via gaster-code/settings.json. Loading .env would re-inject stale
 # provider keys (e.g., a MiniMax key as ANTHROPIC_API_KEY) that
 # override the active provider config.
-if [[ "${GASTER_CODE_SKIP_DOTENV:-0}" == "1" ]]; then
+if [[ "${GASTER_CODE_SKIP_DOTENV:-${CC_HAHA_SKIP_DOTENV:-0}}" == "1" ]]; then
   # Bun auto-loads .env by default; explicitly point to /dev/null to suppress.
   ENV_FILE_FLAG="--env-file=/dev/null"
 elif [[ -f .env ]]; then

@@ -163,16 +163,16 @@ describe('FileSearchMenu', () => {
 
   it('uses the resolved home root for typed folder filters when no workspace is selected', async () => {
     vi.mocked(filesystemApi.search).mockResolvedValueOnce({
-      currentPath: '/Users/demo',
+      currentPath: '/Users/nanmi',
       parentPath: '/',
       query: 'workspace',
       entries: [
-        { name: 'workspace', path: '/Users/demo/workspace', relativePath: 'workspace', isDirectory: true },
+        { name: 'workspace', path: '/Users/nanmi/workspace', relativePath: 'workspace', isDirectory: true },
       ],
     })
     vi.mocked(filesystemApi.browse).mockResolvedValueOnce({
-      currentPath: '/Users/demo/workspace',
-      parentPath: '/Users/demo',
+      currentPath: '/Users/nanmi/workspace',
+      parentPath: '/Users/nanmi',
       entries: [],
     })
 
@@ -195,7 +195,7 @@ describe('FileSearchMenu', () => {
     )
 
     await waitFor(() => {
-      expect(filesystemApi.browse).toHaveBeenCalledWith('/Users/demo/workspace', { includeFiles: true })
+      expect(filesystemApi.browse).toHaveBeenCalledWith('/Users/nanmi/workspace', { includeFiles: true })
     })
   })
 })

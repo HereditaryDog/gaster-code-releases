@@ -11,7 +11,7 @@ import { SettingsService } from './settingsService.js'
 import { sessionService } from './sessionService.js'
 import { PROVIDER_PRESETS } from '../config/providerPresets.js'
 import { isEnvTruthy } from '../../utils/envUtils.js'
-import { GASTER_ENV } from '../../utils/gasterEnv.js'
+import { GASTER_ENV, LEGACY_GASTER_ENV } from '../../utils/gasterEnv.js'
 import { cleanSessionTitleSource, hasSessionTitleMarkup } from '../../utils/sessionTitleText.js'
 
 const TITLE_MAX_LEN = 50
@@ -183,7 +183,10 @@ async function shouldDisableThinkingForTitle(presetId: string): Promise<boolean>
   if (settings.alwaysThinkingEnabled !== false) return false
 
   const presetEnv = PROVIDER_PRESETS.find((preset) => preset.id === presetId)?.defaultEnv
-  return isEnvTruthy(presetEnv?.[GASTER_ENV.SEND_DISABLED_THINKING])
+  return isEnvTruthy(
+    presetEnv?.[GASTER_ENV.SEND_DISABLED_THINKING] ??
+      presetEnv?.[LEGACY_GASTER_ENV.SEND_DISABLED_THINKING],
+  )
 }
 
 /**

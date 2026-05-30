@@ -3,7 +3,12 @@ import path from 'node:path'
 export type SidecarMode = 'server' | 'cli' | 'adapters'
 
 const EXPLICIT_MODES = new Set<SidecarMode>(['server', 'cli', 'adapters'])
-const DESKTOP_CLI_NAMES = new Set(['gaster-code', 'gaster-code.exe'])
+const DESKTOP_CLI_NAMES = new Set([
+  'gaster-code',
+  'gaster-code.exe',
+  'claude-haha',
+  'claude-haha.exe',
+])
 
 export function resolveSidecarInvocation(
   rawArgs: string[],
@@ -57,7 +62,7 @@ export function parseLauncherArgs(
   }
 
   if (!appRoot) {
-    throw new Error('Missing --app-root for gaster-sidecar')
+    throw new Error('Missing --app-root for claude-sidecar')
   }
 
   return { appRoot, args: nextArgs }

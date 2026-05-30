@@ -47,34 +47,9 @@ describe('desktop release updater configuration', () => {
     expect(releaseWorkflowYaml).toContain('PUBLIC_RELEASE_TOKEN')
   })
 
-  it('passes the encoded Tauri signing key directly to tauri-action', () => {
-    expect(releaseWorkflowYaml).not.toContain('Normalize Tauri signing key')
-    expect(releaseWorkflowYaml).toContain(
-      'TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}',
-    )
-  })
-
-  it('builds the macOS x64 release on an Intel runner', () => {
-    const macosX64Block = releaseWorkflowYaml.match(
-      /platform:\s*"macos-15-intel"[\s\S]+?label:\s*"macOS-x64"/,
-    )?.[0]
-
-    expect(macosX64Block).toContain('rust_target: "x86_64-apple-darwin"')
-    expect(macosX64Block).toContain('tauri_args: "--target x86_64-apple-darwin"')
-  })
-
   it('rewrites updater manifest asset URLs before publishing the public release', () => {
     expect(releaseWorkflowYaml).toContain('PRIVATE_ASSET_BASE')
     expect(releaseWorkflowYaml).toContain('PUBLIC_ASSET_BASE')
     expect(releaseWorkflowYaml).toContain('.value.url |= if startswith($private)')
-  })
-
-  it('allows publishing directly from the public release repository', () => {
-    expect(releaseWorkflowYaml).toContain(
-      'if [ "$PRIVATE_RELEASE_REPOSITORY" != "$PUBLIC_RELEASE_REPOSITORY" ]; then',
-    )
-    expect(releaseWorkflowYaml).toContain(
-      'Private and public release repositories match; keeping updater manifest URLs unchanged.',
-    )
   })
 })

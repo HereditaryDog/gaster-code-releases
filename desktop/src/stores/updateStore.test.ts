@@ -86,7 +86,7 @@ describe('updateStore', () => {
 
     expect(useUpdateStore.getState().shouldPrompt).toBe(false)
     expect(window.localStorage.getItem('gaster-code-dismissed-update-version')).toBe('0.2.0')
-    expect(window.localStorage.getItem('gaster-code-legacy-dismissed-update-version')).toBeNull()
+    expect(window.localStorage.getItem('cc-haha-dismissed-update-version')).toBeNull()
 
     await useUpdateStore.getState().checkForUpdates({ silent: true })
 
@@ -96,7 +96,7 @@ describe('updateStore', () => {
   })
 
   it('migrates a legacy dismissed update version', async () => {
-    window.localStorage.setItem('gaster-code-legacy-dismissed-update-version', '0.2.0')
+    window.localStorage.setItem('cc-haha-dismissed-update-version', '0.2.0')
     check.mockResolvedValue({
       version: '0.2.0',
       body: 'Bug fixes and performance improvements',
@@ -110,7 +110,7 @@ describe('updateStore', () => {
 
     expect(useUpdateStore.getState().shouldPrompt).toBe(false)
     expect(window.localStorage.getItem('gaster-code-dismissed-update-version')).toBe('0.2.0')
-    expect(window.localStorage.getItem('gaster-code-legacy-dismissed-update-version')).toBeNull()
+    expect(window.localStorage.getItem('cc-haha-dismissed-update-version')).toBeNull()
   })
 
   it('prompts again when a newer version is available after dismissing an older one', async () => {

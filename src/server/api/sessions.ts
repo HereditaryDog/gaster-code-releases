@@ -33,11 +33,6 @@ import {
   previewSessionRewind,
   type RewindTargetSelector,
 } from '../services/sessionRewindService.js'
-import {
-  createSessionBranch,
-  SessionBranchingError,
-} from '../../utils/sessionBranching.js'
-import { registerFilesystemAccessRoot } from '../services/filesystemAccessRoots.js'
 
 const workspaceService = new WorkspaceService(
   async (sessionId) => (
@@ -127,16 +122,6 @@ export async function handleSessionsApi(
         )
       }
       return await rewindSession(req, sessionId)
-    }
-
-    if (subResource === 'branch') {
-      if (req.method !== 'POST') {
-        return Response.json(
-          { error: 'METHOD_NOT_ALLOWED', message: `Method ${req.method} not allowed` },
-          { status: 405 }
-        )
-      }
-      return await branchSession(req, sessionId)
     }
 
     if (subResource === 'turn-checkpoints') {
@@ -314,11 +299,7 @@ async function getSessionRepositoryContext(url: URL): Promise<Response> {
     throw ApiError.badRequest('workDir query parameter is required')
   }
 
-  const context = await getRepositoryContext(workDir)
-  registerFilesystemAccessRoot(workDir)
-  registerFilesystemAccessRoot(context.workDir)
-  registerFilesystemAccessRoot(context.repoRoot)
-  return Response.json(context)
+  return Response.json(await getRepositoryContext(workDir))
 }
 
 async function requireSessionWorkspace(sessionId: string): Promise<string> {
@@ -632,7 +613,6 @@ async function getGitInfo(sessionId: string): Promise<Response> {
   if (!workDir) {
     throw ApiError.notFound(`Session not found: ${sessionId}`)
   }
-  registerFilesystemAccessRoot(workDir)
   const launchInfo = await sessionService.getSessionLaunchInfo(sessionId).catch(() => null)
   const repository = launchInfo?.repository
   const worktreeSession = launchInfo?.worktreeSession
@@ -728,56 +708,6 @@ async function rewindSession(req: Request, sessionId: string): Promise<Response>
     : await executeSessionRewind(sessionId, body)
 
   return Response.json(result)
-}
-
-async function branchSession(req: Request, sessionId: string): Promise<Response> {
-  let body: { targetMessageId?: unknown; title?: unknown }
-  try {
-    body = (await req.json()) as { targetMessageId?: unknown; title?: unknown }
-  } catch {
-    throw ApiError.badRequest('Invalid JSON body')
-  }
-
-  if (typeof body.targetMessageId !== 'string' || body.targetMessageId.trim().length === 0) {
-    throw ApiError.badRequest('targetMessageId (string) is required in request body')
-  }
-
-  if (body.title !== undefined && typeof body.title !== 'string') {
-    throw ApiError.badRequest('title must be a string')
-  }
-
-  const launchInfo = await sessionService.getSessionLaunchInfo(sessionId)
-  if (!launchInfo) {
-    throw ApiError.notFound(`Session not found: ${sessionId}`)
-  }
-
-  try {
-    const result = await createSessionBranch({
-      sourceSessionId: sessionId,
-      sourceTranscriptPath: launchInfo.filePath,
-      targetMessageId: body.targetMessageId.trim(),
-      title: body.title?.trim() || undefined,
-      sourceWorkDir: launchInfo.workDir,
-      sourceRepository: launchInfo.repository,
-      sourceWorktreeSession: launchInfo.worktreeSession,
-    })
-
-    return Response.json({
-      sessionId: result.sessionId,
-      title: result.title,
-      workDir: result.workDir ?? launchInfo.workDir,
-      sourceSessionId: sessionId,
-      targetMessageId: body.targetMessageId.trim(),
-    }, { status: 201 })
-  } catch (error) {
-    if (error instanceof SessionBranchingError) {
-      if (error.code === 'SOURCE_NOT_FOUND') {
-        throw ApiError.notFound(error.message)
-      }
-      throw ApiError.badRequest(error.message)
-    }
-    throw error
-  }
 }
 
 async function getTurnCheckpoints(sessionId: string): Promise<Response> {

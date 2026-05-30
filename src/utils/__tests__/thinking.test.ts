@@ -15,6 +15,7 @@ describe('provider-aware thinking support', () => {
   let originalVertex: string | undefined
   let originalFoundry: string | undefined
   let originalGasterExplicitDisabledThinking: string | undefined
+  let originalExplicitDisabledThinking: string | undefined
 
   beforeEach(() => {
     originalBaseUrl = process.env.ANTHROPIC_BASE_URL
@@ -24,11 +25,13 @@ describe('provider-aware thinking support', () => {
     originalVertex = process.env.CLAUDE_CODE_USE_VERTEX
     originalFoundry = process.env.CLAUDE_CODE_USE_FOUNDRY
     originalGasterExplicitDisabledThinking = process.env.GASTER_CODE_SEND_DISABLED_THINKING
+    originalExplicitDisabledThinking = process.env.CC_HAHA_SEND_DISABLED_THINKING
 
     delete process.env.CLAUDE_CODE_USE_BEDROCK
     delete process.env.CLAUDE_CODE_USE_VERTEX
     delete process.env.CLAUDE_CODE_USE_FOUNDRY
     delete process.env.GASTER_CODE_SEND_DISABLED_THINKING
+    delete process.env.CC_HAHA_SEND_DISABLED_THINKING
   })
 
   afterEach(() => {
@@ -39,6 +42,7 @@ describe('provider-aware thinking support', () => {
     restoreEnv('CLAUDE_CODE_USE_VERTEX', originalVertex)
     restoreEnv('CLAUDE_CODE_USE_FOUNDRY', originalFoundry)
     restoreEnv('GASTER_CODE_SEND_DISABLED_THINKING', originalGasterExplicitDisabledThinking)
+    restoreEnv('CC_HAHA_SEND_DISABLED_THINKING', originalExplicitDisabledThinking)
     clearCapabilityCache()
   })
 
@@ -74,6 +78,12 @@ describe('provider-aware thinking support', () => {
     expect(shouldSendExplicitDisabledThinking()).toBe(false)
 
     process.env.GASTER_CODE_SEND_DISABLED_THINKING = '1'
+    expect(shouldSendExplicitDisabledThinking()).toBe(true)
+  })
+
+  test('keeps the legacy explicit disabled thinking env var as a fallback', () => {
+    process.env.CC_HAHA_SEND_DISABLED_THINKING = '1'
+
     expect(shouldSendExplicitDisabledThinking()).toBe(true)
   })
 

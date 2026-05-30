@@ -90,7 +90,7 @@ describe('useScheduledTaskDesktopNotifications', () => {
     await vi.waitFor(() => {
       expect(localStorage.getItem('gaster-code.notifiedDesktopTaskRuns.v1')).toContain('run-old')
     })
-    expect(localStorage.getItem('gaster-code-legacy.notifiedDesktopTaskRuns.v1')).toBeNull()
+    expect(localStorage.getItem('cc-haha.notifiedDesktopTaskRuns.v1')).toBeNull()
 
     await vi.advanceTimersByTimeAsync(30_000)
     await vi.waitFor(() => expect(notifyDesktopMock).toHaveBeenCalledTimes(1))

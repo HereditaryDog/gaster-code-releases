@@ -7,7 +7,7 @@ describe('resolveSidecarInvocation', () => {
     expect(
       resolveSidecarInvocation(
         ['server', '--host', '127.0.0.1'],
-        '/tmp/gaster-sidecar',
+        '/tmp/claude-sidecar',
       ),
     ).toEqual({
       mode: 'server',
@@ -29,6 +29,18 @@ describe('resolveSidecarInvocation', () => {
     })
   })
 
+  it('keeps legacy claude-haha invocations in cli mode', () => {
+    expect(
+      resolveSidecarInvocation(
+        ['plugin', 'install', 'demo'],
+        '/Users/demo/.local/bin/claude-haha',
+      ),
+    ).toEqual({
+      mode: 'cli',
+      restArgs: ['plugin', 'install', 'demo'],
+      defaultAppRoot: '/Users/demo/.local/bin',
+    })
+  })
 })
 
 describe('parseLauncherArgs', () => {

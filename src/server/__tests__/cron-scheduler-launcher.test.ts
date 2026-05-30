@@ -10,7 +10,7 @@ import {
 } from '../services/cronScheduler.js'
 import { CronService } from '../services/cronService.js'
 import { ProviderService } from '../services/providerService.js'
-import { GASTER_ENV } from '../../utils/gasterEnv.js'
+import { GASTER_ENV, LEGACY_GASTER_ENV } from '../../utils/gasterEnv.js'
 import { resetTerminalShellEnvironmentCacheForTests } from '../../utils/terminalShellEnvironment.js'
 
 const originalConfigDir = process.env.CLAUDE_CONFIG_DIR
@@ -24,6 +24,7 @@ const originalHome = process.env.HOME
 const originalShell = process.env.SHELL
 const originalZdotdir = process.env.ZDOTDIR
 const originalDisableTerminalShellEnv = process.env[GASTER_ENV.TERMINAL_SHELL_ENV_DISABLED]
+const originalLegacyDisableTerminalShellEnv = process.env[LEGACY_GASTER_ENV.TERMINAL_SHELL_ENV_DISABLED]
 
 const isWindows = process.platform === 'win32'
 const unixOnly = isWindows ? it.skip : it
@@ -107,6 +108,11 @@ function restoreEnv(): void {
   } else {
     delete process.env[GASTER_ENV.TERMINAL_SHELL_ENV_DISABLED]
   }
+  if (originalLegacyDisableTerminalShellEnv) {
+    process.env[LEGACY_GASTER_ENV.TERMINAL_SHELL_ENV_DISABLED] = originalLegacyDisableTerminalShellEnv
+  } else {
+    delete process.env[LEGACY_GASTER_ENV.TERMINAL_SHELL_ENV_DISABLED]
+  }
   resetTerminalShellEnvironmentCacheForTests()
 }
 
@@ -117,6 +123,7 @@ describe('cron scheduler launcher resolution', () => {
     tmpDir = await createTmpDir()
     process.env.CLAUDE_CONFIG_DIR = path.join(tmpDir, 'config')
     process.env[GASTER_ENV.TERMINAL_SHELL_ENV_DISABLED] = '1'
+    delete process.env[LEGACY_GASTER_ENV.TERMINAL_SHELL_ENV_DISABLED]
     resetTerminalShellEnvironmentCacheForTests()
   })
 
@@ -126,7 +133,7 @@ describe('cron scheduler launcher resolution', () => {
   })
 
   it('uses the bundled sidecar launcher when one is configured', () => {
-    const sidecarPath = path.join(tmpDir, 'gaster-sidecar')
+    const sidecarPath = path.join(tmpDir, 'claude-sidecar')
     const appRoot = path.join(tmpDir, 'app-root')
 
     const args = buildCronCliArgs(['--print'], {
@@ -160,6 +167,19 @@ describe('cron scheduler launcher resolution', () => {
     ).toBe(sourceRoot)
   })
 
+  it('keeps the legacy CC_HAHA_ROOT source checkout override for compatibility', async () => {
+    const sourceRoot = path.join(tmpDir, 'legacy-source')
+    await createSourceRoot(sourceRoot)
+
+    expect(
+      resolveCronProjectRoot({
+        cwd: path.join(tmpDir, 'other'),
+        moduleDir: path.join(tmpDir, 'broken', 'src', 'server', 'services'),
+        env: { CC_HAHA_ROOT: sourceRoot },
+      }),
+    ).toBe(sourceRoot)
+  })
+
   it('falls back to the nearest source checkout from cwd before module dir', async () => {
     const sourceRoot = path.join(tmpDir, 'source')
     const nestedCwd = path.join(sourceRoot, 'nested', 'workdir')
@@ -178,7 +198,7 @@ describe('cron scheduler launcher resolution', () => {
   unixOnly('executeTask launches the configured desktop sidecar instead of source bun', async () => {
     const binDir = path.join(tmpDir, 'bin')
     const appRoot = path.join(tmpDir, 'app-root')
-    const sidecarPath = path.join(tmpDir, 'gaster-sidecar')
+    const sidecarPath = path.join(tmpDir, 'claude-sidecar')
     const sidecarArgsPath = path.join(tmpDir, 'sidecar.args')
     const bunArgsPath = path.join(tmpDir, 'bun.args')
 
@@ -249,7 +269,7 @@ describe('cron scheduler launcher resolution', () => {
 
   unixOnly('executeTask passes provider-scoped model runtime to the sidecar', async () => {
     const appRoot = path.join(tmpDir, 'app-root')
-    const sidecarPath = path.join(tmpDir, 'gaster-sidecar')
+    const sidecarPath = path.join(tmpDir, 'claude-sidecar')
     const sidecarArgsPath = path.join(tmpDir, 'sidecar.args')
     const sidecarEnvPath = path.join(tmpDir, 'sidecar.env')
 
@@ -328,12 +348,13 @@ describe('cron scheduler launcher resolution', () => {
     expect(env.ANTHROPIC_MODEL).not.toBe('stale-parent-model')
     expect(env.CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST).toBe('1')
     expect(env.GASTER_CODE_SKIP_DOTENV).toBe('1')
+    expect(env.CC_HAHA_SKIP_DOTENV).toBeUndefined()
     expect(env.CLAUDE_CODE_ENTRYPOINT).toBe('sdk-cli')
   })
 
   unixOnly('executeTask inherits exported terminal shell variables', async () => {
     const appRoot = path.join(tmpDir, 'app-root')
-    const sidecarPath = path.join(tmpDir, 'gaster-sidecar')
+    const sidecarPath = path.join(tmpDir, 'claude-sidecar')
     const sidecarEnvPath = path.join(tmpDir, 'sidecar.env')
     const shellPath = path.join(tmpDir, 'zsh')
     const nodeBin = path.join(tmpDir, 'node-bin')

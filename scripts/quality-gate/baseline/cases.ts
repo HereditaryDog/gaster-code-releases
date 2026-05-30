@@ -23,7 +23,7 @@ export const baselineCases: BaselineCase[] = [
     title: 'Update a multi-file API contract',
     description: 'A small app exposes a user display API. The Agent must change the contract and update callers coherently without loosening tests.',
     fixture: 'scripts/quality-gate/baseline/fixtures/multi-file-api',
-    prompt: 'The user display API contract changed: formatUser must return an object with a label field instead of displayName, where label is "Ada Lovelace <ada@example.com>". Update formatUser and the renderUser caller to use label, then rerun the tests until they pass. Do not ask for clarification. Do not edit package.json.',
+    prompt: 'The user display API contract changed to return an object with a label field, where label is "Ada Lovelace <ada@example.com>". Update the implementation and caller so the existing tests pass. Do not edit package.json.',
     mode: 'websocket',
     requiredCapabilities: ['model', 'file-edit', 'shell'],
     timeoutMs: 240_000,

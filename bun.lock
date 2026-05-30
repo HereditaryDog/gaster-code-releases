@@ -3,7 +3,7 @@
   "configVersion": 0,
   "workspaces": {
     "": {
-      "name": "gaster-code",
+      "name": "claude-code-local",
       "dependencies": {
         "@anthropic-ai/sandbox-runtime": "^0.0.44",
         "@anthropic-ai/sdk": "^0.99.0",

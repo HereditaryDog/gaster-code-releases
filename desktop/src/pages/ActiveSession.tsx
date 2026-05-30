@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Target } from 'lucide-react'
 import {
   SCHEDULED_TAB_ID,
@@ -102,25 +102,6 @@ function ActiveGoalStrip({
           ))}
         </span>
       ) : null}
-    </div>
-  )
-}
-
-function SessionContentLoading({ compact, label }: { compact: boolean; label: string }) {
-  return (
-    <div
-      data-testid="session-content-loading"
-      className={compact ? 'flex min-h-0 flex-1 flex-col px-4 py-4' : 'mx-auto flex min-h-0 w-full max-w-[860px] flex-1 flex-col px-8 py-6'}
-      aria-live="polite"
-      aria-busy="true"
-    >
-      <div className="mb-4 h-3 w-28 rounded-full bg-[var(--color-surface-container-high)]" />
-      <div className="space-y-3">
-        <div className="h-16 rounded-[10px] bg-[var(--color-surface-container)]" />
-        <div className="ml-auto h-14 w-4/5 rounded-[10px] bg-[var(--color-surface-container-high)]" />
-        <div className="h-20 w-11/12 rounded-[10px] bg-[var(--color-surface-container)]" />
-      </div>
-      <span className="sr-only">{label}</span>
     </div>
   )
 }
@@ -278,9 +259,6 @@ export function ActiveSession() {
   const isMobileLayout = useMobileViewport() && !isTauriRuntime()
   const activeTabId = useTabStore((s) => s.activeTabId)
   const activeTabType = useTabStore((s) => s.tabs.find((tab) => tab.sessionId === s.activeTabId)?.type ?? null)
-  const [messageListSessionId, setMessageListSessionId] = useState<string | null>(activeTabId)
-  const [isMessageListDeferred, setIsMessageListDeferred] = useState(false)
-  const [, startMessageListTransition] = useTransition()
   const sessions = useSessionStore((s) => s.sessions)
   const connectToSession = useChatStore((s) => s.connectToSession)
   const sessionState = useChatStore((s) => activeTabId ? s.sessions[activeTabId] : undefined)
@@ -309,36 +287,6 @@ export function ActiveSession() {
       : false,
   )
   const terminalPanelHeight = useTerminalPanelStore((state) => state.height)
-
-  useEffect(() => {
-    if (!activeTabId || !isSessionTabState(activeTabId, activeTabType) || isMemberSession) {
-      if (messageListSessionId !== activeTabId) setMessageListSessionId(activeTabId)
-      if (isMessageListDeferred) setIsMessageListDeferred(false)
-      return
-    }
-
-    if (messageListSessionId === activeTabId) {
-      if (isMessageListDeferred) setIsMessageListDeferred(false)
-      return
-    }
-
-    setIsMessageListDeferred(true)
-    const timer = window.setTimeout(() => {
-      startMessageListTransition(() => {
-        setMessageListSessionId(activeTabId)
-        setIsMessageListDeferred(false)
-      })
-    }, 0)
-
-    return () => window.clearTimeout(timer)
-  }, [
-    activeTabId,
-    activeTabType,
-    isMemberSession,
-    isMessageListDeferred,
-    messageListSessionId,
-    startMessageListTransition,
-  ])
 
   useEffect(() => {
     if (activeTabId && !isMemberSession) {
@@ -381,9 +329,6 @@ export function ActiveSession() {
     (trackedTaskSessionId === activeTabId && hasRunningTasks) ||
     hasRunningBackgroundTasks
   const totalTokens = tokenUsage.input_tokens + tokenUsage.output_tokens
-  const shouldDeferMessageList =
-    isMessageListDeferred ||
-    (activeTabId !== null && messageListSessionId !== activeTabId)
 
   const lastUpdated = useMemo(() => {
     if (!session?.modifiedAt) return ''
@@ -542,11 +487,7 @@ export function ActiveSession() {
                 </div>
               )}
 
-              {shouldDeferMessageList ? (
-                <SessionContentLoading compact={showWorkspacePanel} label={t('common.loading')} />
-              ) : (
-                <MessageList sessionId={messageListSessionId} compact={showWorkspacePanel} />
-              )}
+              <MessageList compact={showWorkspacePanel} />
             </>
           )}
 

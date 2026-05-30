@@ -1,5 +1,5 @@
 /**
- * GasterOpenAIOAuthService — 桌面端自管 OpenAI OAuth token
+ * HahaOpenAIOAuthService — 桌面端自管 OpenAI OAuth token
  *
  * 为什么存在: macOS Keychain ACL 在 .app 被打上 quarantine 属性后
  * 对无 UI sidecar 静默拒绝,导致 CLI 读不到 OAuth token → 403。
@@ -57,7 +57,7 @@ type OpenAIRefreshFn = (
 
 const SESSION_TTL_MS = 5 * 60 * 1000
 
-export class GasterOpenAIOAuthService {
+export class HahaOpenAIOAuthService {
   private sessions = new Map<string, OpenAIOAuthSession>()
   private refreshFn: OpenAIRefreshFn = refreshOpenAITokens
 
@@ -204,7 +204,7 @@ export class GasterOpenAIOAuthService {
       return updated
     } catch (err) {
       console.error(
-        '[GasterOpenAIOAuthService] token refresh failed:',
+        '[HahaOpenAIOAuthService] token refresh failed:',
         err instanceof Error ? err.message : err,
       )
       return null
@@ -217,4 +217,4 @@ export class GasterOpenAIOAuthService {
   }
 }
 
-export const gasterOpenAIOAuthService = new GasterOpenAIOAuthService()
+export const hahaOpenAIOAuthService = new HahaOpenAIOAuthService()

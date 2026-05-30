@@ -28,7 +28,7 @@ export type ParsedGoalCommand =
   | { type: 'set'; objective: string }
 
 const GOAL_HOOK_MARKER = '<gaster-code-goal-hook>'
-const LEGACY_GOAL_HOOK_MARKER = '<gaster-code-legacy-goal-hook>'
+const LEGACY_GOAL_HOOK_MARKER = '<cc-haha-goal-hook>'
 const GOAL_HOOK_MARKERS = [GOAL_HOOK_MARKER, LEGACY_GOAL_HOOK_MARKER]
 const GOAL_HOOK_TIMEOUT_SECONDS = 45
 const RESERVED_GOAL_ARGS = new Set(['status', 'pause', 'resume', 'complete'])

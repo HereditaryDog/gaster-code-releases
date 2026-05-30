@@ -63,7 +63,7 @@ describe('ensureDesktopCliLauncherInstalled', () => {
   })
 
   unixOnly('copies the bundled sidecar into the user bin dir and configures PATH', async () => {
-    const sourcePath = join(tempSourceDir, 'gaster-sidecar')
+    const sourcePath = join(tempSourceDir, 'claude-sidecar')
     await writeFile(sourcePath, '#!/bin/sh\necho desktop-sidecar\n', 'utf8')
     await chmod(sourcePath, 0o755)
     process.env.CLAUDE_CLI_PATH = sourcePath
@@ -84,6 +84,7 @@ describe('ensureDesktopCliLauncherInstalled', () => {
     const shellConfig = await readFile(shellConfigPath, 'utf8')
     expect(shellConfig).toContain('# >>> Gaster Code PATH >>>')
     expect(shellConfig).toContain('export PATH="$HOME/.local/bin:$PATH"')
+    expect(shellConfig).not.toContain('Claude Code Haha PATH')
   })
 
   it('reports unsupported status when the current launcher is not a bundled sidecar', async () => {

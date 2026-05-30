@@ -67,7 +67,7 @@ describe('ProjectFilter', () => {
           realPath: '/Users/demo/workspace/myself_code/OpenCutSkill',
           projectName: 'OpenCutSkill',
           isGit: true,
-          repoName: 'HereditaryDog/GasterCodeSkill',
+          repoName: 'NanmiCoder/OpenCutSkill',
           branch: 'main',
           modifiedAt: '2026-04-20T09:00:00.000Z',
           sessionCount: 2,
@@ -82,7 +82,7 @@ describe('ProjectFilter', () => {
     await waitFor(() => {
       expect(screen.getByText('HereditaryDog/gaster-code')).toBeInTheDocument()
       expect(screen.getByText('/Users/demo/workspace/myself_code/gaster-code')).toBeInTheDocument()
-      expect(screen.getByText('HereditaryDog/GasterCodeSkill')).toBeInTheDocument()
+      expect(screen.getByText('NanmiCoder/OpenCutSkill')).toBeInTheDocument()
     })
 
     fireEvent.click(screen.getByRole('button', { name: /HereditaryDog\/gaster-code/i }))

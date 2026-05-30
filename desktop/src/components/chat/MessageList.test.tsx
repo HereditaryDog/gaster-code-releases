@@ -6,8 +6,7 @@ import { sessionsApi } from '../../api/sessions'
 import { useChatStore } from '../../stores/chatStore'
 import { useWorkspaceChatContextStore } from '../../stores/workspaceChatContextStore'
 import { useSettingsStore } from '../../stores/settingsStore'
-import { useSessionStore } from '../../stores/sessionStore'
-import { useTabStore } from '../../stores/tabStore'
+import { SETTINGS_TAB_ID, useTabStore } from '../../stores/tabStore'
 import { useUIStore } from '../../stores/uiStore'
 import type { UIMessage } from '../../types/chat'
 import type { PerSessionState } from '../../stores/chatStore'
@@ -37,7 +36,6 @@ function makeSessionState(overrides: Partial<PerSessionState> = {}): PerSessionS
     tokenUsage: { input_tokens: 0, output_tokens: 0 },
     elapsedSeconds: 0,
     statusVerb: '',
-    apiRetry: null,
     slashCommands: [],
     agentTaskNotifications: {},
     elapsedTimer: null,
@@ -103,11 +101,9 @@ async function selectMessageText(element: Element, text: string) {
 describe('MessageList nested tool calls', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
-    vi.unstubAllGlobals()
     useSettingsStore.setState({ locale: 'en' })
-    useUIStore.setState({ pendingSettingsTab: null })
     useTabStore.setState({ activeTabId: ACTIVE_TAB, tabs: [{ sessionId: ACTIVE_TAB, title: 'Test', type: 'session' as const, status: 'idle' }] })
-    useSessionStore.setState({ sessions: [], activeSessionId: null, isLoading: false, error: null })
+    useUIStore.setState({ pendingSettingsTab: null })
     useChatStore.setState({ sessions: { [ACTIVE_TAB]: makeSessionState() } })
     useWorkspaceChatContextStore.setState(useWorkspaceChatContextStore.getInitialState(), true)
     vi.spyOn(sessionsApi, 'getTurnCheckpoints').mockImplementation(
@@ -123,7 +119,7 @@ describe('MessageList nested tool calls', () => {
     })
   })
 
-  it('windows long transcripts instead of mounting every historical message at once', () => {
+  it('keeps full long transcripts mounted so variable-height messages cannot leave spacer gaps', () => {
     useChatStore.setState({
       sessions: {
         [ACTIVE_TAB]: makeSessionState({
@@ -147,231 +143,20 @@ describe('MessageList nested tool calls', () => {
 
     const { container } = render(<MessageList />)
 
+    expect(screen.getByText('assistant transcript line 0')).toBeTruthy()
     expect(screen.getByText('assistant transcript line 219')).toBeTruthy()
-    expect(screen.queryByText('assistant transcript line 0')).toBeNull()
-    expect(container.querySelectorAll('[data-message-shell="assistant"]').length).toBeLessThan(220)
-    expect(container.querySelector('[data-virtual-message-item]')).not.toBeNull()
-    expect(container.querySelector('[data-virtual-spacer="top"]')).not.toBeNull()
-  })
-
-  it('keeps small transcripts fully mounted without deferred browser painting', () => {
-    useChatStore.setState({
-      sessions: {
-        [ACTIVE_TAB]: makeSessionState({
-          messages: [
-            {
-              id: 'assistant-1',
-              type: 'assistant_text',
-              content: 'first assistant reply',
-              timestamp: 1,
-            },
-            {
-              id: 'assistant-2',
-              type: 'assistant_text',
-              content: 'second assistant reply',
-              timestamp: 2,
-            },
-          ],
-        }),
-      },
-    })
-
-    const { container } = render(<MessageList />)
-    const renderItems = container.querySelectorAll('.chat-render-item')
-
-    expect(renderItems).toHaveLength(2)
-    for (const item of renderItems) {
-      expect(item.className).not.toContain('content-visibility')
-      expect(item.className).not.toContain('contain-intrinsic-size')
-    }
+    expect(container.querySelectorAll('[data-message-shell="assistant"]').length).toBe(220)
     expect(container.querySelector('[data-virtual-message-item]')).toBeNull()
   })
 
-  it('virtualizes short message lists when their content is very large', () => {
-    useChatStore.setState({
-      sessions: {
-        [ACTIVE_TAB]: makeSessionState({
-          messages: [
-            {
-              id: 'user-huge',
-              type: 'user_text',
-              content: '超长设计内容 '.repeat(24_000),
-              timestamp: 1,
-            },
-            {
-              id: 'assistant-tail',
-              type: 'assistant_text',
-              content: 'latest assistant reply',
-              timestamp: 2,
-            },
-          ],
-        }),
-      },
-    })
-
-    const { container } = render(<MessageList />)
-
-    expect(container.querySelector('[data-virtual-message-item]')).not.toBeNull()
-    expect(screen.getByText('latest assistant reply')).toBeTruthy()
-  })
-
-  it('filters duplicate unresolved AskUserQuestion cards while a matching permission is pending', () => {
-    const messages: UIMessage[] = [
-      {
-        id: 'stale-ask',
-        type: 'tool_use',
-        toolName: 'AskUserQuestion',
-        toolUseId: 'stale-tool',
-        input: {
-          questions: [
-            {
-              question: 'Restore this context?',
-              options: [{ label: 'No' }, { label: 'Yes' }],
-            },
-          ],
-        },
-        timestamp: 1,
-      },
-      {
-        id: 'active-ask',
-        type: 'tool_use',
-        toolName: 'AskUserQuestion',
-        toolUseId: 'active-tool',
-        input: {
-          questions: [
-            {
-              question: 'Restore this context?',
-              options: [{ label: 'No' }, { label: 'Yes' }],
-            },
-          ],
-        },
-        timestamp: 2,
-      },
-    ]
-
-    const { renderItems } = buildRenderModel(messages, 'active-tool')
-
-    expect(renderItems).toHaveLength(1)
-    expect(renderItems[0]).toMatchObject({
-      kind: 'message',
-      message: {
-        type: 'tool_use',
-        toolName: 'AskUserQuestion',
-        toolUseId: 'active-tool',
-      },
-    })
-  })
-
-  it('keeps resolved AskUserQuestion history visible when filtering active duplicates', () => {
-    const messages: UIMessage[] = [
-      {
-        id: 'answered-ask',
-        type: 'tool_use',
-        toolName: 'AskUserQuestion',
-        toolUseId: 'answered-tool',
-        input: {
-          questions: [
-            {
-              question: 'Already answered?',
-              options: [{ label: 'No' }, { label: 'Yes' }],
-            },
-          ],
-        },
-        timestamp: 1,
-      },
-      {
-        id: 'answered-result',
-        type: 'tool_result',
-        toolUseId: 'answered-tool',
-        content: { answers: { 'Already answered?': 'Yes' } },
-        isError: false,
-        timestamp: 2,
-      },
-      {
-        id: 'active-ask',
-        type: 'tool_use',
-        toolName: 'AskUserQuestion',
-        toolUseId: 'active-tool',
-        input: {
-          questions: [
-            {
-              question: 'Restore this context?',
-              options: [{ label: 'No' }, { label: 'Yes' }],
-            },
-          ],
-        },
-        timestamp: 3,
-      },
-    ]
-
-    const { renderItems } = buildRenderModel(messages, 'active-tool')
-
-    expect(renderItems).toHaveLength(2)
-    expect(renderItems.map((item) => item.kind === 'message' && item.message.type === 'tool_use'
-      ? item.message.toolUseId
-      : null,
-    )).toEqual(['answered-tool', 'active-tool'])
-  })
-
-  it('keeps only the latest unresolved AskUserQuestion when no pending permission is active', () => {
-    const messages: UIMessage[] = [
-      {
-        id: 'first-ask',
-        type: 'tool_use',
-        toolName: 'AskUserQuestion',
-        toolUseId: 'first-tool',
-        input: {
-          questions: [
-            {
-              question: 'First question?',
-              options: [{ label: 'A' }, { label: 'B' }],
-            },
-          ],
-        },
-        timestamp: 1,
-      },
-      {
-        id: 'second-ask',
-        type: 'tool_use',
-        toolName: 'AskUserQuestion',
-        toolUseId: 'second-tool',
-        input: {
-          questions: [
-            {
-              question: 'Second question?',
-              options: [{ label: 'A' }, { label: 'B' }],
-            },
-          ],
-        },
-        timestamp: 2,
-      },
-    ]
-
-    const { renderItems } = buildRenderModel(messages, null)
-
-    expect(renderItems).toHaveLength(1)
-    expect(renderItems[0]).toMatchObject({
-      kind: 'message',
-      message: {
-        type: 'tool_use',
-        toolName: 'AskUserQuestion',
-        toolUseId: 'second-tool',
-      },
-    })
-  })
-
-  it('renders goal events as visible status cards', () => {
+  it('adds selected user message text to the chat context', async () => {
     useChatStore.setState({
       sessions: {
         [ACTIVE_TAB]: makeSessionState({
           messages: [{
-            id: 'goal-1',
-            type: 'goal_event',
-            action: 'created',
-            status: 'active',
-            objective: 'ship the smoke test',
-            budget: '0 / 2,000 tokens',
-            continuations: '0',
+            id: 'user-1',
+            type: 'user_text',
+            content: 'Please inspect the workspace selection behavior.',
             timestamp: 1,
           }],
         }),
@@ -380,23 +165,36 @@ describe('MessageList nested tool calls', () => {
 
     render(<MessageList />)
 
-    expect(screen.getByText('Goal set')).toBeTruthy()
-    expect(screen.getByText('Objective: ship the smoke test')).toBeTruthy()
-    expect(screen.getByText('Status: active')).toBeTruthy()
-    expect(screen.getByText('Budget: 0 / 2,000 tokens')).toBeTruthy()
+    const userText = screen.getByText('Please inspect the workspace selection behavior.')
+    await selectMessageText(userText, 'workspace selection behavior')
+    const floatingAddButton = screen.getByRole('button', { name: 'Add to chat' })
+
+    expect(floatingAddButton.style.left).toBe('141px')
+    expect(floatingAddButton.style.top).toBe('26px')
+
+    fireEvent.click(floatingAddButton)
+
+    expect(useWorkspaceChatContextStore.getState().referencesBySession[ACTIVE_TAB]).toMatchObject([
+      {
+        kind: 'chat-selection',
+        path: 'chat://user/user-1',
+        name: 'User message',
+        messageId: 'user-1',
+        sourceRole: 'user',
+        quote: 'workspace selection behavior',
+      },
+    ])
+    expect(window.getSelection()?.toString()).toBe('')
   })
 
-  it('renders replacement goal events distinctly', () => {
+  it('dismisses the selected-message action when clicking outside the popover', async () => {
     useChatStore.setState({
       sessions: {
         [ACTIVE_TAB]: makeSessionState({
           messages: [{
-            id: 'goal-replaced',
-            type: 'goal_event',
-            action: 'replaced',
-            status: 'active',
-            objective: 'ship the replacement target',
-            budget: '0 / unlimited tokens',
+            id: 'assistant-1',
+            type: 'assistant_text',
+            content: 'Clicking outside should clear the selected reply action.',
             timestamp: 1,
           }],
         }),
@@ -405,285 +203,17 @@ describe('MessageList nested tool calls', () => {
 
     render(<MessageList />)
 
-    expect(screen.getByText('Goal set')).toBeTruthy()
-    expect(screen.getByText('Objective: ship the replacement target')).toBeTruthy()
-    expect(screen.getByText('Budget: 0 / unlimited tokens')).toBeTruthy()
-  })
+    const assistantText = screen.getByText(/Clicking outside should clear/)
+    await selectMessageText(assistantText, 'selected reply')
+    expect(screen.getByRole('button', { name: 'Add to chat' })).toBeTruthy()
 
-  it('renders non-agent background progress inline in the transcript', () => {
-    useChatStore.setState({
-      sessions: {
-        [ACTIVE_TAB]: makeSessionState({
-          messages: [
-            {
-              id: 'user-1',
-              type: 'user_text',
-              content: 'run review',
-              timestamp: 1,
-            },
-            {
-              id: 'background-task-shell-1',
-              type: 'background_task',
-              timestamp: 2,
-              task: {
-                taskId: 'shell-task-1',
-                toolUseId: 'shell-tool-1',
-                status: 'running',
-                taskType: 'local_bash',
-                summary: 'Running Playwright checks',
-                usage: {
-                  totalTokens: 1200,
-                  toolUses: 4,
-                  durationMs: 45000,
-                },
-                startedAt: 2,
-                updatedAt: 2,
-              },
-            },
-            {
-              id: 'assistant-1',
-              type: 'assistant_text',
-              content: 'continuing',
-              timestamp: 3,
-            },
-          ],
-        }),
-      },
-    })
-
-    render(<MessageList />)
-
-    const card = screen.getByTestId('background-task-event-card')
-    expect(card.textContent).toContain('Background command')
-    expect(card.textContent).toContain('running')
-    expect(card.textContent).toContain('Running Playwright checks')
-    expect(card.textContent).toContain('1,200 tokens')
-    expect(card.textContent).toContain('45s')
-  })
-
-  it('renders stopped non-agent background tasks as neutral transcript events', () => {
-    useChatStore.setState({
-      sessions: {
-        [ACTIVE_TAB]: makeSessionState({
-          messages: [{
-            id: 'background-task-shell-stopped',
-            type: 'background_task',
-            timestamp: 2,
-            task: {
-              taskId: 'shell-task-stopped',
-              toolUseId: 'shell-tool-stopped',
-              status: 'stopped',
-              taskType: 'local_bash',
-              summary: 'Command "bun test" was stopped',
-              startedAt: 1,
-              updatedAt: 2,
-            },
-          }],
-        }),
-      },
-    })
-
-    render(<MessageList />)
-
-    const card = screen.getByTestId('background-task-event-card')
-    expect(card.getAttribute('data-status')).toBe('stopped')
-    expect(card.textContent).toContain('stopped')
-    expect(card.querySelector('.text-\\[var\\(--color-error\\)\\]')).toBeNull()
-  })
-
-  it('uses user-facing labels for workflow and unknown background tasks', () => {
-    useChatStore.setState({
-      sessions: {
-        [ACTIVE_TAB]: makeSessionState({
-          messages: [
-            {
-              id: 'background-task-workflow',
-              type: 'background_task',
-              timestamp: 2,
-              task: {
-                taskId: 'workflow-task',
-                status: 'running',
-                taskType: 'local_workflow',
-                summary: 'Running release checklist',
-                startedAt: 1,
-                updatedAt: 2,
-              },
-            },
-            {
-              id: 'background-task-unknown',
-              type: 'background_task',
-              timestamp: 3,
-              task: {
-                taskId: 'unknown-task',
-                status: 'completed',
-                summary: 'Finished background work',
-                startedAt: 1,
-                updatedAt: 3,
-              },
-            },
-          ],
-        }),
-      },
-    })
-
-    render(<MessageList />)
-
-    const cards = screen.getAllByTestId('background-task-event-card')
-    expect(cards).toHaveLength(2)
-    expect(cards[0]?.textContent).toContain('Background workflow')
-    expect(cards[1]?.textContent).toContain('Background task')
-  })
-
-  it('does not render agent background task events as separate transcript cards', () => {
-    useChatStore.setState({
-      sessions: {
-        [ACTIVE_TAB]: makeSessionState({
-          messages: [{
-            id: 'background-task-agent-hidden',
-            type: 'background_task',
-            timestamp: 2,
-            task: {
-              taskId: 'agent-task-hidden',
-              toolUseId: 'agent-tool-hidden',
-              status: 'running',
-              taskType: 'local_agent',
-              summary: 'Running Read',
-              startedAt: 1,
-              updatedAt: 2,
-            },
-          }],
-        }),
-      },
-    })
-
-    render(<MessageList />)
-
-    expect(screen.queryByTestId('background-task-event-card')).toBeNull()
-    expect(screen.queryByText('local_agent')).toBeNull()
-  })
-
-  it('renders the historical window when scrolling away from latest', async () => {
-    useChatStore.setState({
-      sessions: {
-        [ACTIVE_TAB]: makeSessionState({
-          messages: Array.from({ length: 220 }, (_, index) => ({
-            id: `assistant-${index}`,
-            type: 'assistant_text',
-            content: `assistant transcript line ${index}`,
-            timestamp: index,
-          })),
-        }),
-      },
-    })
-
-    const { container } = render(<MessageList />)
-    const scrollArea = container.querySelector('.chat-scroll-area') as HTMLElement
-    Object.defineProperty(scrollArea, 'clientHeight', { configurable: true, value: 500 })
-    Object.defineProperty(scrollArea, 'scrollHeight', { configurable: true, value: 220 * 112 })
-    await waitForProgrammaticScrollReset()
-
-    scrollArea.scrollTop = 0
     await act(async () => {
-      fireEvent.scroll(scrollArea)
+      fireEvent.pointerDown(document.body)
+      await Promise.resolve()
     })
 
-    expect(screen.getByText('assistant transcript line 0')).toBeTruthy()
-    expect(screen.queryByText('assistant transcript line 219')).toBeNull()
-    expect(container.querySelectorAll('[data-message-shell="assistant"]').length).toBeLessThan(220)
-  })
-
-  it('keeps tool-call groups reachable while scrolling virtualized history', async () => {
-    useChatStore.setState({
-      sessions: {
-        [ACTIVE_TAB]: makeSessionState({
-          messages: [
-            {
-              id: 'tool-read',
-              type: 'tool_use',
-              toolName: 'Read',
-              toolUseId: 'read-1',
-              input: { file_path: '/tmp/example.ts' },
-              timestamp: 0,
-            },
-            {
-              id: 'tool-read-result',
-              type: 'tool_result',
-              toolUseId: 'read-1',
-              content: 'read result content',
-              isError: false,
-              timestamp: 1,
-            },
-            ...Array.from({ length: 220 }, (_, index) => ({
-              id: `assistant-${index}`,
-              type: 'assistant_text' as const,
-              content: `assistant transcript line ${index}`,
-              timestamp: index + 2,
-            })),
-          ],
-        }),
-      },
-    })
-
-    const { container } = render(<MessageList />)
-    const scrollArea = container.querySelector('.chat-scroll-area') as HTMLElement
-    Object.defineProperty(scrollArea, 'clientHeight', { configurable: true, value: 500 })
-    Object.defineProperty(scrollArea, 'scrollHeight', { configurable: true, value: 222 * 112 })
-    await waitForProgrammaticScrollReset()
-
-    expect(screen.queryByText('Read')).toBeNull()
-    expect(screen.getByText('assistant transcript line 219')).toBeTruthy()
-
-    scrollArea.scrollTop = 0
-    await act(async () => {
-      fireEvent.scroll(scrollArea)
-    })
-
-    expect(screen.getByText('Read')).toBeTruthy()
-    expect(screen.queryByText('assistant transcript line 219')).toBeNull()
-    expect(container.querySelector('[data-virtual-message-item]')).not.toBeNull()
-  })
-
-  it('splits large virtualization spacers into content-visibility chunks', async () => {
-    useChatStore.setState({
-      sessions: {
-        [ACTIVE_TAB]: makeSessionState({
-          messages: Array.from({ length: 240 }, (_, index) => ({
-            id: `assistant-${index}`,
-            type: 'assistant_text',
-            content: `assistant transcript line ${index}`,
-            timestamp: index,
-          })),
-        }),
-      },
-    })
-
-    const { container } = render(<MessageList />)
-    const scrollArea = container.querySelector('.chat-scroll-area') as HTMLElement
-    Object.defineProperty(scrollArea, 'clientHeight', { configurable: true, value: 500 })
-    Object.defineProperty(scrollArea, 'scrollHeight', { configurable: true, value: 240 * 200 })
-    await waitForProgrammaticScrollReset()
-
-    // Scroll to middle so both top and bottom spacers are present
-    scrollArea.scrollTop = 20_000
-    await act(async () => {
-      fireEvent.scroll(scrollArea)
-    })
-
-    const topChunks = container.querySelectorAll('[data-virtual-spacer-chunk="top"]')
-    const bottomChunks = container.querySelectorAll('[data-virtual-spacer-chunk="bottom"]')
-    expect(topChunks.length).toBeGreaterThan(1)
-    expect(bottomChunks.length).toBeGreaterThan(1)
-
-    const firstTopChunk = topChunks[0] as HTMLElement
-    expect(firstTopChunk.style.contentVisibility).toBe('auto')
-    expect(firstTopChunk.style.containIntrinsicSize).toMatch(/^0 \d+px$/)
-
-    // Items inside the active window must NOT carry content-visibility (this
-    // is the regression guard that previous content-visibility rollout hit).
-    const visibleItems = container.querySelectorAll('[data-virtual-message-item]')
-    for (const item of visibleItems) {
-      expect((item as HTMLElement).style.contentVisibility).toBe('')
-    }
+    expect(screen.queryByRole('button', { name: 'Add to chat' })).toBeNull()
+    expect(window.getSelection()?.toString()).toBe('')
   })
 
   it('renders sub-agent tool calls inline beneath the parent agent tool call', () => {
@@ -727,82 +257,6 @@ describe('MessageList nested tool calls', () => {
     expect(screen.getAllByText('Running').length).toBeGreaterThan(0)
     expect(screen.getByText(/Read .*example\.ts.*done/i)).toBeTruthy()
     expect(container.textContent).toContain('Agent')
-  })
-
-  it('shows a dedicated compacting status indicator', () => {
-    useChatStore.setState({
-      sessions: {
-        [ACTIVE_TAB]: makeSessionState({
-          chatState: 'compacting',
-          statusVerb: 'Compacting conversation',
-        }),
-      },
-    })
-
-    render(<MessageList />)
-
-    const divider = screen.getByTestId('compact-status-divider')
-    expect(within(divider).getByText('Compacting context')).toBeTruthy()
-    expect(screen.queryByText('Compacting context...')).toBeNull()
-  })
-
-  it('shows API retry metadata in the active turn indicator', () => {
-    useChatStore.setState({
-      sessions: {
-        [ACTIVE_TAB]: makeSessionState({
-          chatState: 'thinking',
-          apiRetry: {
-            attempt: 2,
-            maxRetries: 10,
-            retryDelayMs: 3000,
-            errorStatus: 503,
-            errorType: 'server_error',
-            receivedAt: Date.now(),
-          },
-        }),
-      },
-    })
-
-    render(<MessageList />)
-
-    expect(screen.getByTestId('api-retry-indicator')).toBeTruthy()
-    expect(screen.getByText('Request failed, retrying')).toBeTruthy()
-    expect(screen.getByText('retry 2/10')).toBeTruthy()
-    expect(screen.getByText('HTTP 503')).toBeTruthy()
-    expect(screen.getByText(/waiting \d+s/)).toBeTruthy()
-  })
-
-  it('renders compact completion as an expandable timeline divider', () => {
-    useChatStore.setState({
-      sessions: {
-        [ACTIVE_TAB]: makeSessionState({
-          messages: [
-            {
-              id: 'compact-1',
-              type: 'compact_summary',
-              title: 'Context compacted',
-              trigger: 'auto',
-              preTokens: 123000,
-              summary: 'Built the invoice import flow and verified retry behavior.',
-              timestamp: 1,
-            },
-          ],
-        }),
-      },
-    })
-
-    render(<MessageList />)
-
-    const divider = screen.getByTestId('compact-status-divider')
-    expect(within(divider).getByText('Context automatically compacted')).toBeTruthy()
-    expect(divider.textContent).not.toContain('123k tokens before compact')
-    expect(divider.textContent).not.toContain('Built the invoice import flow')
-
-    fireEvent.click(within(divider).getByRole('button'))
-
-    expect(divider.textContent).toContain('auto')
-    expect(divider.textContent).toContain('123k tokens before compact')
-    expect(divider.textContent).toContain('Built the invoice import flow and verified retry behavior.')
   })
 
   it('keeps mixed tool groups active while a nested child tool call is unresolved', () => {
@@ -900,159 +354,11 @@ describe('MessageList nested tool calls', () => {
     expect(container.querySelectorAll('[data-message-shell="assistant"]')).toHaveLength(0)
   })
 
-  it('renders saved memory events with an entrypoint to memory settings', () => {
-    useChatStore.setState({
-      sessions: {
-        [ACTIVE_TAB]: makeSessionState({
-          messages: [
-            {
-              id: 'memory-1',
-              type: 'memory_event',
-              event: 'saved',
-              files: [
-                { path: '/Users/test/.claude/projects/example/memory/preferences.md', action: 'saved' },
-              ],
-              timestamp: 1,
-            },
-          ],
-        }),
-      },
-    })
+  it('adds a soft bottom fade on the full chat scroll area', () => {
+    const { container } = render(<MessageList />)
 
-    render(<MessageList sessionId={ACTIVE_TAB} />)
-
-    expect(screen.getByText('Saved 1 memory file(s)')).toBeTruthy()
-    expect(screen.getByText('preferences.md')).toBeTruthy()
-
-    const openButton = screen.getByText('Open Memory').closest('button')
-    expect(openButton).toBeTruthy()
-    fireEvent.click(openButton!)
-
-    expect(useUIStore.getState().pendingSettingsTab).toBe('memory')
-    expect(useUIStore.getState().pendingMemoryPath).toBe('/Users/test/.claude/projects/example/memory/preferences.md')
-    expect(useTabStore.getState().activeTabId).toBe('__settings__')
-  })
-
-  it('promotes memory file writes from tool calls into a dedicated memory card', () => {
-    useChatStore.setState({
-      sessions: {
-        [ACTIVE_TAB]: makeSessionState({
-          messages: [
-            {
-              id: 'tool-write-memory',
-              type: 'tool_use',
-              toolName: 'Write',
-              toolUseId: 'write-memory',
-              input: {
-                file_path: '/Users/test/.claude/projects/example/memory/preferences.md',
-                content: '# Preferences\n',
-              },
-              timestamp: 1,
-            },
-            {
-              id: 'result-write-memory',
-              type: 'tool_result',
-              toolUseId: 'write-memory',
-              content: 'File written successfully',
-              isError: false,
-              timestamp: 2,
-            },
-          ],
-        }),
-      },
-    })
-
-    render(<MessageList sessionId={ACTIVE_TAB} />)
-
-    expect(screen.getByText('Saved 1 memory item(s)')).toBeTruthy()
-    expect(screen.getByText('preferences.md')).toBeTruthy()
-    expect(screen.getByText('Tool details')).toBeTruthy()
-    const memoryCardClassName = screen.getByTestId('memory-tool-activity-card').className
-    expect(memoryCardClassName).toContain('border-[var(--color-memory-border)]')
-    expect(memoryCardClassName).toContain('bg-[var(--color-memory-surface)]')
-  })
-
-  it('promotes memory file reads into collapsible memory references', () => {
-    useChatStore.setState({
-      sessions: {
-        [ACTIVE_TAB]: makeSessionState({
-          messages: [
-            {
-              id: 'tool-read-memory-1',
-              type: 'tool_use',
-              toolName: 'Read',
-              toolUseId: 'read-memory-1',
-              input: { file_path: '/Users/test/.claude/projects/example/memory/MEMORY.md' },
-              timestamp: 1,
-            },
-            {
-              id: 'result-read-memory-1',
-              type: 'tool_result',
-              toolUseId: 'read-memory-1',
-              content: '1 # Project Memory\n2\n3 billing ledger rules',
-              isError: false,
-              timestamp: 2,
-            },
-            {
-              id: 'tool-read-memory-2',
-              type: 'tool_use',
-              toolName: 'Read',
-              toolUseId: 'read-memory-2',
-              input: { file_path: '/Users/test/.claude/projects/example/memory/workflow.md' },
-              timestamp: 3,
-            },
-          ],
-        }),
-      },
-    })
-
-    render(<MessageList sessionId={ACTIVE_TAB} />)
-
-    expect(screen.getByText('2 memory reference(s)')).toBeTruthy()
-    fireEvent.click(screen.getByText('2 memory reference(s)'))
-    expect(screen.getByText('MEMORY.md')).toBeTruthy()
-    expect(screen.getByText('workflow.md')).toBeTruthy()
-  })
-
-  it('keeps non-memory tools visible when a tool group also touches memory files', () => {
-    useChatStore.setState({
-      sessions: {
-        [ACTIVE_TAB]: makeSessionState({
-          messages: [
-            {
-              id: 'tool-read-memory',
-              type: 'tool_use',
-              toolName: 'Read',
-              toolUseId: 'read-memory',
-              input: { file_path: '/Users/test/.claude/projects/example/memory/MEMORY.md' },
-              timestamp: 1,
-            },
-            {
-              id: 'tool-bash',
-              type: 'tool_use',
-              toolName: 'Bash',
-              toolUseId: 'bash-1',
-              input: { command: 'bun test' },
-              timestamp: 2,
-            },
-            {
-              id: 'result-bash',
-              type: 'tool_result',
-              toolUseId: 'bash-1',
-              content: 'ok',
-              isError: false,
-              timestamp: 3,
-            },
-          ],
-        }),
-      },
-    })
-
-    render(<MessageList sessionId={ACTIVE_TAB} />)
-
-    expect(screen.getByText('1 memory reference(s)')).toBeTruthy()
-    expect(screen.getByText('Bash')).toBeTruthy()
-    expect(screen.getByText('bun test')).toBeTruthy()
+    const scroller = container.querySelector('.overflow-y-auto')
+    expect(scroller?.className).toContain('chat-scroll-area--composer-fade')
   })
 
   it('keeps root tool runs split when nested child tool calls appear between them', () => {
@@ -1267,7 +573,7 @@ describe('MessageList nested tool calls', () => {
       },
     })
 
-    render(<MessageList />)
+    render(<MessageList sessionId={ACTIVE_TAB} />)
 
     expect(screen.getByText('Failed')).toBeTruthy()
     expect(screen.getByText('Explore agent unavailable in this session')).toBeTruthy()
@@ -1310,7 +616,7 @@ describe('MessageList nested tool calls', () => {
       },
     })
 
-    render(<MessageList />)
+    render(<MessageList sessionId={ACTIVE_TAB} />)
 
     expect(screen.getByText('Done')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'View result' })).toBeTruthy()
@@ -1458,7 +764,7 @@ describe('MessageList nested tool calls', () => {
     fireEvent.click(screen.getByRole('button', { name: 'View result' }))
 
     const dialog = screen.getByRole('dialog')
-    expect(within(dialog).getByRole('heading', { name: '审查安全风险' })).toBeTruthy()
+    expect(within(dialog).getByRole('heading', { name: '查看安全报告' })).toBeTruthy()
     expect(within(dialog).getByText('最终报告应该按 Markdown 展示。')).toBeTruthy()
     expect(within(dialog).queryByText(/raw structured JSON should not be shown/)).toBeNull()
   })
@@ -1576,150 +882,6 @@ describe('MessageList nested tool calls', () => {
     )
   })
 
-  it('adds selected user message text to the composer context', async () => {
-    useChatStore.setState({
-      sessions: {
-        [ACTIVE_TAB]: makeSessionState({
-          messages: [{
-            id: 'user-1',
-            type: 'user_text',
-            content: 'Please inspect the workspace selection behavior.',
-            timestamp: 1,
-          }],
-        }),
-      },
-    })
-
-    render(<MessageList />)
-
-    const userText = screen.getByText('Please inspect the workspace selection behavior.')
-    await selectMessageText(userText, 'workspace selection behavior')
-    const floatingAddButton = screen.getByRole('button', { name: 'Add to chat' })
-
-    expect(floatingAddButton.style.left).toBe('141px')
-    expect(floatingAddButton.style.top).toBe('26px')
-
-    fireEvent.click(floatingAddButton)
-
-    expect(useWorkspaceChatContextStore.getState().referencesBySession[ACTIVE_TAB]).toMatchObject([
-      {
-        kind: 'chat-selection',
-        path: 'chat://user/user-1',
-        name: 'User message',
-        messageId: 'user-1',
-        sourceRole: 'user',
-        quote: 'workspace selection behavior',
-      },
-    ])
-    expect(window.getSelection()?.toString()).toBe('')
-  })
-
-  it('adds selected assistant reply text to the composer context', async () => {
-    useChatStore.setState({
-      sessions: {
-        [ACTIVE_TAB]: makeSessionState({
-          messages: [{
-            id: 'assistant-1',
-            type: 'assistant_text',
-            content: 'First inspect the file tree. Then quote the selected lines.',
-            timestamp: 1,
-          }],
-        }),
-      },
-    })
-
-    render(<MessageList />)
-
-    const assistantText = screen.getByText(/First inspect the file tree/)
-    await selectMessageText(assistantText, 'quote the selected lines')
-    fireEvent.click(screen.getByRole('button', { name: 'Add to chat' }))
-
-    expect(useWorkspaceChatContextStore.getState().referencesBySession[ACTIVE_TAB]).toMatchObject([
-      {
-        kind: 'chat-selection',
-        path: 'chat://assistant/assistant-1',
-        name: 'Assistant message',
-        messageId: 'assistant-1',
-        sourceRole: 'assistant',
-        quote: 'quote the selected lines',
-      },
-    ])
-  })
-
-  it('dismisses the selected-message action when clicking outside the popover', async () => {
-    useChatStore.setState({
-      sessions: {
-        [ACTIVE_TAB]: makeSessionState({
-          messages: [{
-            id: 'assistant-1',
-            type: 'assistant_text',
-            content: 'Clicking outside should clear this selected reply.',
-            timestamp: 1,
-          }],
-        }),
-      },
-    })
-
-    render(<MessageList />)
-
-    const assistantText = screen.getByText(/Clicking outside should clear/)
-    await selectMessageText(assistantText, 'selected reply')
-    expect(screen.getByRole('button', { name: 'Add to chat' })).toBeTruthy()
-
-    await act(async () => {
-      fireEvent.pointerDown(document.body)
-      await Promise.resolve()
-    })
-
-    expect(screen.queryByRole('button', { name: 'Add to chat' })).toBeNull()
-    expect(window.getSelection()?.toString()).toBe('')
-  })
-
-  it('keeps only the latest selected-message action when selecting across messages', async () => {
-    useChatStore.setState({
-      sessions: {
-        [ACTIVE_TAB]: makeSessionState({
-          messages: [
-            {
-              id: 'assistant-1',
-              type: 'assistant_text',
-              content: 'First assistant reply can be selected.',
-              timestamp: 1,
-            },
-            {
-              id: 'assistant-2',
-              type: 'assistant_text',
-              content: 'Second assistant reply should replace it.',
-              timestamp: 2,
-            },
-          ],
-        }),
-      },
-    })
-
-    render(<MessageList />)
-
-    const firstText = screen.getByText(/First assistant reply/)
-    const secondText = screen.getByText(/Second assistant reply/)
-    await selectMessageText(firstText, 'First assistant reply')
-    expect(screen.getAllByRole('button', { name: 'Add to chat' })).toHaveLength(1)
-
-    await act(async () => {
-      fireEvent.pointerDown(secondText)
-      await Promise.resolve()
-    })
-    await selectMessageText(secondText, 'Second assistant reply')
-
-    expect(screen.getAllByRole('button', { name: 'Add to chat' })).toHaveLength(1)
-    fireEvent.click(screen.getByRole('button', { name: 'Add to chat' }))
-    expect(useWorkspaceChatContextStore.getState().referencesBySession[ACTIVE_TAB]).toMatchObject([
-      {
-        messageId: 'assistant-2',
-        quote: 'Second assistant reply',
-      },
-    ])
-  })
-
   it('does not force-scroll to the bottom while the user is reading history', async () => {
     const scrollIntoView = vi.fn()
     Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
@@ -1777,6 +939,7 @@ describe('MessageList nested tool calls', () => {
       expect(screen.getByText('streaming new token')).toBeTruthy()
     })
     expect(scrollIntoView).not.toHaveBeenCalled()
+    expect(scrollTop).toBe(120)
   })
 
   it('keeps auto-scrolling when new output arrives while already near the bottom', async () => {
@@ -1837,381 +1000,6 @@ describe('MessageList nested tool calls', () => {
     })
     expect(scrollIntoView).not.toHaveBeenCalled()
     expect(scrollTop).toBe(600)
-  })
-
-  it('keeps auto-scrolling without reading scroll geometry synchronously', async () => {
-    useChatStore.setState({
-      sessions: {
-        [ACTIVE_TAB]: makeSessionState({
-          chatState: 'streaming',
-          messages: [
-            {
-              id: 'user-1',
-              type: 'user_text',
-              content: 'latest prompt',
-              timestamp: 1,
-            },
-          ],
-          streamingText: 'streaming',
-        }),
-      },
-    })
-
-    const { container } = render(<MessageList />)
-    const scroller = container.querySelector('.overflow-y-auto') as HTMLDivElement
-    const readScrollHeight = vi.fn(() => {
-      throw new Error('scrollHeight should not be read while pinning to bottom')
-    })
-    const readClientHeight = vi.fn(() => {
-      throw new Error('clientHeight should not be read while pinning to bottom')
-    })
-    let scrollTop = 552
-    Object.defineProperty(scroller, 'scrollHeight', {
-      configurable: true,
-      get: readScrollHeight,
-    })
-    Object.defineProperty(scroller, 'clientHeight', {
-      configurable: true,
-      get: readClientHeight,
-    })
-    Object.defineProperty(scroller, 'scrollTop', {
-      configurable: true,
-      get: () => scrollTop,
-      set: (value) => {
-        scrollTop = value >= 1_000_000_000 ? 600 : value
-      },
-    })
-    Object.defineProperty(scroller, 'scrollTo', {
-      configurable: true,
-      value: vi.fn((options: ScrollToOptions | number, y?: number) => {
-        scroller.scrollTop = typeof options === 'number' ? y ?? 0 : options.top ?? 0
-      }),
-    })
-
-    await waitForProgrammaticScrollReset()
-    act(() => {
-      useChatStore.setState((state) => ({
-        sessions: {
-          ...state.sessions,
-          [ACTIVE_TAB]: {
-            ...state.sessions[ACTIVE_TAB]!,
-            streamingText: 'streaming next token',
-          },
-        },
-      }))
-    })
-
-    await waitFor(() => {
-      expect(screen.getByText('streaming next token')).toBeTruthy()
-    })
-    await waitForProgrammaticScrollReset()
-
-    expect(scrollTop).toBe(600)
-    expect(readScrollHeight).not.toHaveBeenCalled()
-    expect(readClientHeight).not.toHaveBeenCalled()
-  })
-
-  it('keeps mobile H5 streaming output pinned after the transcript height grows', async () => {
-    const scrollIntoView = vi.fn()
-    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
-      configurable: true,
-      value: scrollIntoView,
-    })
-
-    useChatStore.setState({
-      sessions: {
-        [ACTIVE_TAB]: makeSessionState({
-          chatState: 'streaming',
-          messages: [
-            {
-              id: 'user-1',
-              type: 'user_text',
-              content: '移动端长回复',
-              timestamp: 1,
-            },
-          ],
-          streamingText: 'streaming',
-        }),
-      },
-    })
-
-    const { container } = render(<MessageList />)
-    const scroller = container.querySelector('.overflow-y-auto') as HTMLDivElement
-    let scrollTop = 552
-    let scrollHeight = 1000
-    Object.defineProperty(scroller, 'scrollHeight', {
-      configurable: true,
-      get: () => scrollHeight,
-    })
-    Object.defineProperty(scroller, 'clientHeight', { configurable: true, value: 400 })
-    Object.defineProperty(scroller, 'scrollTop', {
-      configurable: true,
-      get: () => scrollTop,
-      set: (value) => {
-        scrollTop = value
-      },
-    })
-
-    await waitForProgrammaticScrollReset()
-    fireEvent.scroll(scroller)
-    expect(screen.queryByRole('button', { name: 'Latest' })).toBeNull()
-
-    scrollIntoView.mockClear()
-    scrollHeight = 1400
-    act(() => {
-      useChatStore.setState((state) => ({
-        sessions: {
-          ...state.sessions,
-          [ACTIVE_TAB]: {
-            ...state.sessions[ACTIVE_TAB]!,
-            streamingText: 'streaming next token after height change',
-          },
-        },
-      }))
-    })
-
-    await waitFor(() => {
-      expect(screen.getByText('streaming next token after height change')).toBeTruthy()
-    })
-    expect(scrollIntoView).not.toHaveBeenCalled()
-    expect(scrollTop).toBe(1000)
-
-    await waitForProgrammaticScrollReset()
-    fireEvent.scroll(scroller)
-
-    expect(screen.queryByRole('button', { name: 'Latest' })).toBeNull()
-  })
-
-  it('keeps H5 pinned when streaming content resizes after render', async () => {
-    const scrollIntoView = vi.fn()
-    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
-      configurable: true,
-      value: scrollIntoView,
-    })
-
-    let resizeCallback: ResizeObserverCallback | null = null
-    class TestResizeObserver {
-      observe = vi.fn()
-      unobserve = vi.fn()
-      disconnect = vi.fn()
-
-      constructor(callback: ResizeObserverCallback) {
-        resizeCallback = callback
-      }
-    }
-    vi.stubGlobal('ResizeObserver', TestResizeObserver)
-
-    useChatStore.setState({
-      sessions: {
-        [ACTIVE_TAB]: makeSessionState({
-          chatState: 'streaming',
-          messages: [
-            {
-              id: 'user-1',
-              type: 'user_text',
-              content: '移动端异步重排',
-              timestamp: 1,
-            },
-          ],
-          streamingText: 'streaming',
-        }),
-      },
-    })
-
-    const { container } = render(<MessageList />)
-    const scroller = container.querySelector('.overflow-y-auto') as HTMLDivElement
-    let scrollTop = 552
-    let scrollHeight = 1000
-    Object.defineProperty(scroller, 'scrollHeight', {
-      configurable: true,
-      get: () => scrollHeight,
-    })
-    Object.defineProperty(scroller, 'clientHeight', { configurable: true, value: 400 })
-    Object.defineProperty(scroller, 'scrollTop', {
-      configurable: true,
-      get: () => scrollTop,
-      set: (value) => {
-        scrollTop = value
-      },
-    })
-
-    await waitFor(() => {
-      expect(resizeCallback).not.toBeNull()
-    })
-    await waitForProgrammaticScrollReset()
-    fireEvent.scroll(scroller)
-    expect(screen.queryByRole('button', { name: 'Latest' })).toBeNull()
-
-    scrollIntoView.mockClear()
-    scrollHeight = 1600
-    act(() => {
-      resizeCallback?.([], {} as ResizeObserver)
-    })
-
-    expect(scrollIntoView).not.toHaveBeenCalled()
-    expect(scrollTop).toBe(1200)
-    expect(screen.queryByRole('button', { name: 'Latest' })).toBeNull()
-  })
-
-  it('does not pull a completed session back to the bottom when content resizes', async () => {
-    const scrollIntoView = vi.fn()
-    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
-      configurable: true,
-      value: scrollIntoView,
-    })
-
-    let resizeCallback: ResizeObserverCallback | null = null
-    class TestResizeObserver {
-      observe = vi.fn()
-      unobserve = vi.fn()
-      disconnect = vi.fn()
-
-      constructor(callback: ResizeObserverCallback) {
-        resizeCallback = callback
-      }
-    }
-    vi.stubGlobal('ResizeObserver', TestResizeObserver)
-
-    useChatStore.setState({
-      sessions: {
-        [ACTIVE_TAB]: makeSessionState({
-          chatState: 'idle',
-          messages: [
-            {
-              id: 'user-1',
-              type: 'user_text',
-              content: '生成一个 todo app',
-              timestamp: 1,
-            },
-            {
-              id: 'assistant-1',
-              type: 'assistant_text',
-              content: [
-                '已完成。',
-                '',
-                '```bash',
-                'cd /private/tmp/todo-app',
-                'npm run dev',
-                '```',
-              ].join('\n'),
-              timestamp: 2,
-            },
-          ],
-        }),
-      },
-    })
-
-    const { container } = render(<MessageList />)
-    const scroller = container.querySelector('.overflow-y-auto') as HTMLDivElement
-    let scrollTop = 180
-    let scrollHeight = 1400
-    Object.defineProperty(scroller, 'scrollHeight', {
-      configurable: true,
-      get: () => scrollHeight,
-    })
-    Object.defineProperty(scroller, 'clientHeight', { configurable: true, value: 400 })
-    Object.defineProperty(scroller, 'scrollTop', {
-      configurable: true,
-      get: () => scrollTop,
-      set: (value) => {
-        scrollTop = value
-      },
-    })
-
-    await waitFor(() => {
-      expect(resizeCallback).not.toBeNull()
-    })
-
-    scrollIntoView.mockClear()
-    scrollHeight = 1600
-    act(() => {
-      resizeCallback?.([], {} as ResizeObserver)
-    })
-
-    expect(scrollIntoView).not.toHaveBeenCalled()
-    expect(scrollTop).toBe(180)
-  })
-
-  it('does not pull a restored completed session back to the bottom from stale running state', async () => {
-    const scrollIntoView = vi.fn()
-    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
-      configurable: true,
-      value: scrollIntoView,
-    })
-
-    let resizeCallback: ResizeObserverCallback | null = null
-    class TestResizeObserver {
-      observe = vi.fn()
-      unobserve = vi.fn()
-      disconnect = vi.fn()
-
-      constructor(callback: ResizeObserverCallback) {
-        resizeCallback = callback
-      }
-    }
-    vi.stubGlobal('ResizeObserver', TestResizeObserver)
-
-    useChatStore.setState({
-      sessions: {
-        [ACTIVE_TAB]: makeSessionState({
-          chatState: 'thinking',
-          activeThinkingId: null,
-          messages: [
-            {
-              id: 'user-1',
-              type: 'user_text',
-              content: '复盘这个已完成会话',
-              timestamp: 1,
-            },
-            {
-              id: 'assistant-1',
-              type: 'assistant_text',
-              content: [
-                '这个会话已经完成。',
-                '',
-                '```tsx',
-                'export function TodoListView() {',
-                '  return <section>Done</section>',
-                '}',
-                '```',
-              ].join('\n'),
-              timestamp: 2,
-            },
-          ],
-          streamingText: '',
-        }),
-      },
-    })
-
-    const { container } = render(<MessageList />)
-    const scroller = container.querySelector('.overflow-y-auto') as HTMLDivElement
-    let scrollTop = 260
-    let scrollHeight = 1800
-    Object.defineProperty(scroller, 'scrollHeight', {
-      configurable: true,
-      get: () => scrollHeight,
-    })
-    Object.defineProperty(scroller, 'clientHeight', { configurable: true, value: 400 })
-    Object.defineProperty(scroller, 'scrollTop', {
-      configurable: true,
-      get: () => scrollTop,
-      set: (value) => {
-        scrollTop = value
-      },
-    })
-
-    await waitFor(() => {
-      expect(resizeCallback).not.toBeNull()
-    })
-
-    scrollIntoView.mockClear()
-    scrollHeight = 2100
-    act(() => {
-      resizeCallback?.([], {} as ResizeObserver)
-    })
-
-    expect(scrollIntoView).not.toHaveBeenCalled()
-    expect(scrollTop).toBe(260)
   })
 
   it('restores a session scroll position when switching back to a tab', async () => {
@@ -2325,6 +1113,7 @@ describe('MessageList nested tool calls', () => {
       writable: true,
     })
 
+    await waitForProgrammaticScrollReset()
     fireEvent.scroll(scroller)
     scrollIntoView.mockClear()
 
@@ -2334,9 +1123,8 @@ describe('MessageList nested tool calls', () => {
 
     await waitFor(() => {
       expect(screen.getByText('Fresh latest response')).toBeTruthy()
-      expect(scrollIntoView).not.toHaveBeenCalled()
+      expect(scroller.scrollTop).toBe(800)
     })
-    expect(scroller.scrollTop).toBe(800)
   })
 
   it('shows a latest button when reading history and resumes following after clicking it', async () => {
@@ -2402,173 +1190,6 @@ describe('MessageList nested tool calls', () => {
       expect(screen.getByText('streaming after jump')).toBeTruthy()
     })
     expect(scrollIntoView).not.toHaveBeenCalled()
-    expect(scrollTop).toBe(600)
-  })
-
-  it('jumps to the latest message when the user sends a new prompt from history', async () => {
-    const scrollIntoView = vi.fn()
-    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
-      configurable: true,
-      value: scrollIntoView,
-    })
-
-    useChatStore.setState({
-      sessions: {
-        [ACTIVE_TAB]: makeSessionState({
-          messages: [
-            {
-              id: 'user-1',
-              type: 'user_text',
-              content: '历史消息',
-              timestamp: 1,
-            },
-            {
-              id: 'assistant-1',
-              type: 'assistant_text',
-              content: '历史回复',
-              timestamp: 2,
-            },
-          ],
-        }),
-      },
-    })
-
-    const { container } = render(<MessageList />)
-    const scroller = container.querySelector('.overflow-y-auto') as HTMLDivElement
-    let scrollTop = 120
-    Object.defineProperty(scroller, 'scrollHeight', { configurable: true, value: 1000 })
-    Object.defineProperty(scroller, 'clientHeight', { configurable: true, value: 400 })
-    Object.defineProperty(scroller, 'scrollTop', {
-      configurable: true,
-      get: () => scrollTop,
-      set: (value) => {
-        scrollTop = value
-      },
-    })
-
-    scrollIntoView.mockClear()
-    await waitForProgrammaticScrollReset()
-    fireEvent.scroll(scroller)
-    expect(screen.getByRole('button', { name: 'Latest' })).toBeTruthy()
-
-    act(() => {
-      useChatStore.setState((state) => ({
-        sessions: {
-          ...state.sessions,
-          [ACTIVE_TAB]: {
-            ...state.sessions[ACTIVE_TAB]!,
-            chatState: 'thinking',
-            messages: [
-              ...state.sessions[ACTIVE_TAB]!.messages,
-              {
-                id: 'user-2',
-                type: 'user_text',
-                content: '新的问题',
-                timestamp: 3,
-              },
-            ],
-          },
-        },
-      }))
-    })
-
-    await waitFor(() => {
-      expect(screen.getByText('新的问题')).toBeTruthy()
-    })
-    expect(scrollIntoView).not.toHaveBeenCalled()
-    expect(scrollTop).toBe(600)
-    expect(screen.queryByRole('button', { name: 'Latest' })).toBeNull()
-  })
-
-  it('jumps to the latest message when a sent prompt lands before chat state changes', async () => {
-    const scrollIntoView = vi.fn()
-    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
-      configurable: true,
-      value: scrollIntoView,
-    })
-
-    useChatStore.setState({
-      sessions: {
-        [ACTIVE_TAB]: makeSessionState({
-          messages: [
-            {
-              id: 'user-1',
-              type: 'user_text',
-              content: '历史消息',
-              timestamp: 1,
-            },
-            {
-              id: 'assistant-1',
-              type: 'assistant_text',
-              content: '历史回复',
-              timestamp: 2,
-            },
-          ],
-        }),
-      },
-    })
-
-    const { container } = render(<MessageList />)
-    const scroller = container.querySelector('.overflow-y-auto') as HTMLDivElement
-    let scrollTop = 120
-    Object.defineProperty(scroller, 'scrollHeight', { configurable: true, value: 1000 })
-    Object.defineProperty(scroller, 'clientHeight', { configurable: true, value: 400 })
-    Object.defineProperty(scroller, 'scrollTop', {
-      configurable: true,
-      get: () => scrollTop,
-      set: (value) => {
-        scrollTop = value
-      },
-    })
-
-    scrollIntoView.mockClear()
-    await waitForProgrammaticScrollReset()
-    fireEvent.scroll(scroller)
-    expect(screen.getByRole('button', { name: 'Latest' })).toBeTruthy()
-
-    act(() => {
-      useChatStore.setState((state) => ({
-        sessions: {
-          ...state.sessions,
-          [ACTIVE_TAB]: {
-            ...state.sessions[ACTIVE_TAB]!,
-            chatState: 'idle',
-            messages: [
-              ...state.sessions[ACTIVE_TAB]!.messages,
-              {
-                id: 'user-2',
-                type: 'user_text',
-                content: '刚发送的问题',
-                timestamp: 3,
-              },
-            ],
-          },
-        },
-      }))
-    })
-
-    await waitFor(() => {
-      expect(screen.getByText('刚发送的问题')).toBeTruthy()
-    })
-    expect(scrollIntoView).not.toHaveBeenCalled()
-    expect(scrollTop).toBe(600)
-    expect(screen.queryByRole('button', { name: 'Latest' })).toBeNull()
-
-    act(() => {
-      useChatStore.setState((state) => ({
-        sessions: {
-          ...state.sessions,
-          [ACTIVE_TAB]: {
-            ...state.sessions[ACTIVE_TAB]!,
-            chatState: 'thinking',
-          },
-        },
-      }))
-    })
-
-    await waitFor(() => {
-      expect(screen.getByText('刚发送的问题')).toBeTruthy()
-    })
     expect(scrollTop).toBe(600)
   })
 
@@ -2691,114 +1312,6 @@ describe('MessageList nested tool calls', () => {
     expect(screen.queryByRole('button', { name: 'Rewind to here' })).toBeNull()
   })
 
-  it('branches from completed transcript-backed chat messages using the original transcript id', async () => {
-    const branchSession = vi.fn().mockResolvedValue({
-      sessionId: 'branched-session-1',
-      title: 'Branched session',
-      workDir: '/tmp/branched-session-1',
-    })
-    const connectToSession = vi.fn()
-    useSessionStore.setState({
-      sessions: [{
-        id: ACTIVE_TAB,
-        title: 'Source session',
-        createdAt: '2026-05-19T00:00:00.000Z',
-        modifiedAt: '2026-05-19T00:00:00.000Z',
-        messageCount: 2,
-        projectPath: '/tmp/source-project',
-        projectRoot: '/tmp/source-project',
-        workDir: '/tmp/source-project',
-        workDirExists: true,
-      }],
-      branchSession: branchSession as never,
-    })
-    useChatStore.setState({
-      connectToSession: connectToSession as never,
-      sessions: {
-        [ACTIVE_TAB]: makeSessionState({
-          messages: [
-            {
-              id: 'local-user-1',
-              transcriptMessageId: 'transcript-user-1',
-              type: 'user_text',
-              content: '从这里开始',
-              timestamp: 1,
-            },
-            {
-              id: 'local-assistant-1',
-              transcriptMessageId: 'transcript-assistant-1',
-              type: 'assistant_text',
-              content: '这是完成的答复。',
-              timestamp: 2,
-            },
-          ],
-        }),
-      },
-    })
-
-    render(<MessageList />)
-
-    const branchButtons = screen.getAllByRole('button', { name: 'Fork a new conversation' })
-    expect(branchButtons).toHaveLength(2)
-    expect(branchButtons[0]!.closest('[data-message-actions]')).toBe(
-      screen.getByRole('button', { name: 'Copy prompt' }).closest('[data-message-actions]')
-    )
-    expect(branchButtons[1]!.closest('[data-message-actions]')).toBe(
-      screen.getByRole('button', { name: 'Copy reply' }).closest('[data-message-actions]')
-    )
-    expect(branchButtons[1]?.getAttribute('title')).toBe('Fork a new conversation')
-
-    fireEvent.click(branchButtons[1]!)
-
-    await waitFor(() => {
-      expect(branchSession).toHaveBeenCalledWith(ACTIVE_TAB, 'transcript-assistant-1')
-    })
-    expect(connectToSession).toHaveBeenCalledWith('branched-session-1')
-    expect(useTabStore.getState().activeTabId).toBe('branched-session-1')
-    const tabs = useTabStore.getState().tabs
-    expect(tabs[tabs.length - 1]).toMatchObject({
-      sessionId: 'branched-session-1',
-      title: 'Branched session',
-      type: 'session',
-    })
-    const toasts = useUIStore.getState().toasts
-    expect(toasts[toasts.length - 1]).toMatchObject({
-      type: 'success',
-      message: 'Created forked conversation "Branched session".',
-    })
-  })
-
-  it('hides branch actions while the current session is still running', () => {
-    useChatStore.setState({
-      sessions: {
-        [ACTIVE_TAB]: makeSessionState({
-          chatState: 'streaming',
-          streamingText: 'partial',
-          messages: [
-            {
-              id: 'local-user-1',
-              transcriptMessageId: 'transcript-user-1',
-              type: 'user_text',
-              content: '从这里开始',
-              timestamp: 1,
-            },
-            {
-              id: 'local-assistant-1',
-              transcriptMessageId: 'transcript-assistant-1',
-              type: 'assistant_text',
-              content: '这是完成的答复。',
-              timestamp: 2,
-            },
-          ],
-        }),
-      },
-    })
-
-    render(<MessageList />)
-
-    expect(screen.queryByRole('button', { name: 'Fork a new conversation' })).toBeNull()
-  })
-
   it('keeps historical sessions readable when turn checkpoint payloads are missing', async () => {
     vi.spyOn(sessionsApi, 'getTurnCheckpoints').mockResolvedValue({} as never)
 
@@ -2831,6 +1344,75 @@ describe('MessageList nested tool calls', () => {
     })
     expect(screen.queryByText(/Cannot read properties/)).toBeNull()
     expect(screen.queryByLabelText('Turn changed files')).toBeNull()
+  })
+
+  it('reuses cached turn change cards when switching back to the same historical session', async () => {
+    const getTurnCheckpoints = vi.spyOn(sessionsApi, 'getTurnCheckpoints').mockResolvedValue({
+      checkpoints: [
+        {
+          target: {
+            targetUserMessageId: 'user-1',
+            userMessageIndex: 0,
+            userMessageCount: 1,
+          },
+          code: {
+            available: true,
+            filesChanged: ['src/App.tsx'],
+            insertions: 4,
+            deletions: 1,
+          },
+        },
+      ],
+    })
+
+    const makeHistoricalMessages = (suffix: string): UIMessage[] => [
+      {
+        id: `user-${suffix}`,
+        type: 'user_text',
+        content: `修改第 ${suffix} 个会话`,
+        timestamp: 1,
+      },
+      {
+        id: `assistant-${suffix}`,
+        type: 'assistant_text',
+        content: `第 ${suffix} 个会话已完成`,
+        timestamp: 2,
+      },
+    ]
+
+    useChatStore.setState({
+      sessions: {
+        'session-a': makeSessionState({ messages: makeHistoricalMessages('1') }),
+        'session-b': makeSessionState({ messages: makeHistoricalMessages('2') }),
+      },
+    })
+    useTabStore.setState({
+      activeTabId: 'session-a',
+      tabs: [
+        { sessionId: 'session-a', title: 'A', type: 'session' as const, status: 'idle' },
+        { sessionId: 'session-b', title: 'B', type: 'session' as const, status: 'idle' },
+      ],
+    })
+
+    const { rerender } = render(<MessageList />)
+    await waitFor(() => expect(getTurnCheckpoints).toHaveBeenCalledWith('session-a'))
+
+    await act(async () => {
+      useTabStore.setState({ activeTabId: 'session-b' })
+      rerender(<MessageList />)
+    })
+    await waitFor(() => expect(getTurnCheckpoints).toHaveBeenCalledWith('session-b'))
+
+    getTurnCheckpoints.mockClear()
+    await act(async () => {
+      useTabStore.setState({ activeTabId: 'session-a' })
+      rerender(<MessageList />)
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText('第 1 个会话已完成')).toBeTruthy()
+    })
+    expect(getTurnCheckpoints).not.toHaveBeenCalled()
   })
 
   it('renders multiple historical turn change cards across three turns', async () => {
@@ -3495,5 +2077,55 @@ describe('MessageList nested tool calls', () => {
         'CLI exited during startup (code 1): Claude Code on Windows requires git-bash (https://git-scm.com/downloads/win).',
       ),
     ).toBeTruthy()
+  })
+
+  it('shows a Chinese G-Master login recovery action for expired managed auth', () => {
+    useSettingsStore.setState({ locale: 'zh' })
+    useChatStore.setState({
+      sessions: {
+        [ACTIVE_TAB]: makeSessionState({
+          messages: [
+            {
+              id: 'error-auth',
+              type: 'error',
+              code: 'GMASTER_AUTH_EXPIRED',
+              message: 'authentication_failed: Not logged in · Please run /login',
+              timestamp: 1,
+            },
+          ],
+        }),
+      },
+    })
+
+    render(<MessageList sessionId={ACTIVE_TAB} />)
+
+    expect(screen.getByText('G-Master API 登录已失效，请重新登录后再试。')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: '重新登录 G-Master API' }))
+    expect(useUIStore.getState().pendingSettingsTab).toBe('account')
+    expect(useTabStore.getState().activeTabId).toBe(SETTINGS_TAB_ID)
+  })
+
+  it('shows a Chinese new-session action for missing historical sessions', () => {
+    useSettingsStore.setState({ locale: 'zh' })
+    useChatStore.setState({
+      sessions: {
+        [ACTIVE_TAB]: makeSessionState({
+          messages: [
+            {
+              id: 'error-session',
+              type: 'error',
+              code: 'CLI_SESSION_MISSING',
+              message: 'No conversation found with session ID: de658bd4-a7c0-4aea-9acc-e2fb0064b752',
+              timestamp: 1,
+            },
+          ],
+        }),
+      },
+    })
+
+    render(<MessageList />)
+
+    expect(screen.getByText('这个历史会话已无法恢复，请新建会话继续。')).toBeTruthy()
+    expect(screen.getByRole('button', { name: '新建会话' })).toBeTruthy()
   })
 })

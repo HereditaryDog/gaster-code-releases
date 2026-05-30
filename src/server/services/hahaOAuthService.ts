@@ -1,5 +1,5 @@
 /**
- * GasterOAuthService — 桌面端自管 Claude OAuth token
+ * HahaOAuthService — 桌面端自管 Claude OAuth token
  *
  * 为什么存在: macOS Keychain ACL 在 .app 被打上 quarantine 属性后
  * 对无 UI sidecar 静默拒绝,导致 CLI 读不到 OAuth token → 403。
@@ -59,7 +59,7 @@ type FetchProfileFn = (
 const SESSION_TTL_MS = 5 * 60 * 1000
 const OAUTH_CALLBACK_PATH = '/callback'
 
-export class GasterOAuthService {
+export class HahaOAuthService {
   private sessions = new Map<string, OAuthSession>()
   private refreshFn: RefreshFn = refreshOAuthToken
   private fetchProfileFn: FetchProfileFn = fetchProfileInfo
@@ -251,7 +251,7 @@ export class GasterOAuthService {
       return updated
     } catch (err) {
       console.error(
-        '[GasterOAuthService] token refresh failed:',
+        '[HahaOAuthService] token refresh failed:',
         err instanceof Error ? err.message : err,
       )
       return null
@@ -264,4 +264,4 @@ export class GasterOAuthService {
   }
 }
 
-export const gasterOAuthService = new GasterOAuthService()
+export const hahaOAuthService = new HahaOAuthService()

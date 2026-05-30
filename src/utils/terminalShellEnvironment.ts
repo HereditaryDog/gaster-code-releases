@@ -4,7 +4,7 @@ import { access } from 'node:fs/promises'
 import path from 'node:path'
 import { isEnvTruthy } from './envUtils.js'
 import { logForDebugging } from './debug.js'
-import { GASTER_ENV } from './gasterEnv.js'
+import { GASTER_ENV, LEGACY_GASTER_ENV } from './gasterEnv.js'
 
 const TERMINAL_SHELL_ENV_TIMEOUT_MS = 5000
 const TERMINAL_ENV_MARKER = '__GASTER_CODE_TERMINAL_ENV_START__'
@@ -105,7 +105,8 @@ async function captureTerminalShellEnvironment(
 ): Promise<Record<string, string> | null> {
   if (
     process.platform === 'win32' ||
-    isEnvTruthy(baseEnv[GASTER_ENV.TERMINAL_SHELL_ENV_DISABLED])
+    isEnvTruthy(baseEnv[GASTER_ENV.TERMINAL_SHELL_ENV_DISABLED]) ||
+    isEnvTruthy(baseEnv[LEGACY_GASTER_ENV.TERMINAL_SHELL_ENV_DISABLED])
   ) {
     return null
   }

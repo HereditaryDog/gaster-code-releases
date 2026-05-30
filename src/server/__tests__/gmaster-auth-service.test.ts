@@ -79,9 +79,18 @@ async function setup() {
               amount_remaining: 880000,
               unlimited: false,
               upgrade_group: 'weekly',
+              cancel_at_period_end: true,
+              resumable: true,
             }],
           },
           quota: { remaining: 123, used: 10, unlimited: false },
+          wallet: { balance: 2500, currency: 'credits', low_balance: false },
+          entitlements: {
+            can_use_builtin_provider: true,
+            enabled_models: ['gpt-5.4'],
+            enabled_features: ['chat'],
+            expires_at: 1772592000,
+          },
           can_use_builtin_provider: true,
           billing_url: 'https://gmapi.example.test/user/billing',
           account_url: 'https://gmapi.example.test/user',
@@ -267,11 +276,153 @@ describe('GMasterAuthService', () => {
         amountRemaining: 880000,
         unlimited: false,
         upgradeGroup: 'weekly',
+        cancelAtPeriodEnd: true,
+        resumable: true,
       }],
+    })
+    expect(me.wallet).toEqual({ balance: 2500, currency: 'credits', lowBalance: false })
+    expect(me.entitlements).toEqual({
+      canUseBuiltinProvider: true,
+      enabledModels: ['gpt-5.4'],
+      enabledFeatures: ['chat'],
+      expiresAt: 1772592000,
     })
     const meCall = fetchCalls.find((call) => call.url.endsWith('/api/gaster-code/me'))
     expect(meCall?.init?.headers).toEqual({
       Authorization: 'Bearer desktop-access',
+    })
+  })
+
+  test('billing helpers proxy authenticated requests and normalize responses', async () => {
+    await service.saveTokens({
+      accessToken: 'desktop-access',
+      refreshToken: 'desktop-refresh',
+      expiresAt: Date.now() + 3600_000,
+      user: { id: 7, username: 'alice', displayName: 'Alice', group: 'default' },
+    })
+    service.setFetchFn(async (url, init) => {
+      fetchCalls.push({ url: String(url), init })
+      if (String(url).endsWith('/api/gaster-code/billing/plans')) {
+        return Response.json({
+          success: true,
+          data: {
+            plans: [{
+              id: 'topup_10',
+              kind: 'topup',
+              name: '10M credits',
+              description: 'Top up 10M credits',
+              price: 1200,
+              currency: 'USD',
+              interval: 'one_time',
+              quota_amount: 10000000,
+              unlimited: false,
+              recommended: true,
+            }],
+          },
+        })
+      }
+      if (String(url).endsWith('/api/gaster-code/billing/checkout')) {
+        return Response.json({
+          success: true,
+          data: {
+            id: 'cs_123',
+            status: 'pending',
+            url: 'https://pay.example.test/cs_123',
+            kind: 'topup',
+            expires_at: 1770000300,
+          },
+        })
+      }
+      if (String(url).endsWith('/api/gaster-code/billing/checkout/cs_%2F123')) {
+        return Response.json({
+          success: true,
+          data: { id: 'cs_/123', status: 'paid', url: '', kind: 'topup', expires_at: null },
+        })
+      }
+      if (String(url).endsWith('/api/gaster-code/billing/transactions')) {
+        return Response.json({
+          success: true,
+          data: {
+            transactions: [{
+              id: 'txn_1',
+              kind: 'topup',
+              status: 'paid',
+              amount: 1200,
+              currency: 'USD',
+              created_at: 1770000000,
+              description: 'Top up',
+            }],
+          },
+        })
+      }
+      if (String(url).endsWith('/api/gaster-code/subscription/cancel')) {
+        return Response.json({
+          success: true,
+          data: { ok: true },
+        })
+      }
+      if (String(url).endsWith('/api/gaster-code/subscription/resume')) {
+        return Response.json({
+          success: true,
+          data: { ok: true },
+        })
+      }
+      return Response.json({ success: false, message: 'unhandled test URL' }, { status: 500 })
+    })
+
+    expect(await service.fetchBillingPlans()).toEqual({
+      plans: [{
+        id: 'topup_10',
+        kind: 'topup',
+        name: '10M credits',
+        description: 'Top up 10M credits',
+        price: 1200,
+        currency: 'USD',
+        interval: 'one_time',
+        quotaAmount: 10000000,
+        unlimited: false,
+        recommended: true,
+      }],
+    })
+    expect(await service.createCheckout({
+      kind: 'topup',
+      planId: 'topup_10',
+      returnTo: 'account',
+    })).toMatchObject({
+      id: 'cs_123',
+      status: 'pending',
+      url: 'https://pay.example.test/cs_123',
+      kind: 'topup',
+      expiresAt: 1770000300,
+    })
+    expect(await service.fetchCheckoutStatus('cs_/123')).toMatchObject({
+      id: 'cs_/123',
+      status: 'paid',
+      kind: 'topup',
+    })
+    expect(await service.fetchBillingTransactions()).toEqual({
+      transactions: [{
+        id: 'txn_1',
+        kind: 'topup',
+        status: 'paid',
+        amount: 1200,
+        currency: 'USD',
+        createdAt: 1770000000,
+        description: 'Top up',
+      }],
+    })
+    expect(await service.cancelSubscription()).toEqual({ ok: true })
+    expect(await service.resumeSubscription()).toEqual({ ok: true })
+
+    const checkoutCall = fetchCalls.find((call) => call.url.endsWith('/api/gaster-code/billing/checkout'))
+    expect(checkoutCall?.init?.headers).toEqual({
+      'Content-Type': 'application/json',
+      Authorization: 'Bearer desktop-access',
+    })
+    expect(JSON.parse(String(checkoutCall?.init?.body))).toEqual({
+      kind: 'topup',
+      plan_id: 'topup_10',
+      return_to: 'account',
     })
   })
 

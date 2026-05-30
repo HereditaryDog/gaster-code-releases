@@ -23,7 +23,7 @@ type CheckOptions = {
 }
 
 const DISMISSED_UPDATE_VERSION_KEY = 'gaster-code-dismissed-update-version'
-const LEGACY_DISMISSED_UPDATE_VERSION_KEYS = ['gaster-code-legacy-dismissed-update-version']
+const LEGACY_DISMISSED_UPDATE_VERSION_KEYS = ['cc-haha-dismissed-update-version']
 
 type UpdateStore = {
   status: UpdateStatus

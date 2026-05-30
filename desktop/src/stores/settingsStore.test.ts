@@ -13,13 +13,13 @@ describe('settingsStore locale defaults', () => {
   })
 
   it('migrates a legacy stored locale override', async () => {
-    window.localStorage.setItem('gaster-code-legacy-locale', 'en')
+    window.localStorage.setItem('cc-haha-locale', 'en')
 
     const { useSettingsStore } = await import('./settingsStore')
 
     expect(useSettingsStore.getState().locale).toBe('en')
     expect(window.localStorage.getItem('gaster-code-locale')).toBe('en')
-    expect(window.localStorage.getItem('gaster-code-legacy-locale')).toBeNull()
+    expect(window.localStorage.getItem('cc-haha-locale')).toBeNull()
   })
 
   it('writes locale updates to the Gaster Code storage key', async () => {
@@ -28,7 +28,7 @@ describe('settingsStore locale defaults', () => {
     useSettingsStore.getState().setLocale('en')
 
     expect(window.localStorage.getItem('gaster-code-locale')).toBe('en')
-    expect(window.localStorage.getItem('gaster-code-legacy-locale')).toBeNull()
+    expect(window.localStorage.getItem('cc-haha-locale')).toBeNull()
   })
 })
 
@@ -444,13 +444,13 @@ describe('settingsStore thinking and zoom persistence', () => {
   })
 
   it('reads legacy UI zoom and stores updates in the Gaster Code key', async () => {
-    window.localStorage.setItem('gaster-code-legacy-ui-zoom', '1.25')
+    window.localStorage.setItem('cc-haha-ui-zoom', '1.25')
 
     const { useSettingsStore } = await import('./settingsStore')
 
     expect(useSettingsStore.getState().uiZoom).toBe(1.25)
     expect(window.localStorage.getItem('gaster-code-app-zoom')).toBe('1.25')
-    expect(window.localStorage.getItem('gaster-code-legacy-ui-zoom')).toBeNull()
+    expect(window.localStorage.getItem('cc-haha-ui-zoom')).toBeNull()
 
     useSettingsStore.getState().setUiZoom(1.4)
     await vi.waitFor(() => {

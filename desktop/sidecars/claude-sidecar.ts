@@ -6,9 +6,9 @@
  * 把所有运行模式合并到同一个二进制里，runtime 只保留一份；调用方通过
  * 第一个 positional 参数选择模式：
  *
- *   gaster-sidecar server   --app-root <path> --host 127.0.0.1 --port 12345
- *   gaster-sidecar cli      --app-root <path> [其它 CLI 参数...]
- *   gaster-sidecar adapters --app-root <path> [--feishu] [--telegram] [--wechat] [--dingtalk]
+ *   claude-sidecar server   --app-root <path> --host 127.0.0.1 --port 12345
+ *   claude-sidecar cli      --app-root <path> [其它 CLI 参数...]
+ *   claude-sidecar adapters --app-root <path> [--feishu] [--telegram] [--wechat] [--dingtalk]
  *
  * 任何模式都必须先做 process.env / process.argv 设置，再 await 进入相应的
  * 子模块树。原因：src/server/index.ts、src/entrypoints/cli.tsx、以及
@@ -22,7 +22,7 @@ import { parseLauncherArgs, resolveSidecarInvocation } from './launcherRouting'
 const rawArgs = process.argv.slice(2)
 const invocation = resolveSidecarInvocation(rawArgs)
 if (!invocation.mode) {
-  console.error('gaster-sidecar: missing mode argument (expected "server", "cli" or "adapters")')
+  console.error('claude-sidecar: missing mode argument (expected "server", "cli" or "adapters")')
   process.exit(2)
 }
 const mode = invocation.mode
@@ -45,7 +45,7 @@ if (mode === 'adapters') {
   } else if (mode === 'cli') {
     await import('../../src/entrypoints/cli.tsx')
   } else {
-    console.error(`gaster-sidecar: unknown mode "${mode}" (expected "server", "cli" or "adapters")`)
+    console.error(`claude-sidecar: unknown mode "${mode}" (expected "server", "cli" or "adapters")`)
     process.exit(2)
   }
 }
@@ -83,12 +83,12 @@ async function runAdapters(rawArgs: string[]): Promise<void> {
       enableDingtalk = true
       continue
     }
-    console.warn(`gaster-sidecar adapters: ignoring unknown arg "${arg}"`)
+    console.warn(`claude-sidecar adapters: ignoring unknown arg "${arg}"`)
   }
 
   if (!enableFeishu && !enableTelegram && !enableWechat && !enableDingtalk) {
     console.error(
-      'gaster-sidecar adapters: must enable at least one of --feishu / --telegram / --wechat / --dingtalk',
+      'claude-sidecar adapters: must enable at least one of --feishu / --telegram / --wechat / --dingtalk',
     )
     process.exit(2)
   }
@@ -112,10 +112,10 @@ async function runAdapters(rawArgs: string[]): Promise<void> {
   if (enableFeishu) {
     if (!config.feishu.appId || !config.feishu.appSecret) {
       console.warn(
-        '[gaster-sidecar] --feishu requested but FEISHU_APP_ID / FEISHU_APP_SECRET missing in env or ~/.claude/adapters.json — skipping',
+        '[claude-sidecar] --feishu requested but FEISHU_APP_ID / FEISHU_APP_SECRET missing in env or ~/.claude/adapters.json — skipping',
       )
     } else {
-      console.log('[gaster-sidecar] starting Feishu adapter')
+      console.log('[claude-sidecar] starting Feishu adapter')
       // 副作用 import：feishu/index.ts 顶层会自动 new WSClient + start()
       await import('../../adapters/feishu/index.ts')
       started += 1
@@ -125,10 +125,10 @@ async function runAdapters(rawArgs: string[]): Promise<void> {
   if (enableTelegram) {
     if (!config.telegram.botToken) {
       console.warn(
-        '[gaster-sidecar] --telegram requested but TELEGRAM_BOT_TOKEN missing in env or ~/.claude/adapters.json — skipping',
+        '[claude-sidecar] --telegram requested but TELEGRAM_BOT_TOKEN missing in env or ~/.claude/adapters.json — skipping',
       )
     } else {
-      console.log('[gaster-sidecar] starting Telegram adapter')
+      console.log('[claude-sidecar] starting Telegram adapter')
       // 副作用 import：telegram/index.ts 顶层会自动 bot.start()
       await import('../../adapters/telegram/index.ts')
       started += 1
@@ -138,10 +138,10 @@ async function runAdapters(rawArgs: string[]): Promise<void> {
   if (enableWechat) {
     if (!config.wechat.accountId || !config.wechat.botToken) {
       console.warn(
-        '[gaster-sidecar] --wechat requested but no QR-bound WeChat account found in env or ~/.claude/adapters.json — skipping',
+        '[claude-sidecar] --wechat requested but no QR-bound WeChat account found in env or ~/.claude/adapters.json — skipping',
       )
     } else {
-      console.log('[gaster-sidecar] starting WeChat adapter')
+      console.log('[claude-sidecar] starting WeChat adapter')
       await import('../../adapters/wechat/index.ts')
       started += 1
     }
@@ -150,10 +150,10 @@ async function runAdapters(rawArgs: string[]): Promise<void> {
   if (enableDingtalk) {
     if (!config.dingtalk.clientId || !config.dingtalk.clientSecret) {
       console.warn(
-        '[gaster-sidecar] --dingtalk requested but DINGTALK_CLIENT_ID / DINGTALK_CLIENT_SECRET missing in env or ~/.claude/adapters.json — skipping',
+        '[claude-sidecar] --dingtalk requested but DINGTALK_CLIENT_ID / DINGTALK_CLIENT_SECRET missing in env or ~/.claude/adapters.json — skipping',
       )
     } else {
-      console.log('[gaster-sidecar] starting DingTalk adapter')
+      console.log('[claude-sidecar] starting DingTalk adapter')
       await import('../../adapters/dingtalk/index.ts')
       started += 1
     }
@@ -161,7 +161,7 @@ async function runAdapters(rawArgs: string[]): Promise<void> {
 
   if (started === 0) {
     console.error(
-      '[gaster-sidecar] no adapter could be started — check credentials in env or ~/.claude/adapters.json',
+      '[claude-sidecar] no adapter could be started — check credentials in env or ~/.claude/adapters.json',
     )
     process.exit(1)
   }

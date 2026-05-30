@@ -6,7 +6,7 @@ import type { CronTask, TaskRun } from '../types/task'
 
 const POLL_INTERVAL_MS = 30_000
 const NOTIFIED_RUNS_STORAGE_KEY = 'gaster-code.notifiedDesktopTaskRuns.v1'
-const LEGACY_NOTIFIED_RUNS_STORAGE_KEYS = ['gaster-code-legacy.notifiedDesktopTaskRuns.v1']
+const LEGACY_NOTIFIED_RUNS_STORAGE_KEYS = ['cc-haha.notifiedDesktopTaskRuns.v1']
 const MAX_STORED_RUN_IDS = 200
 
 function isTerminalRun(run: TaskRun): boolean {

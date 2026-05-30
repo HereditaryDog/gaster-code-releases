@@ -89,26 +89,21 @@ export function AskUserQuestion({ sessionId, toolUseId, input, result }: Props) 
       ? answers as Record<string, string>
       : {}
   }, [result])
-  const resultText = typeof result === 'string' && result.trim().length > 0 ? result.trim() : ''
-  const hasStructuredAnswers = Object.keys(resultAnswers).length > 0
-  const hasTerminalResult = hasStructuredAnswers || resultText.length > 0
 
   const pendingRequest = pendingPermission?.toolUseId === toolUseId ? pendingPermission : null
   const answeredText = useMemo(() => {
-    if (hasStructuredAnswers) {
+    if (Object.keys(resultAnswers).length > 0) {
       return questions
         .map((question) => resultAnswers[question.question])
         .filter((answer): answer is string => typeof answer === 'string' && answer.trim().length > 0)
         .join(', ')
     }
-    if (resultText) return resultText
     return questions
       .map((question, index) => freeTexts[index]?.trim() || getSelectedAnswer(question, selections[index]))
       .filter(Boolean)
       .join('; ')
-  }, [freeTexts, hasStructuredAnswers, questions, resultAnswers, resultText, selections])
-  const submitted = hasTerminalResult || hasSubmitted
-  const terminalWithoutAnswers = submitted && !hasStructuredAnswers && resultText.length > 0
+  }, [freeTexts, questions, resultAnswers, selections])
+  const submitted = Object.keys(resultAnswers).length > 0 || hasSubmitted
 
   const handleSelect = (qIndex: number, label: string) => {
     if (submitted) return
@@ -226,7 +221,7 @@ export function AskUserQuestion({ sessionId, toolUseId, input, result }: Props) 
           </span>
           {submitted && (
             <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[var(--color-surface-container-high)] text-[var(--color-text-tertiary)]">
-              {t(terminalWithoutAnswers ? 'question.completed' : 'question.answered')}
+              {t('question.answered')}
             </span>
           )}
         </div>
@@ -325,22 +320,18 @@ export function AskUserQuestion({ sessionId, toolUseId, input, result }: Props) 
             <label className="text-xs text-[var(--color-text-tertiary)] mb-1.5 block">
               {t('question.customResponse')}
             </label>
-            <textarea
+            <input
+              type="text"
               value={freeTexts[safeActiveTab] ?? ''}
               onChange={(e) => handleFreeTextChange(safeActiveTab, e.target.value)}
               onCompositionStart={() => { composingRef.current = true }}
               onCompositionEnd={() => { composingRef.current = false }}
               onKeyDown={(e) => {
                 if (composingRef.current || e.nativeEvent.isComposing || e.keyCode === 229) return
-                if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && allAnswered) {
-                  e.preventDefault()
-                  handleSubmit()
-                }
+                if (e.key === 'Enter' && allAnswered) handleSubmit()
               }}
               placeholder={t('question.typePlaceholder')}
-              rows={3}
-              wrap="soft"
-              className="max-h-48 min-h-[84px] w-full resize-y rounded-[var(--radius-md)] border border-[var(--color-outline-variant)]/40 bg-[var(--color-surface)] px-3 py-2 text-sm leading-relaxed text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:border-[var(--color-secondary)] focus:outline-none focus:ring-1 focus:ring-[var(--color-secondary)]/30"
+              className="w-full px-3 py-2 text-sm bg-[var(--color-surface)] border border-[var(--color-outline-variant)]/40 rounded-[var(--radius-md)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:outline-none focus:border-[var(--color-secondary)] focus:ring-1 focus:ring-[var(--color-secondary)]/30"
             />
           </div>
         )}
@@ -350,7 +341,7 @@ export function AskUserQuestion({ sessionId, toolUseId, input, result }: Props) 
           <div className="flex items-center gap-2 text-xs text-[var(--color-text-secondary)]">
             <span className="material-symbols-outlined text-[14px] text-[var(--color-success)]">check_circle</span>
             <span>
-              {t(terminalWithoutAnswers ? 'question.resultPrefix' : 'question.answeredPrefix')}<strong>{answeredText}</strong>
+              {t('question.answeredPrefix')}<strong>{answeredText}</strong>
             </span>
           </div>
         )}

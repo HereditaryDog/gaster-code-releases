@@ -1,12 +1,12 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-The root package is the Bun-based CLI and local server. Main code lives in `src/`: `entrypoints/` for startup paths, `screens/` and `components/` for the Ink TUI, `commands/` for slash commands, `services/` for API/MCP/OAuth logic, and `tools/` for agent tool implementations. `bin/gaster-code` is the executable entrypoint. The desktop app is isolated in `desktop/` with React UI code in `desktop/src/` and Tauri glue in `desktop/src-tauri/`. Documentation is in `docs/` and builds with VitePress. Treat root screenshots and `docs/images/` as reference assets, not source code.
+The root package is the Bun-based CLI and local server. Main code lives in `src/`: `entrypoints/` for startup paths, `screens/` and `components/` for the Ink TUI, `commands/` for slash commands, `services/` for API/MCP/OAuth logic, and `tools/` for agent tool implementations. `bin/claude-haha` is the executable entrypoint. The desktop app is isolated in `desktop/` with React UI code in `desktop/src/` and Tauri glue in `desktop/src-tauri/`. Documentation is in `docs/` and builds with VitePress. Treat root screenshots and `docs/images/` as reference assets, not source code.
 
 ## Build, Test, and Development Commands
 Install root dependencies with `bun install`, then install desktop dependencies in `desktop/` if you are touching the app UI.
 
-- `./bin/gaster-code` or `bun run start`: run the CLI locally.
+- `./bin/claude-haha` or `bun run start`: run the CLI locally.
 - `SERVER_PORT=3456 bun run src/server/index.ts`: start the local API/WebSocket server used by `desktop/`.
 - `bun run docs:dev` / `bun run docs:build`: preview or build the VitePress docs.
 - `cd desktop && bun run dev`: run the desktop frontend in Vite.
@@ -45,7 +45,6 @@ Future Coding Agents should run the right local gate themselves before claiming 
 - Use `bun run check:native` for `desktop/src-tauri`, sidecars, native packaging, release, or platform startup behavior changes.
 - Use `bun run check:adapters` for `adapters/`; on a fresh checkout run `cd adapters && bun install` first if dependencies are missing.
 - Use `bun run check:docs` for docs, VitePress, README, or docs workflow changes.
-- Use `bun run check:brand` for release, packaging, docs, metadata, or public-surface changes that could reintroduce old project identifiers.
 - For chat, agent loop, tool execution, provider routing, desktop chat UI, CLI task execution, or other core Coding Agent paths, also run a live baseline when local providers are available: first `bun run quality:providers`, then choose one or more copyable selectors and run `bun run quality:gate --mode baseline --allow-live --provider-model <provider:model[:label]>`.
 - For release readiness, run `bun run quality:gate --mode release --allow-live --provider-model <provider:model[:label]>` with at least one real provider/model selector. Prefer multiple providers when quota is available.
 - If no live provider is configured, or a provider quota/key is unavailable, run the non-live gate anyway and report the live-baseline blocker explicitly instead of claiming full release confidence.

@@ -3,26 +3,23 @@ layout: home
 
 hero:
   name: Gaster Code
-  text: Public Local AI Coding Assistant
-  tagline: v1.0.6 source hotfix improves long conversation switching, Markdown rendering, tab dragging, and workspace previews while keeping CLI / TUI, desktop app, multi-session workspaces, MCP, Skills, Agents, remote adapters, and task automation
+  text: Locally Runnable AI Coding Assistant
+  tagline: Desktop workflow with trusted H5 access, batch session cleanup, Git-aware file mentions, and third-party Skills / Agents visibility fixes
   image:
     src: /images/logo-horizontal.png
     alt: Gaster Code
   actions:
     - theme: brand
-      text: View Releases
-      link: https://github.com/HereditaryDog/gaster-code-releases/releases/latest
-    - theme: alt
       text: Quick Start
       link: /en/guide/quick-start
     - theme: alt
-      text: GitHub
-      link: https://github.com/HereditaryDog/gaster-code-releases
+      text: Download
+      link: https://github.com/HereditaryDog/gaster-code-releases/releases
 
 features:
   - icon: "\U0001F5A5"
-    title: CLI / TUI / Desktop
-    details: Terminal workflow, headless mode, and the Tauri 2 + React desktop app are maintained in one public source repository
+    title: Full TUI Experience
+    details: Gaster Code Ink terminal UI with --print headless mode
   - icon: "\U0001F9E0"
     title: Memory System
     details: Cross-session persistent memory with auto-extraction, smart retrieval, and AutoDream consolidation
@@ -34,7 +31,7 @@ features:
     details: Extensible capability plugins, custom workflows, conditional activation, and slash-command wrapped external Skills
   - icon: "\U0001F4BB"
     title: Computer Use
-    details: Desktop control with screenshots, mouse, keyboard automation, and Python Bridge
+    details: Desktop control — screenshots, mouse, and keyboard automation
     link: /en/features/computer-use
   - icon: "\U0001F310"
     title: Third-Party Models
@@ -44,21 +41,8 @@ features:
     title: Remote Control
     details: Telegram, Feishu, WeChat, and DingTalk adapters for remote chat, project switching, and permission approval
     link: /im/
-  - icon: "\U0001F4E6"
-    title: Public Release
-    details: Starting with v1.0.0, source, installers, release notes, and updater metadata are maintained in the public repository
-    link: https://github.com/HereditaryDog/gaster-code-releases/releases/latest
+  - icon: "\U0001F5A5"
+    title: Desktop App
+    details: Tauri 2 + React desktop client with tabs, sessions, workspace file panel, H5 access, batch cleanup, desktop notifications, and G-Master API provider sync
+    link: /desktop/
 ---
-
-## Source Transparency Note
-
-Gaster Code is based on community research and organization of leaked Claude Code source code, with product and development inspiration from the `cc-haha` project. Gaster Code is not an official Anthropic, Claude Code, or `cc-haha` project, and is not affiliated with those projects or organizations.
-
-Starting with **v1.0.0**, this repository is publicly maintained so developers can inspect the source, reproduce builds, submit fixes, and continue improving local AI coding workflows, desktop usability, model integrations, automation, and extension systems.
-
-## Current Version
-
-- Latest source version: [Gaster Code v1.0.6](https://github.com/HereditaryDog/gaster-code-releases/releases/tag/v1.0.6)
-- Current downloadable installer release: [Gaster Code v1.0.6](https://github.com/HereditaryDog/gaster-code-releases/releases/latest)
-- Updater metadata: [latest.json](https://github.com/HereditaryDog/gaster-code-releases/releases/latest/download/latest.json)
-- Public source: [HereditaryDog/gaster-code-releases](https://github.com/HereditaryDog/gaster-code-releases)

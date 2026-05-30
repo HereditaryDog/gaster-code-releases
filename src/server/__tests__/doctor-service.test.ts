@@ -80,7 +80,7 @@ describe('DoctorService', () => {
 
     expect(serialized).not.toContain(tmpDir)
     expect(serialized).not.toContain(projectRoot)
-    expect(serialized).not.toContain('gaster-code-legacy')
+    expect(serialized).not.toContain('cc-haha')
 
     const userSettings = report.items.find((item) => item.path === '~/.claude/settings.json')
     expect(userSettings).toBeDefined()

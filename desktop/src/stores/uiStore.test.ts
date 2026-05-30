@@ -9,13 +9,13 @@ describe('uiStore theme persistence', () => {
   })
 
   it('migrates the legacy theme to the Gaster Code storage key', async () => {
-    window.localStorage.setItem('gaster-code-legacy-theme', 'dark')
+    window.localStorage.setItem('cc-haha-theme', 'dark')
 
     const { useUIStore } = await import('./uiStore')
 
     expect(useUIStore.getState().theme).toBe('dark')
     expect(window.localStorage.getItem('gaster-code-theme')).toBe('dark')
-    expect(window.localStorage.getItem('gaster-code-legacy-theme')).toBeNull()
+    expect(window.localStorage.getItem('cc-haha-theme')).toBeNull()
   })
 
   it('writes theme changes to the Gaster Code storage key', async () => {
@@ -24,7 +24,7 @@ describe('uiStore theme persistence', () => {
     useUIStore.getState().setTheme('dark')
 
     expect(window.localStorage.getItem('gaster-code-theme')).toBe('dark')
-    expect(window.localStorage.getItem('gaster-code-legacy-theme')).toBeNull()
+    expect(window.localStorage.getItem('cc-haha-theme')).toBeNull()
   })
 
   it('defaults new installs to the pure white theme', async () => {

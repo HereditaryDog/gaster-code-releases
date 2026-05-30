@@ -69,19 +69,6 @@ function extractPythonVersion(output: string): string | null {
   return match?.[1] ?? null
 }
 
-export function isPythonVersionAtLeast(
-  version: string | null,
-  major: number,
-  minor: number,
-): boolean {
-  if (!version) return false
-  const match = version.match(/^(\d+)\.(\d+)/)
-  if (!match) return false
-  const currentMajor = Number(match[1])
-  const currentMinor = Number(match[2])
-  return currentMajor > major || (currentMajor === major && currentMinor >= minor)
-}
-
 function firstOutputLine(output: string): string | null {
   const line = output
     .split(/\r?\n/)

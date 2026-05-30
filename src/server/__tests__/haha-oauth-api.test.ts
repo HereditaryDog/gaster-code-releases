@@ -1,24 +1,19 @@
 /**
- * Integration tests for /api/gaster-openai-oauth/* endpoints.
+ * Integration tests for /api/haha-oauth/* endpoints.
  */
 
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test'
 import * as fs from 'fs/promises'
 import * as path from 'path'
 import * as os from 'os'
-import {
-  handleGasterOpenAIOAuthApi,
-  handleGasterOpenAIOAuthCallback,
-} from '../api/gaster-openai-oauth.js'
-import { gasterOpenAIOAuthService } from '../services/gasterOpenAIOAuthService.js'
+import { handleHahaOAuthApi, handleHahaOAuthCallback } from '../api/haha-oauth.js'
+import { hahaOAuthService } from '../services/hahaOAuthService.js'
 
 let tmpDir: string
 let originalConfigDir: string | undefined
 
 async function setup() {
-  tmpDir = await fs.mkdtemp(
-    path.join(os.tmpdir(), 'gaster-openai-oauth-api-test-'),
-  )
+  tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'haha-oauth-api-test-'))
   originalConfigDir = process.env.CLAUDE_CONFIG_DIR
   process.env.CLAUDE_CONFIG_DIR = tmpDir
 }
@@ -47,137 +42,127 @@ function buildReq(
   return { req, url, segments }
 }
 
-describe('POST /api/gaster-openai-oauth/start', () => {
+describe('POST /api/haha-oauth/start', () => {
   beforeEach(setup)
   afterEach(teardown)
 
   test('returns authorize URL with PKCE challenge', async () => {
-    const { req, url, segments } = buildReq(
-      'POST',
-      '/api/gaster-openai-oauth/start',
-      { serverPort: 54321 },
-    )
-    const res = await handleGasterOpenAIOAuthApi(req, url, segments)
+    const { req, url, segments } = buildReq('POST', '/api/haha-oauth/start', {
+      serverPort: 54321,
+    })
+    const res = await handleHahaOAuthApi(req, url, segments)
     expect(res.status).toBe(200)
     const data = (await res.json()) as { authorizeUrl: string; state: string }
     expect(data.authorizeUrl).toContain('code_challenge_method=S256')
     expect(data.authorizeUrl).toContain(
-      'codex_cli_simplified_flow=true',
-    )
-    expect(data.authorizeUrl).toContain(
-      encodeURIComponent('http://localhost:54321/auth/callback'),
+      encodeURIComponent('http://localhost:54321/callback'),
     )
     expect(data.state).toMatch(/^[A-Za-z0-9_-]+$/)
   })
 
   test('400 if serverPort missing', async () => {
-    const { req, url, segments } = buildReq(
-      'POST',
-      '/api/gaster-openai-oauth/start',
-      {},
-    )
-    const res = await handleGasterOpenAIOAuthApi(req, url, segments)
+    const { req, url, segments } = buildReq('POST', '/api/haha-oauth/start', {})
+    const res = await handleHahaOAuthApi(req, url, segments)
     expect(res.status).toBe(400)
     const body = (await res.json()) as { error: string; message?: string }
     expect(body.error).toBe('BAD_REQUEST')
   })
 })
 
-describe('GET /api/gaster-openai-oauth', () => {
+describe('GET /api/haha-oauth/status', () => {
   beforeEach(setup)
   afterEach(teardown)
 
   test('returns loggedIn=false when no token file', async () => {
-    const { req, url, segments } = buildReq('GET', '/api/gaster-openai-oauth')
-    const res = await handleGasterOpenAIOAuthApi(req, url, segments)
+    const { req, url, segments } = buildReq('GET', '/api/haha-oauth/status')
+    const res = await handleHahaOAuthApi(req, url, segments)
     expect(res.status).toBe(200)
     const data = (await res.json()) as { loggedIn: boolean }
     expect(data.loggedIn).toBe(false)
   })
 
   test('returns loggedIn=true + metadata when token saved', async () => {
-    await gasterOpenAIOAuthService.saveTokens({
-      accessToken: 'openai-access-token-xxx',
-      refreshToken: 'openai-refresh-token-xxx',
+    await hahaOAuthService.saveTokens({
+      accessToken: 'sk-ant-oat01-xxx',
+      refreshToken: 'sk-ant-ort01-xxx',
       expiresAt: Date.now() + 3600_000,
-      email: 'test@example.com',
-      accountId: 'acct_123',
+      scopes: ['user:inference'],
+      subscriptionType: 'max',
     })
 
-    const { req, url, segments } = buildReq('GET', '/api/gaster-openai-oauth')
-    const res = await handleGasterOpenAIOAuthApi(req, url, segments)
+    const { req, url, segments } = buildReq('GET', '/api/haha-oauth/status')
+    const res = await handleHahaOAuthApi(req, url, segments)
     expect(res.status).toBe(200)
     const data = (await res.json()) as {
       loggedIn: boolean
-      expiresAt: number | null
-      email: string | null
-      accountId: string | null
+      subscriptionType: string | null
+      scopes: string[]
     }
     expect(data.loggedIn).toBe(true)
-    expect(data.email).toBe('test@example.com')
-    expect(data.accountId).toBe('acct_123')
-    // Never leak token values
-    expect(JSON.stringify(data)).not.toContain('openai-access-token')
-    expect(JSON.stringify(data)).not.toContain('openai-refresh-token')
+    expect(data.subscriptionType).toBe('max')
+    expect(data.scopes).toEqual(['user:inference'])
+    expect(JSON.stringify(data)).not.toContain('sk-ant-oat01')
+    expect(JSON.stringify(data)).not.toContain('sk-ant-ort01')
   })
 
   test('returns loggedIn=false when stored token is expired and refresh fails', async () => {
-    await gasterOpenAIOAuthService.saveTokens({
+    await hahaOAuthService.saveTokens({
       accessToken: 'expired-token',
       refreshToken: 'revoked-refresh-token',
       expiresAt: Date.now() - 1_000,
-      email: 'test@example.com',
-      accountId: 'acct_123',
+      scopes: ['user:inference'],
+      subscriptionType: 'max',
     })
-    gasterOpenAIOAuthService.setRefreshFn(async () => {
+    hahaOAuthService.setRefreshFn(async () => {
       throw new Error('refresh revoked')
     })
 
-    const { req, url, segments } = buildReq('GET', '/api/gaster-openai-oauth')
-    const res = await handleGasterOpenAIOAuthApi(req, url, segments)
+    const { req, url, segments } = buildReq('GET', '/api/haha-oauth/status')
+    const res = await handleHahaOAuthApi(req, url, segments)
 
     expect(res.status).toBe(200)
     expect(await res.json()).toEqual({ loggedIn: false })
   })
 })
 
-describe('GET /callback/openai', () => {
+describe('GET /callback', () => {
   beforeEach(setup)
   afterEach(teardown)
 
   test('success page is branded as Gaster Code', async () => {
-    const originalCompleteSession = gasterOpenAIOAuthService.completeSession
-    ;(gasterOpenAIOAuthService as any).completeSession = async () => undefined
+    const originalCompleteSession = hahaOAuthService.completeSession
+    ;(hahaOAuthService as any).completeSession = async () => undefined
 
     try {
-      const res = await handleGasterOpenAIOAuthCallback(
-        new URL('http://localhost:3456/callback/openai?code=abc&state=state-123'),
+      const res = await handleHahaOAuthCallback(
+        new URL('http://localhost:3456/callback?code=abc&state=state-123'),
       )
       const body = await res.text()
 
       expect(body).toContain('return to Gaster Code')
+      expect(body).not.toContain('Claude Code Haha')
     } finally {
-      ;(gasterOpenAIOAuthService as any).completeSession = originalCompleteSession
+      ;(hahaOAuthService as any).completeSession = originalCompleteSession
     }
   })
 })
 
-describe('DELETE /api/gaster-openai-oauth', () => {
+describe('DELETE /api/haha-oauth', () => {
   beforeEach(setup)
   afterEach(teardown)
 
   test('clears token file', async () => {
-    await gasterOpenAIOAuthService.saveTokens({
+    await hahaOAuthService.saveTokens({
       accessToken: 'a',
       refreshToken: null,
       expiresAt: null,
-      email: null,
-      accountId: null,
+      scopes: [],
+      subscriptionType: null,
     })
 
-    const { req, url, segments } = buildReq('DELETE', '/api/gaster-openai-oauth')
-    const res = await handleGasterOpenAIOAuthApi(req, url, segments)
+    const { req, url, segments } = buildReq('DELETE', '/api/haha-oauth')
+    const res = await handleHahaOAuthApi(req, url, segments)
     expect(res.status).toBe(200)
-    expect(await gasterOpenAIOAuthService.loadTokens()).toBeNull()
+    expect(await hahaOAuthService.loadTokens()).toBeNull()
   })
 })

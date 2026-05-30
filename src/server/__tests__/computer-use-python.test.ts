@@ -1,18 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { detectPythonRuntime, isPythonVersionAtLeast } from '../api/computer-use-python.js'
-
-describe('isPythonVersionAtLeast', () => {
-  test('accepts supported Python 3.9+ versions', () => {
-    expect(isPythonVersionAtLeast('3.9.0', 3, 9)).toBe(true)
-    expect(isPythonVersionAtLeast('3.12.11', 3, 9)).toBe(true)
-  })
-
-  test('rejects missing or older Python versions', () => {
-    expect(isPythonVersionAtLeast(null, 3, 9)).toBe(false)
-    expect(isPythonVersionAtLeast('3.8.18', 3, 9)).toBe(false)
-    expect(isPythonVersionAtLeast('2.7.18', 3, 9)).toBe(false)
-  })
-})
+import { detectPythonRuntime } from '../api/computer-use-python.js'
 
 describe('detectPythonRuntime', () => {
   test('prefers python3 on Windows when available', async () => {

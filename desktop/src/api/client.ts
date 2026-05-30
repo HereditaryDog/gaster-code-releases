@@ -10,6 +10,9 @@ const DEFAULT_BASE_URL = ENV_BASE_URL || 'http://127.0.0.1:3456'
 let baseUrl = DEFAULT_BASE_URL
 let authToken: string | null = null
 const DIAGNOSTICS_PATH = '/api/diagnostics/events'
+const CHECKOUT_PATH_RE = /\/api\/gmaster-auth\/billing\/checkout\/[^/?#]+/g
+const SENSITIVE_DIAGNOSTIC_KEY_RE =
+  /(authorization|access[_-]?token|refresh[_-]?token|provider[_-]?token|api[_-]?key|checkout[_-]?url|payment|secret)/i
 let fetchSupportsAbortSignal = true
 
 function getErrorMessage(status: number, body: unknown) {
@@ -144,7 +147,7 @@ function reportApiFailure(method: string, path: string, error: unknown) {
 
   const details: Record<string, unknown> = {
     method,
-    path,
+    path: sanitizeDiagnosticPath(path),
     errorName: error instanceof Error ? error.name : typeof error,
     message: sanitizeDiagnosticValue(error instanceof Error ? error.message : String(error)),
   }
@@ -160,6 +163,10 @@ function reportApiFailure(method: string, path: string, error: unknown) {
     summary: `${method} ${path} failed: ${details.message}`,
     details,
   })
+}
+
+function sanitizeDiagnosticPath(path: string): string {
+  return path.replace(CHECKOUT_PATH_RE, '/api/gmaster-auth/billing/checkout/[redacted]')
 }
 
 export function rawRecordDiagnosticEvent(event: {
@@ -188,20 +195,26 @@ function buildHeaders(): Record<string, string> {
   return headers
 }
 
-function sanitizeDiagnosticValue(value: unknown): unknown {
-  if (!authToken) return value
+function sanitizeDiagnosticValue(value: unknown, key = ''): unknown {
+  if (key && SENSITIVE_DIAGNOSTIC_KEY_RE.test(key)) return '[redacted]'
 
   if (typeof value === 'string') {
-    return value.split(authToken).join('[redacted]')
+    const withoutToken = authToken
+      ? value.split(authToken).join('[redacted]')
+      : value
+    return sanitizeDiagnosticPath(withoutToken)
   }
 
   if (Array.isArray(value)) {
-    return value.map((entry) => sanitizeDiagnosticValue(entry))
+    return value.map((entry) => sanitizeDiagnosticValue(entry, key))
   }
 
   if (value && typeof value === 'object') {
     return Object.fromEntries(
-      Object.entries(value).map(([key, entry]) => [key, sanitizeDiagnosticValue(entry)]),
+      Object.entries(value).map(([entryKey, entry]) => [
+        entryKey,
+        sanitizeDiagnosticValue(entry, entryKey),
+      ]),
     )
   }
 

@@ -46,23 +46,39 @@ describe('images API', () => {
     await fs.rm(tmpDir, { recursive: true, force: true })
   })
 
-  test('POST /api/images/generate uses the managed G-Master async gpt-image-2 channel', async () => {
+  test('POST /api/images/generate uses the managed G-Master gpt-image-2 channel', async () => {
     await setupGMasterProvider()
-    let capturedUrl = ''
+    const capturedUrls: string[] = []
     let capturedBody: Record<string, unknown> | null = null
     let capturedAuthorization = ''
     globalThis.fetch = (async (url, init) => {
-      capturedUrl = String(url)
+      capturedUrls.push(String(url))
       capturedAuthorization = String((init?.headers as Record<string, string>).Authorization)
-      capturedBody = JSON.parse(String(init?.body)) as Record<string, unknown>
+      if (init?.body) capturedBody = JSON.parse(String(init.body)) as Record<string, unknown>
+      if (String(url).endsWith('/v1/images/generations/async')) {
+        return Response.json({
+          id: 'job_image_1',
+          job_id: 'job_image_1',
+          object: 'image.generation.job',
+          status: 'queued',
+          poll_url: '/v1/images/jobs/job_image_1',
+        }, { status: 202 })
+      }
       return Response.json({
-        created: 1760000000,
-        data: [{ b64_json: 'iVBORw0KGgo=', revised_prompt: 'A precise neon cat poster' }],
+        id: 'job_image_1',
+        job_id: 'job_image_1',
+        object: 'image.generation.job',
+        status: 'succeeded',
+        result: {
+          created: 1760000000,
+          data: [{ b64_json: 'iVBORw0KGgo=', revised_prompt: 'A precise neon cat poster' }],
+        },
       })
     }) as typeof fetch
 
+    const prompt = '  a neon cat poster with precise typography,\nlayered reflections, and no prompt rewriting  '
     const { req, url } = buildReq('POST', '/api/images/generate', {
-      prompt: 'a neon cat poster',
+      prompt,
       size: '1024x1024',
     })
 
@@ -72,11 +88,14 @@ describe('images API', () => {
     }
 
     expect(res.status).toBe(200)
-    expect(capturedUrl).toBe('https://gmapi.example.test/v1/images/generations/async')
+    expect(capturedUrls).toEqual([
+      'https://gmapi.example.test/v1/images/generations/async',
+      'https://gmapi.example.test/v1/images/jobs/job_image_1',
+    ])
     expect(capturedAuthorization).toBe('Bearer sk-gmaster-desktop')
     expect(capturedBody).toEqual({
       model: 'gpt-image-2',
-      prompt: 'a neon cat poster',
+      prompt,
       size: '1024x1024',
       n: 1,
     })
@@ -93,10 +112,28 @@ describe('images API', () => {
     await setupGMasterProvider()
     let capturedBody: Record<string, unknown> | null = null
     globalThis.fetch = (async (_url, init) => {
-      capturedBody = JSON.parse(String(init?.body)) as Record<string, unknown>
+      if (init?.body) {
+        capturedBody = JSON.parse(String(init.body)) as Record<string, unknown>
+        return Response.json({
+          id: 'job_image_size',
+          job_id: 'job_image_size',
+          object: 'image.generation.job',
+          status: 'succeeded',
+          result: {
+            created: 1760000000,
+            data: [{ b64_json: 'iVBORw0KGgo=' }],
+          },
+        }, { status: 202 })
+      }
       return Response.json({
-        created: 1760000000,
-        data: [{ b64_json: 'iVBORw0KGgo=' }],
+        id: 'job_image_size',
+        job_id: 'job_image_size',
+        object: 'image.generation.job',
+        status: 'succeeded',
+        result: {
+          created: 1760000000,
+          data: [{ b64_json: 'iVBORw0KGgo=' }],
+        },
       })
     }) as typeof fetch
 
@@ -117,10 +154,28 @@ describe('images API', () => {
 
   test('POST /api/images/generate persists generated images in drawing history', async () => {
     await setupGMasterProvider()
-    globalThis.fetch = (async () => {
+    globalThis.fetch = (async (_url, init) => {
+      if (init?.body) {
+        return Response.json({
+          id: 'job_image_history',
+          job_id: 'job_image_history',
+          object: 'image.generation.job',
+          status: 'succeeded',
+          result: {
+            created: 1760000000,
+            data: [{ b64_json: 'aGVsbG8=', revised_prompt: 'A precise neon cat poster' }],
+          },
+        }, { status: 202 })
+      }
       return Response.json({
-        created: 1760000000,
-        data: [{ b64_json: 'aGVsbG8=', revised_prompt: 'A precise neon cat poster' }],
+        id: 'job_image_history',
+        job_id: 'job_image_history',
+        object: 'image.generation.job',
+        status: 'succeeded',
+        result: {
+          created: 1760000000,
+          data: [{ b64_json: 'aGVsbG8=', revised_prompt: 'A precise neon cat poster' }],
+        },
       })
     }) as typeof fetch
 
@@ -239,15 +294,33 @@ describe('images API', () => {
     expect(res.status).toBe(502)
     expect(body.error).toBe('IMAGE_GENERATION_UPSTREAM_REQUEST_FAILED')
     expect(body.message).toContain('G-Master API image request was interrupted')
-    expect(body.message).toContain('prompt is not rewritten')
+    expect(body.message).not.toContain('shorter prompt')
   })
 
-  test('POST /api/images/generate classifies upstream 524 as an image channel timeout', async () => {
+  test('POST /api/images/generate classifies async job 524 failures as image channel timeouts', async () => {
     await setupGMasterProvider()
-    globalThis.fetch = (async () => {
+    globalThis.fetch = (async (url, init) => {
+      if (init?.body && String(url).endsWith('/v1/images/generations/async')) {
+        return Response.json({
+          id: 'job_image_timeout',
+          job_id: 'job_image_timeout',
+          object: 'image.generation.job',
+          status: 'queued',
+          poll_url: '/v1/images/jobs/job_image_timeout',
+        }, { status: 202 })
+      }
       return Response.json({
-        error: { message: 'Image generation failed with HTTP 524' },
-      }, { status: 524 })
+        id: 'job_image_timeout',
+        job_id: 'job_image_timeout',
+        object: 'image.generation.job',
+        status: 'failed',
+        error: {
+          message: 'gpt-image-2 image generation timed out upstream',
+          type: 'image_generation_timeout',
+          code: 'upstream_timeout',
+          upstream_status: 524,
+        },
+      })
     }) as typeof fetch
 
     const { req, url } = buildReq('POST', '/api/images/generate', {

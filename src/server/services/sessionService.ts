@@ -24,7 +24,6 @@ import {
   type CreateSessionRepositoryOptions,
   type PreparedSessionWorkspace,
 } from './repositoryLaunchService.js'
-import { registerFilesystemAccessRoot } from './filesystemAccessRoots.js'
 import { cleanSessionTitleSource } from '../../utils/sessionTitleText.js'
 
 // ============================================================================
@@ -837,7 +836,7 @@ export class SessionService {
 
   /**
    * Convert a sanitized directory name back to the original absolute path.
-   * Reverses sanitizePath(): `-Users-demo-workspace` → `/Users/demo/workspace`.
+   * Reverses sanitizePath(): `-Users-nanmi-workspace` → `/Users/nanmi/workspace`.
    */
   desanitizePath(sanitized: string): string {
     // The sanitized form replaces all non-alphanumeric characters with '-'.
@@ -1302,7 +1301,6 @@ export class SessionService {
       sessionId,
     )
     const absWorkDir = preparedWorkspace.workDir
-    registerFilesystemAccessRoot(absWorkDir)
     console.log(
       `[SessionService] createSession: requested workDir=${JSON.stringify(
         workDir,

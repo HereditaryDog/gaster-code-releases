@@ -4,6 +4,7 @@ import { randomBytes } from 'node:crypto'
 import {
   getClaudeConfigDir,
   getGasterConfigPath,
+  getLegacyGasterConfigPath,
 } from '../../utils/gasterConfig.js'
 
 export const CURRENT_PROVIDER_INDEX_SCHEMA_VERSION = 1
@@ -170,7 +171,37 @@ async function migrateJsonEntry(
   }
 }
 
-async function migrateCurrentEntry(
+async function importLegacyJsonEntry(
+  legacyPath: string,
+  currentPath: string,
+  entryName: string,
+  report: MigrationReport,
+  migrate: (value: unknown) => JsonObject,
+  malformedDefault: JsonObject,
+): Promise<void> {
+  try {
+    const legacy = await readJsonFile(legacyPath)
+    if (legacy.missing) return
+
+    await writeJsonFile(currentPath, migrate(legacy.value))
+    report.migratedEntries.push(entryName)
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      try {
+        await quarantineMalformedFile(legacyPath)
+        await writeJsonFile(currentPath, malformedDefault)
+        report.migratedEntries.push(entryName)
+      } catch (recoveryError) {
+        report.failures.push(`${entryName}: ${recoveryError instanceof Error ? recoveryError.message : String(recoveryError)}`)
+      }
+      return
+    }
+
+    report.failures.push(`${entryName}: ${error instanceof Error ? error.message : String(error)}`)
+  }
+}
+
+async function migrateCurrentOrImportLegacy(
   configDir: string,
   fileName: string,
   report: MigrationReport,
@@ -178,9 +209,19 @@ async function migrateCurrentEntry(
   malformedDefault: JsonObject,
 ): Promise<void> {
   const currentPath = getGasterConfigPath(configDir, fileName)
-  await migrateJsonEntry(
+  const currentFound = await migrateJsonEntry(
     currentPath,
     `gaster-code/${fileName}`,
+    report,
+    migrate,
+    malformedDefault,
+  )
+  if (currentFound) return
+
+  await importLegacyJsonEntry(
+    getLegacyGasterConfigPath(configDir, fileName),
+    currentPath,
+    `legacy cc-haha/${fileName}`,
     report,
     migrate,
     malformedDefault,
@@ -191,14 +232,14 @@ async function runPersistentStorageMigrations(configDir: string): Promise<Migrat
   const report: MigrationReport = { migratedEntries: [], failures: [] }
   const emptyProviderIndex = migrateProvidersIndex({})
 
-  await migrateCurrentEntry(
+  await migrateCurrentOrImportLegacy(
     configDir,
     'providers.json',
     report,
     migrateProvidersIndex,
     emptyProviderIndex,
   )
-  await migrateCurrentEntry(
+  await migrateCurrentOrImportLegacy(
     configDir,
     'settings.json',
     report,

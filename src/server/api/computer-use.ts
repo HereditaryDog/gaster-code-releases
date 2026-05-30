@@ -14,8 +14,7 @@ import path from 'path'
 import { fileURLToPath } from 'url'
 import type { CuPermissionRequest } from '../../vendor/computer-use-mcp/types.js'
 import { computerUseApprovalService } from '../services/computerUseApprovalService.js'
-import { detectPythonRuntime, isPythonVersionAtLeast } from './computer-use-python.js'
-import { buildPipInstallAttempts } from '../../utils/computerUse/pipInstall.js'
+import { detectPythonRuntime } from './computer-use-python.js'
 import {
   DEFAULT_DESKTOP_GRANT_FLAGS,
   loadStoredComputerUseConfig,
@@ -39,11 +38,7 @@ const claudeHome = process.env.CLAUDE_CONFIG_DIR ?? join(homedir(), '.claude')
 const runtimeStateRoot = join(claudeHome, '.runtime')
 const venvRoot = join(runtimeStateRoot, 'venv')
 const installStampPath = join(runtimeStateRoot, 'requirements.sha256')
-// 记录上次创建 venv 时所用的 config.pythonPath 原值。读取该文件来判断当前
-// venv 是否仍与最新的自定义路径配置一致。
 const baseInterpreterMarkerPath = join(runtimeStateRoot, 'venv-base-interpreter.txt')
-const MIN_PYTHON_MAJOR = 3
-const MIN_PYTHON_MINOR = 9
 
 const isWindows = process.platform === 'win32'
 const REQUIREMENTS_CONTENT = isWindows ? REQUIREMENTS_WIN32 : REQUIREMENTS_DARWIN
@@ -56,6 +51,10 @@ function getPythonCommandEnv(): Record<string, string> | undefined {
     PYTHONUTF8: '1',
   } as Record<string, string>
 }
+
+// 清华大学 PyPI 镜像，国内安装速度更快
+const PIP_INDEX_URL = 'https://pypi.tuna.tsinghua.edu.cn/simple/'
+const PIP_TRUSTED_HOST = 'pypi.tuna.tsinghua.edu.cn'
 
 // Paths that resolve correctly in both dev and bundled modes
 function getRequirementsPath(): string {
@@ -79,20 +78,6 @@ async function pathExists(target: string): Promise<boolean> {
   }
 }
 
-/**
- * 判断现有 venv 是否与当前 config.pythonPath 配置一致。
- *
- * 通过 marker 文件记录上次 setup 时所用的解释器路径——这比解析 pyvenv.cfg
- * 可靠得多：当用户自定义 Python 自身在一个 venv 里时（conda/pyenv/手工 venv
- * 都是这种情况），Python 的 venv 模块会跳过外层 venv 直接指向 base 解释器，
- * 导致 pyvenv.cfg 的 home 字段记录的是 base 而非用户提供的那个路径。
- *
- * 兼容性：marker 缺失时——
- * - 若用户也没设置自定义路径（current === ''），视为老用户的合法 venv，
- *   返回 true 不打扰。
- * - 若用户设置了自定义路径（current !== ''），说明这是 marker 引入前建立
- *   的旧 venv，绝非由当前自定义路径建立，返回 false 触发重建。
- */
 async function venvBaseInterpreterMatches(
   currentCustomPath: string | null | undefined,
 ): Promise<boolean> {
@@ -124,20 +109,6 @@ async function runCommand(
   } catch {
     return { ok: false, stdout: '', stderr: `Failed to run ${cmd}`, code: -1 }
   }
-}
-
-export async function runPipInstallWithFallback(
-  pythonCmd: string,
-  baseArgs: string[],
-  run: typeof runCommand = runCommand,
-): Promise<{ ok: boolean; stdout: string; stderr: string; code: number }> {
-  let firstFailure: { ok: boolean; stdout: string; stderr: string; code: number } | null = null
-  for (const args of buildPipInstallAttempts(baseArgs)) {
-    const result = await run(pythonCmd, args)
-    if (result.ok) return result
-    firstFailure ??= result
-  }
-  return firstFailure ?? { ok: false, stdout: '', stderr: 'pip install failed', code: -1 }
 }
 
 /**
@@ -200,11 +171,6 @@ async function checkStatus(): Promise<EnvStatus> {
     config.pythonPath,
   )
 
-  // 校验现有 venv 是否与当前 config.pythonPath 配置一致：
-  // - 老用户从未设过自定义路径 → marker 不存在 + current 为空 → 视为匹配，
-  //   原行为完全不变。
-  // - 配置变更（设置/切换/清空自定义路径）→ marker 与 current 不一致 →
-  //   effectiveVenvCreated 置为 false，UI 提示需要重新 setup。
   let effectiveVenvCreated = venvCreated
   if (venvCreated) {
     const matches = await venvBaseInterpreterMatches(config.pythonPath)
@@ -269,26 +235,6 @@ type SetupResult = {
   steps: { name: string; ok: boolean; message: string }[]
 }
 
-export function getUnsupportedPythonVersionStep(
-  version: string | null,
-): SetupResult['steps'][number] | null {
-  if (isPythonVersionAtLeast(version, MIN_PYTHON_MAJOR, MIN_PYTHON_MINOR)) return null
-  return {
-    name: 'python_version',
-    ok: false,
-    message: `Computer Use 需要 Python >= ${MIN_PYTHON_MAJOR}.${MIN_PYTHON_MINOR}，当前版本为 ${version ?? 'unknown'}`,
-  }
-}
-
-export async function installSetupDependencies(
-  venvPython: string,
-  reqPath: string,
-  install: typeof runPipInstallWithFallback = runPipInstallWithFallback,
-): Promise<{ ok: boolean; stdout: string; stderr: string; code: number }> {
-  await install(venvPython, ['-m', 'pip', 'install', '--upgrade', 'pip'])
-  return install(venvPython, ['-m', 'pip', 'install', '-r', reqPath])
-}
-
 async function runSetup(): Promise<SetupResult> {
   const steps: SetupResult['steps'] = []
 
@@ -298,14 +244,9 @@ async function runSetup(): Promise<SetupResult> {
   let venvExists = await pathExists(venvPython)
   const config = await loadConfig()
 
-  // 校验现有 venv 是否与当前 config.pythonPath 配置一致（marker 机制详见
-  // venvBaseInterpreterMatches 注释）。不一致则删除以便后续步骤重建。
-  // 老用户从未设过自定义路径时此分支不会触发，原行为完全保留。
   if (venvExists && !(await venvBaseInterpreterMatches(config.pythonPath))) {
     try {
       await rm(venvRoot, { recursive: true, force: true })
-      // 同时清除 stamp，否则 Step 5 会因 digest 匹配而跳过依赖安装，
-      // 导致重建出的 venv 没有依赖。
       await rm(installStampPath, { force: true })
       await rm(baseInterpreterMarkerPath, { force: true })
       venvExists = false
@@ -351,9 +292,6 @@ async function runSetup(): Promise<SetupResult> {
         : `Python ${pythonRuntime.version}`,
   })
 
-  const unsupportedVersionStep = getUnsupportedPythonVersionStep(pythonRuntime.version)
-  if (unsupportedVersionStep) return { success: false, steps: [...steps, unsupportedVersionStep] }
-
   // Step 2: Extract runtime files to ~/.claude/.runtime/
   try {
     await ensureRuntimeFiles()
@@ -391,7 +329,6 @@ async function runSetup(): Promise<SetupResult> {
       })
       return { success: false, steps }
     }
-    // 记录本次创建 venv 时所用的自定义路径配置，供后续 checkStatus 比对。
     try {
       await writeFile(baseInterpreterMarkerPath, config.pythonPath ?? '', 'utf8')
     } catch (err) {
@@ -439,7 +376,18 @@ async function runSetup(): Promise<SetupResult> {
   } catch {}
 
   if (installedDigest !== digest) {
-    const installResult = await installSetupDependencies(venvPython, reqPath)
+    // Upgrade pip first (using China mirror)
+    await runCommand(venvPython, [
+      '-m', 'pip', 'install', '--upgrade', 'pip',
+      '-i', PIP_INDEX_URL, '--trusted-host', PIP_TRUSTED_HOST,
+    ])
+
+    // Install deps (using China mirror)
+    const installResult = await runCommand(venvPython, [
+      '-m', 'pip', 'install',
+      '-r', reqPath,
+      '-i', PIP_INDEX_URL, '--trusted-host', PIP_TRUSTED_HOST,
+    ])
     if (!installResult.ok) {
       steps.push({
         name: 'deps',

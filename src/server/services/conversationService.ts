@@ -26,13 +26,12 @@ import {
   getClaudeConfigDir,
   resolveExistingGasterConfigPath,
 } from '../../utils/gasterConfig.js'
-import { GASTER_ENV, getGasterManagedEnvKeys } from '../../utils/gasterEnv.js'
+import { GASTER_ENV, LEGACY_GASTER_ENV, getGasterManagedEnvKeys } from '../../utils/gasterEnv.js'
 import { classifyCliErrorPayload } from './errorClassification.js'
 import { getClaudeConfigHomeDir } from '../../utils/envUtils.js'
 import { findCanonicalGitRoot } from '../../utils/git.js'
 import { sanitizePath } from '../../utils/path.js'
 import { getProcessEnvWithTerminalShellEnvironment } from '../../utils/terminalShellEnvironment.js'
-import { buildNetworkEnvironment, loadNetworkSettings } from './networkSettings.js'
 
 const MAX_CAPTURED_PROCESS_LINES = 80
 const MAX_CAPTURED_SDK_MESSAGES = 40
@@ -69,20 +68,10 @@ type SessionProcess = {
     string,
     {
       toolName: string
-      toolUseId?: string
-      description?: string
       input: Record<string, unknown>
       permissionSuggestions?: unknown[]
     }
   >
-}
-
-export type PendingPermissionRequest = {
-  requestId: string
-  toolName: string
-  toolUseId?: string
-  input: Record<string, unknown>
-  description?: string
 }
 
 type SessionStartOptions = {
@@ -242,7 +231,7 @@ export class ConversationService {
 
     // IMPORTANT (Bug#5): 必须覆盖子进程继承的 CALLER_DIR / PWD。
     // preload.ts 顶层读 process.env.CALLER_DIR 并调用 process.chdir(CALLER_DIR)。
-    // 在 bundled 桌面端里，server sidecar 被 Tauri 从 cwd=/ 启动，gaster-sidecar.ts
+    // 在 bundled 桌面端里，server sidecar 被 Tauri 从 cwd=/ 启动，claude-sidecar.ts
     // 在 server/cli 模式入口把 CALLER_DIR 默认设成 process.cwd()（即 '/'），
     // 随后这个 env 被完整继承到 Bun.spawn 的 CLI 子进程；即使这里显式传了
     // cwd: workDir，CLI 子进程里 preload.ts 还是会 chdir('/')，结果把
@@ -593,19 +582,6 @@ export class ConversationService {
     return session?.permissionMode || 'default'
   }
 
-  getPendingPermissionRequests(sessionId: string): PendingPermissionRequest[] {
-    const session = this.sessions.get(sessionId)
-    if (!session) return []
-
-    return Array.from(session.pendingPermissionRequests.entries()).map(([requestId, request]) => ({
-      requestId,
-      toolName: request.toolName,
-      ...(request.toolUseId ? { toolUseId: request.toolUseId } : {}),
-      input: request.input,
-      ...(request.description ? { description: request.description } : {}),
-    }))
-  }
-
   authorizeSdkConnection(
     sessionId: string,
     token: string | null | undefined,
@@ -677,34 +653,14 @@ export class ConversationService {
               typeof msg.request.tool_name === 'string'
                 ? msg.request.tool_name
                 : 'Unknown',
-            toolUseId:
-              typeof msg.request.tool_use_id === 'string' && msg.request.tool_use_id.trim()
-                ? msg.request.tool_use_id
-                : undefined,
             input:
               msg.request.input && typeof msg.request.input === 'object'
                 ? (msg.request.input as Record<string, unknown>)
                 : {},
-            description:
-              typeof msg.request.description === 'string' && msg.request.description.trim()
-                ? msg.request.description
-                : undefined,
             permissionSuggestions: Array.isArray(msg.request.permission_suggestions)
               ? msg.request.permission_suggestions
               : undefined,
           })
-        }
-        if (
-          (msg?.type === 'control_cancel_request' || msg?.type === 'control_response') &&
-          typeof msg.request_id === 'string'
-        ) {
-          session.pendingPermissionRequests.delete(msg.request_id)
-        }
-        if (
-          msg?.type === 'control_response' &&
-          typeof msg.response?.request_id === 'string'
-        ) {
-          session.pendingPermissionRequests.delete(msg.response.request_id)
         }
         for (const cb of session.outputCallbacks) {
           cb(msg)
@@ -1037,6 +993,7 @@ export class ConversationService {
       'ANTHROPIC_DEFAULT_OPUS_MODEL',
       'ANTHROPIC_DEFAULT_OPUS_MODEL_SUPPORTED_CAPABILITIES',
       GASTER_ENV.SEND_DISABLED_THINKING,
+      LEGACY_GASTER_ENV.SEND_DISABLED_THINKING,
       'CLAUDE_CODE_AUTO_COMPACT_WINDOW',
       'CLAUDE_CODE_MODEL_CONTEXT_WINDOWS',
     ] as const
@@ -1074,11 +1031,8 @@ export class ConversationService {
       // Diagnostics must never block session startup.
     }
 
-    const networkEnv = buildNetworkEnvironment(await loadNetworkSettings())
-
     return {
       ...cleanEnv,
-      ...networkEnv,
       CLAUDE_CODE_ENABLE_TASKS: '1',
       CLAUDE_CODE_ENABLE_SDK_FILE_CHECKPOINTING: '1',
       CLAUDE_CODE_DIAGNOSTICS_FILE: cliDiagnosticsPath,
@@ -1144,8 +1098,8 @@ export class ConversationService {
     try {
       // deferred import: avoids instantiating the OAuth singleton on every
       // ConversationService construction — only loaded when official mode hits.
-      const { gasterOAuthService } = await import('./gasterOAuthService.js')
-      const token = await gasterOAuthService.ensureFreshAccessToken()
+      const { hahaOAuthService } = await import('./hahaOAuthService.js')
+      const token = await hahaOAuthService.ensureFreshAccessToken()
       if (token) {
         env.CLAUDE_CODE_OAUTH_TOKEN = token
       }

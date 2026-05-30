@@ -1,8 +1,8 @@
-// desktop/src/api/gasterOAuth.ts
+// desktop/src/api/hahaOAuth.ts
 
 import { api, getBaseUrl } from './client'
 
-export type GasterOAuthStatus =
+export type HahaOAuthStatus =
   | { loggedIn: false }
   | {
       loggedIn: true
@@ -20,19 +20,19 @@ function currentServerPort(): number {
   return parsed
 }
 
-export const gasterOAuthApi = {
+export const hahaOAuthApi = {
   start() {
     return api.post<{ authorizeUrl: string; state: string }>(
-      '/api/gaster-oauth/start',
+      '/api/haha-oauth/start',
       { serverPort: currentServerPort() },
     )
   },
 
   status() {
-    return api.get<GasterOAuthStatus>('/api/gaster-oauth')
+    return api.get<HahaOAuthStatus>('/api/haha-oauth')
   },
 
   logout() {
-    return api.delete<{ ok: true }>('/api/gaster-oauth')
+    return api.delete<{ ok: true }>('/api/haha-oauth')
   },
 }

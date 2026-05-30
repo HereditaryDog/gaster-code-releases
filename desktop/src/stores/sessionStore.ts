@@ -1,10 +1,5 @@
 import { create } from 'zustand'
-import {
-  sessionsApi,
-  type BatchDeleteSessionsResponse,
-  type CreateSessionRepositoryOptions,
-  type SessionBranchResponse,
-} from '../api/sessions'
+import { sessionsApi, type BatchDeleteSessionsResponse, type CreateSessionRepositoryOptions } from '../api/sessions'
 import { useSessionRuntimeStore } from './sessionRuntimeStore'
 import { useTabStore } from './tabStore'
 import type { SessionListItem } from '../types/session'
@@ -35,7 +30,6 @@ type SessionStore = {
   deselectSessions: (ids: string[]) => void
   clearSessionSelection: () => void
   renameSession: (id: string, title: string) => Promise<void>
-  branchSession: (id: string, targetMessageId: string) => Promise<SessionBranchResponse>
   updateSessionTitle: (id: string, title: string) => void
   setActiveSession: (id: string | null) => void
   setSelectedProjects: (projects: string[]) => void
@@ -161,30 +155,6 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         session.id === id ? { ...session, title } : session,
       ),
     }))
-  },
-
-  branchSession: async (id: string, targetMessageId: string) => {
-    const result = await sessionsApi.branch(id, targetMessageId)
-    const now = new Date().toISOString()
-    const branchedSession: SessionListItem = {
-      id: result.sessionId,
-      title: result.title,
-      createdAt: now,
-      modifiedAt: now,
-      messageCount: 0,
-      projectPath: '',
-      workDir: result.workDir ?? null,
-      workDirExists: true,
-    }
-
-    set((state) => ({
-      sessions: state.sessions.some((session) => session.id === result.sessionId)
-        ? state.sessions
-        : [branchedSession, ...state.sessions],
-      activeSessionId: result.sessionId,
-    }))
-    void get().fetchSessions()
-    return result
   },
 
   updateSessionTitle: (id, title) => {

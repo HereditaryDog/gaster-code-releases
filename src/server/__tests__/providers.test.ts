@@ -535,6 +535,7 @@ describe('ProviderService', () => {
       const settings = await readSettings()
       const env = settings.env as Record<string, string>
       expect(env.GASTER_CODE_SEND_DISABLED_THINKING).toBe('1')
+      expect(env.CC_HAHA_SEND_DISABLED_THINKING).toBeUndefined()
       expect(env.CLAUDE_CODE_AUTO_COMPACT_WINDOW).toBeUndefined()
       expect(JSON.parse(env.CLAUDE_CODE_MODEL_CONTEXT_WINDOWS)).toEqual({
         'deepseek-v4-pro': 1000000,
@@ -545,6 +546,7 @@ describe('ProviderService', () => {
 
       const runtimeEnv = await svc.getProviderRuntimeEnv(provider.id)
       expect(runtimeEnv.GASTER_CODE_SEND_DISABLED_THINKING).toBe('1')
+      expect(runtimeEnv.CC_HAHA_SEND_DISABLED_THINKING).toBeUndefined()
       expect(runtimeEnv.CLAUDE_CODE_AUTO_COMPACT_WINDOW).toBeUndefined()
       expect(JSON.parse(runtimeEnv.CLAUDE_CODE_MODEL_CONTEXT_WINDOWS)).toEqual({
         'deepseek-v4-pro': 1000000,
@@ -557,6 +559,7 @@ describe('ProviderService', () => {
       const clearedSettings = await readSettings()
       const clearedEnv = (clearedSettings.env as Record<string, string> | undefined) ?? {}
       expect(clearedEnv.GASTER_CODE_SEND_DISABLED_THINKING).toBeUndefined()
+      expect(clearedEnv.CC_HAHA_SEND_DISABLED_THINKING).toBeUndefined()
       expect(clearedEnv.CLAUDE_CODE_AUTO_COMPACT_WINDOW).toBeUndefined()
       expect(clearedEnv.CLAUDE_CODE_MODEL_CONTEXT_WINDOWS).toBeUndefined()
     })
@@ -663,17 +666,17 @@ describe('ProviderService', () => {
     })
   })
 
-  describe('managed settings storage', () => {
-    test('reads and writes managed settings in Gaster Code storage', async () => {
-      await fs.mkdir(path.join(tmpDir, 'gaster-code'), { recursive: true })
+  describe('legacy storage migration', () => {
+    test('reads legacy cc-haha provider settings and writes updates to gaster-code', async () => {
+      await fs.mkdir(path.join(tmpDir, 'cc-haha'), { recursive: true })
       await fs.writeFile(
-        path.join(tmpDir, 'gaster-code', 'settings.json'),
-        JSON.stringify({ env: { ANTHROPIC_MODEL: 'initial-model' } }, null, 2),
+        path.join(tmpDir, 'cc-haha', 'settings.json'),
+        JSON.stringify({ env: { ANTHROPIC_MODEL: 'legacy-model' } }, null, 2),
         'utf-8',
       )
 
       const svc = new ProviderService()
-      expect(await svc.getManagedSettings()).toEqual({ env: { ANTHROPIC_MODEL: 'initial-model' } })
+      expect(await svc.getManagedSettings()).toEqual({ env: { ANTHROPIC_MODEL: 'legacy-model' } })
 
       await svc.updateManagedSettings({ env: { ANTHROPIC_MODEL: 'gaster-model' } })
       await expect(fs.readFile(path.join(tmpDir, 'gaster-code', 'settings.json'), 'utf-8'))

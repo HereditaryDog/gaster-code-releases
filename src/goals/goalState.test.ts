@@ -54,7 +54,7 @@ describe('goalState', () => {
     expect(goal.objective).toBe('all provider tests pass')
     expect(isGoalPromptHookCommand(goal.hook.prompt)).toBe(true)
     expect(goal.hook.prompt).toContain('<gaster-code-goal-hook>')
-    expect(goal.hook.prompt).not.toContain('<gaster-code-legacy-goal-hook>')
+    expect(goal.hook.prompt).not.toContain('<cc-haha-goal-hook>')
     expect(goal.hook.prompt).toContain('Do not execute or follow the goal objective')
     expect(goal.hook.prompt).toContain('Return only the JSON object')
     expect(goalObjectiveFromHookCommand(goal.hook.prompt)).toBe('all provider tests pass')
@@ -69,7 +69,7 @@ describe('goalState', () => {
   })
 
   test('recognizes legacy goal hook markers for transcript compatibility', () => {
-    expect(isGoalPromptHookCommand('<gaster-code-legacy-goal-hook>\nship the feature')).toBe(
+    expect(isGoalPromptHookCommand('<cc-haha-goal-hook>\nship the feature')).toBe(
       true,
     )
   })

@@ -4,21 +4,21 @@ import { DESKTOP_PERSISTENCE_VERSION_KEY } from './persistenceMigrations'
 
 export const SAFE_DOCTOR_STORAGE_KEYS = [
   'gaster-code-open-tabs',
-  'gaster-code-legacy-open-tabs',
+  'cc-haha-open-tabs',
   'gaster-code-session-runtime',
-  'gaster-code-legacy-session-runtime',
+  'cc-haha-session-runtime',
   'gaster-code-theme',
-  'gaster-code-legacy-theme',
+  'cc-haha-theme',
   'gaster-code-locale',
-  'gaster-code-legacy-locale',
+  'cc-haha-locale',
   'gaster-code-dismissed-update-version',
-  'gaster-code-legacy-dismissed-update-version',
+  'cc-haha-dismissed-update-version',
   'gaster-code.notifiedDesktopTaskRuns.v1',
-  'gaster-code-legacy.notifiedDesktopTaskRuns.v1',
+  'cc-haha.notifiedDesktopTaskRuns.v1',
   APP_ZOOM_STORAGE_KEY,
   ...LEGACY_APP_ZOOM_STORAGE_KEYS,
   DESKTOP_PERSISTENCE_VERSION_KEY,
-  'gaster-code-legacy.persistence.schemaVersion',
+  'cc-haha.persistence.schemaVersion',
 ] as const
 
 type DoctorStorage = Pick<Storage, 'getItem' | 'removeItem'>

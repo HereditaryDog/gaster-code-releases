@@ -1,16 +1,16 @@
 /**
- * Gaster OAuth REST API
+ * Haha OAuth REST API
  *
- * POST   /api/gaster-oauth/start    — 生成 PKCE+state,返回 authorize URL
+ * POST   /api/haha-oauth/start    — 生成 PKCE+state,返回 authorize URL
  * GET    /callback                — 用户浏览器 redirect 到此,完成 token 交换
- * GET    /api/gaster-oauth/callback — 兼容旧路径
- * GET    /api/gaster-oauth          — 查询当前登录状态(不回传 token 本体)
- * GET    /api/gaster-oauth/status   — 同上(legacy path)
- * DELETE /api/gaster-oauth          — 登出,删除 token 文件
+ * GET    /api/haha-oauth/callback — 兼容旧路径
+ * GET    /api/haha-oauth          — 查询当前登录状态(不回传 token 本体)
+ * GET    /api/haha-oauth/status   — 同上(legacy path)
+ * DELETE /api/haha-oauth          — 登出,删除 token 文件
  */
 
 import { z } from 'zod'
-import { gasterOAuthService } from '../services/gasterOAuthService.js'
+import { hahaOAuthService } from '../services/hahaOAuthService.js'
 import { ApiError, errorResponse } from '../middleware/errorHandler.js'
 
 const StartRequestSchema = z.object({
@@ -24,13 +24,13 @@ function html(body: string): Response {
   })
 }
 
-export async function handleGasterOAuthApi(
+export async function handleHahaOAuthApi(
   req: Request,
   url: URL,
   segments: string[],
 ): Promise<Response> {
   try {
-    const action = segments[2] // segments: ['api', 'gaster-oauth', <action?>]
+    const action = segments[2] // segments: ['api', 'haha-oauth', <action?>]
 
     if (action === 'start' && req.method === 'POST') {
       let body: unknown
@@ -43,7 +43,7 @@ export async function handleGasterOAuthApi(
       if (!parsed.success) {
         throw ApiError.badRequest('serverPort (positive integer) required')
       }
-      const session = gasterOAuthService.startSession({
+      const session = hahaOAuthService.startSession({
         serverPort: parsed.data.serverPort,
       })
       return Response.json({
@@ -53,11 +53,11 @@ export async function handleGasterOAuthApi(
     }
 
     if (action === 'callback' && req.method === 'GET') {
-      return handleGasterOAuthCallback(url)
+      return handleHahaOAuthCallback(url)
     }
 
     if ((action === undefined || action === 'status') && req.method === 'GET') {
-      const tokens = await gasterOAuthService.ensureFreshTokens()
+      const tokens = await hahaOAuthService.ensureFreshTokens()
       if (!tokens) {
         return Response.json({ loggedIn: false })
       }
@@ -70,7 +70,7 @@ export async function handleGasterOAuthApi(
     }
 
     if (action === undefined && req.method === 'DELETE') {
-      await gasterOAuthService.deleteTokens()
+      await hahaOAuthService.deleteTokens()
       return Response.json({ ok: true })
     }
 
@@ -80,7 +80,7 @@ export async function handleGasterOAuthApi(
   }
 }
 
-export async function handleGasterOAuthCallback(url: URL): Promise<Response> {
+export async function handleHahaOAuthCallback(url: URL): Promise<Response> {
   const code = url.searchParams.get('code')
   const state = url.searchParams.get('state')
   const error = url.searchParams.get('error')
@@ -93,7 +93,7 @@ export async function handleGasterOAuthCallback(url: URL): Promise<Response> {
   }
 
   try {
-    await gasterOAuthService.completeSession(code, state)
+    await hahaOAuthService.completeSession(code, state)
     return html(renderCallbackPage(true, null))
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)

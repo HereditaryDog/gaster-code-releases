@@ -21,12 +21,6 @@ import {
   splitMessage,
 } from '../common/format.js'
 import {
-  buildTelegramThinkingUpdate,
-  formatTelegramOutboundText,
-  formatTelegramStreamingText,
-  planTelegramStreamingUpdate,
-} from './format.js'
-import {
   formatPermissionDecisionStatus,
   formatPermissionInstructions,
   parsePermissionCommand,
@@ -45,7 +39,6 @@ import type { PendingUpload } from '../common/attachment/attachment-types.js'
 import * as fs from 'node:fs/promises'
 
 const TELEGRAM_TEXT_LIMIT = 4000 // leave margin below 4096
-const TELEGRAM_STREAMING_TEXT_LIMIT = TELEGRAM_TEXT_LIMIT - 2 // reserve room for cursor
 
 // ---------- init ----------
 
@@ -71,7 +64,6 @@ attachmentStore.gc().catch((err) => {
 const placeholders = new Map<string, { chatId: string; messageId: number }>()
 // Track accumulated text per chat for streaming
 const accumulatedText = new Map<string, string>()
-const accumulatedThinkingText = new Map<string, string>()
 // Message buffers per chat
 const buffers = new Map<string, MessageBuffer>()
 // Track chats waiting for project selection
@@ -122,7 +114,6 @@ function getRuntimeState(chatId: string): ChatRuntimeState {
 function clearTransientChatState(chatId: string): void {
   placeholders.delete(chatId)
   accumulatedText.delete(chatId)
-  accumulatedThinkingText.delete(chatId)
   buffers.get(chatId)?.reset()
   const runtime = getRuntimeState(chatId)
   runtime.state = 'idle'
@@ -219,14 +210,14 @@ async function buildStatusText(chatId: string): Promise<string> {
 async function flushToTelegram(chatId: string, newText: string, isComplete: boolean): Promise<void> {
   const numericChatId = Number(chatId)
   const prev = accumulatedText.get(chatId) ?? ''
+  const fullText = prev + newText
+  accumulatedText.set(chatId, fullText)
 
   const placeholder = placeholders.get(chatId)
 
   if (placeholder) {
     if (isComplete) {
-      const fullText = prev + newText
-      accumulatedText.set(chatId, fullText)
-      const chunks = splitMessage(formatTelegramOutboundText(fullText), TELEGRAM_TEXT_LIMIT)
+      const chunks = splitMessage(fullText, TELEGRAM_TEXT_LIMIT)
       try {
         await bot.api.editMessageText(numericChatId, placeholder.messageId, chunks[0]!)
       } catch { /* ignore */ }
@@ -234,45 +225,16 @@ async function flushToTelegram(chatId: string, newText: string, isComplete: bool
         await bot.api.sendMessage(numericChatId, chunks[i]!)
       }
     } else {
-      const { sealedChunks, activeChunk } = planTelegramStreamingUpdate(
-        prev,
-        newText,
-        TELEGRAM_STREAMING_TEXT_LIMIT,
-      )
-      accumulatedText.set(chatId, activeChunk)
+      const displayText = fullText.slice(0, TELEGRAM_TEXT_LIMIT - 2) + ' ▍'
       try {
-        const firstSealedChunk = sealedChunks.shift()
-        if (firstSealedChunk) {
-          const firstSealedFormattedChunks = splitMessage(
-            formatTelegramOutboundText(firstSealedChunk),
-            TELEGRAM_TEXT_LIMIT,
-          )
-          await bot.api.editMessageText(numericChatId, placeholder.messageId, firstSealedFormattedChunks[0]!)
-          for (let i = 1; i < firstSealedFormattedChunks.length; i++) {
-            await bot.api.sendMessage(numericChatId, firstSealedFormattedChunks[i]!)
-          }
-          for (const chunk of sealedChunks) {
-            const formattedChunks = splitMessage(formatTelegramOutboundText(chunk), TELEGRAM_TEXT_LIMIT)
-            for (const formattedChunk of formattedChunks) {
-              await bot.api.sendMessage(numericChatId, formattedChunk)
-            }
-          }
-          const sent = await bot.api.sendMessage(numericChatId, formatTelegramStreamingText(activeChunk))
-          placeholders.set(chatId, { chatId, messageId: sent.message_id })
-        } else {
-          await bot.api.editMessageText(numericChatId, placeholder.messageId, formatTelegramStreamingText(activeChunk))
-        }
+        await bot.api.editMessageText(numericChatId, placeholder.messageId, displayText)
       } catch { /* ignore */ }
     }
-  } else if (isComplete && (prev + newText).trim()) {
-    const fullText = prev + newText
-    accumulatedText.set(chatId, fullText)
-    const chunks = splitMessage(formatTelegramOutboundText(fullText), TELEGRAM_TEXT_LIMIT)
+  } else if (isComplete && fullText.trim()) {
+    const chunks = splitMessage(fullText, TELEGRAM_TEXT_LIMIT)
     for (const chunk of chunks) {
       await bot.api.sendMessage(numericChatId, chunk)
     }
-  } else {
-    accumulatedText.set(chatId, prev + newText)
   }
 
   if (isComplete) {
@@ -413,13 +375,11 @@ async function handleServerMessage(chatId: string, msg: ServerMessage): Promise<
         const sent = await bot.api.sendMessage(numericChatId, '💭 思考中...')
         placeholders.set(chatId, { chatId, messageId: sent.message_id })
         accumulatedText.set(chatId, '')
-        accumulatedThinkingText.set(chatId, '')
       }
       break
 
     case 'content_start':
       if (msg.blockType === 'text') {
-        accumulatedThinkingText.delete(chatId)
         if (!placeholders.has(chatId)) {
           const sent = await bot.api.sendMessage(numericChatId, '▍')
           placeholders.set(chatId, { chatId, messageId: sent.message_id })
@@ -434,11 +394,7 @@ async function handleServerMessage(chatId: string, msg: ServerMessage): Promise<
           const text = accumulatedText.get(chatId)
           if (text?.trim()) {
             try {
-              await bot.api.editMessageText(
-                numericChatId,
-                placeholders.get(chatId)!.messageId,
-                formatTelegramOutboundText(text),
-              )
+              await bot.api.editMessageText(numericChatId, placeholders.get(chatId)!.messageId, text)
             } catch { /* ignore */ }
           }
           placeholders.delete(chatId)
@@ -450,7 +406,6 @@ async function handleServerMessage(chatId: string, msg: ServerMessage): Promise<
 
     case 'content_delta':
       if (msg.text) {
-        accumulatedThinkingText.delete(chatId)
         buf.append(msg.text)
         const newUploads = getTgWatcher(chatId).feed(msg.text)
         for (const pending of newUploads) {
@@ -461,16 +416,11 @@ async function handleServerMessage(chatId: string, msg: ServerMessage): Promise<
 
     case 'thinking':
       if (placeholders.has(chatId)) {
-        const update = buildTelegramThinkingUpdate(
-          accumulatedThinkingText.get(chatId) ?? '',
-          msg.text,
-        )
-        accumulatedThinkingText.set(chatId, update.fullText)
         try {
           await bot.api.editMessageText(
             numericChatId,
             placeholders.get(chatId)!.messageId,
-            update.messageText,
+            `💭 ${msg.text.slice(0, 200)}...`,
           )
         } catch { /* ignore */ }
       }
@@ -510,7 +460,7 @@ async function handleServerMessage(chatId: string, msg: ServerMessage): Promise<
         const text = accumulatedText.get(chatId)
         if (text?.trim()) {
           try {
-            const chunks = splitMessage(formatTelegramOutboundText(text), TELEGRAM_TEXT_LIMIT)
+            const chunks = splitMessage(text, TELEGRAM_TEXT_LIMIT)
             await bot.api.editMessageText(numericChatId, placeholders.get(chatId)!.messageId, chunks[0]!)
             for (let i = 1; i < chunks.length; i++) {
               await bot.api.sendMessage(numericChatId, chunks[i]!)
@@ -519,7 +469,6 @@ async function handleServerMessage(chatId: string, msg: ServerMessage): Promise<
         }
         placeholders.delete(chatId)
         accumulatedText.delete(chatId)
-        accumulatedThinkingText.delete(chatId)
         buffers.get(chatId)?.reset()
       }
       break
@@ -527,7 +476,6 @@ async function handleServerMessage(chatId: string, msg: ServerMessage): Promise<
     case 'error':
       runtime.state = 'idle'
       runtime.verb = undefined
-      accumulatedThinkingText.delete(chatId)
       // Auto-recover from stale thinking block signatures by creating a fresh session.
       // This happens when the API key or provider changed since the session was created.
       if (msg.message && /Invalid.*signature.*thinking/i.test(msg.message)) {
@@ -582,7 +530,6 @@ async function startNewSession(chatId: string, query?: string): Promise<void> {
   sessionStore.delete(chatId)
   placeholders.delete(chatId)
   accumulatedText.delete(chatId)
-  accumulatedThinkingText.delete(chatId)
   buffers.get(chatId)?.reset()
   buffers.delete(chatId)
   pendingProjectSelection.delete(chatId)

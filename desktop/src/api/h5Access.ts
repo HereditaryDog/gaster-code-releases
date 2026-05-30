@@ -1,11 +1,10 @@
 import { api } from './client'
-import type { H5AccessDiagnostics, H5AccessSettings } from '../types/settings'
+import type { H5AccessSettings } from '../types/settings'
 
-export type { H5AccessDiagnostics, H5AccessSettings } from '../types/settings'
+export type { H5AccessSettings } from '../types/settings'
 
 export type H5AccessStatus = {
   settings: H5AccessSettings
-  diagnostics?: H5AccessDiagnostics
 }
 
 export type H5AccessTokenResult = {

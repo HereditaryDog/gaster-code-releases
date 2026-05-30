@@ -11,6 +11,7 @@ let tmpDir: string
 let originalConfigDir: string | undefined
 let originalBaseUrl: string | undefined
 let authStartBodies: unknown[]
+let billingRequestBodies: unknown[]
 
 async function setup() {
   tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'gmaster-auth-api-test-'))
@@ -19,6 +20,7 @@ async function setup() {
   process.env.CLAUDE_CONFIG_DIR = tmpDir
   process.env.GMASTER_API_BASE_URL = 'https://gmapi.example.test'
   authStartBodies = []
+  billingRequestBodies = []
   gmasterAuthService.setFetchFn(async (url, init) => {
     if (String(url).endsWith('/api/gaster-code/auth/start')) {
       authStartBodies.push(JSON.parse(String(init?.body)))
@@ -51,6 +53,72 @@ async function setup() {
     }
     if (String(url).endsWith('/v1/models')) {
       return Response.json({ object: 'list', data: [{ id: 'gpt-5.4', object: 'model' }] })
+    }
+    if (String(url).endsWith('/api/gaster-code/billing/plans')) {
+      return Response.json({
+        success: true,
+        data: {
+          plans: [{
+            id: 'subscription_2',
+            kind: 'subscription',
+            name: 'Monthly',
+            description: 'Monthly subscription',
+            price: 1200,
+            currency: 'USD',
+            interval: 'month',
+            quota_amount: 10000000,
+            unlimited: false,
+            recommended: true,
+          }],
+        },
+      })
+    }
+    if (String(url).endsWith('/api/gaster-code/billing/checkout')) {
+      billingRequestBodies.push(JSON.parse(String(init?.body)))
+      return Response.json({
+        success: true,
+        data: {
+          id: 'cs_123',
+          status: 'pending',
+          url: 'https://pay.example.test/cs_123',
+          kind: 'subscription',
+          expires_at: 1770000300,
+        },
+      })
+    }
+    if (String(url).endsWith('/api/gaster-code/billing/checkout/cs_%2F123')) {
+      return Response.json({
+        success: true,
+        data: { id: 'cs_/123', status: 'paid', url: '', kind: 'subscription', expires_at: null },
+      })
+    }
+    if (String(url).endsWith('/api/gaster-code/billing/transactions')) {
+      return Response.json({
+        success: true,
+        data: {
+          transactions: [{
+            id: 'txn_1',
+            kind: 'topup',
+            status: 'paid',
+            amount: 1200,
+            currency: 'USD',
+            created_at: 1770000000,
+            description: 'Top up',
+          }],
+        },
+      })
+    }
+    if (String(url).endsWith('/api/gaster-code/subscription/cancel')) {
+      return Response.json({
+        success: true,
+        data: { ok: true },
+      })
+    }
+    if (String(url).endsWith('/api/gaster-code/subscription/resume')) {
+      return Response.json({
+        success: true,
+        data: { ok: true },
+      })
     }
     return Response.json({ success: false, message: `unexpected ${String(url)} ${init?.method}` }, { status: 500 })
   })
@@ -255,6 +323,131 @@ describe('gmaster auth local API', () => {
       const res = await handleGMasterAuthApi(req, url, segments)
       expect(res.status).toBe(404)
     }
+  })
+
+  test('billing nested routes proxy authenticated G-Master API calls', async () => {
+    await gmasterAuthService.saveTokens({
+      accessToken: 'desktop-access',
+      refreshToken: null,
+      expiresAt: null,
+      user: { id: 7, username: 'alice', displayName: 'Alice' },
+    })
+
+    const plans = buildReq('GET', '/api/gmaster-auth/billing/plans')
+    const plansRes = await handleGMasterAuthApi(plans.req, plans.url, plans.segments)
+    expect(plansRes.status).toBe(200)
+    expect(await plansRes.json()).toEqual({
+      plans: [{
+        id: 'subscription_2',
+        kind: 'subscription',
+        name: 'Monthly',
+        description: 'Monthly subscription',
+        price: 1200,
+        currency: 'USD',
+        interval: 'month',
+        quotaAmount: 10000000,
+        unlimited: false,
+        recommended: true,
+      }],
+    })
+
+    const checkout = buildReq('POST', '/api/gmaster-auth/billing/checkout', {
+      kind: 'subscription',
+      planId: 'subscription_2',
+    })
+    const checkoutRes = await handleGMasterAuthApi(checkout.req, checkout.url, checkout.segments)
+    expect(checkoutRes.status).toBe(200)
+    expect(await checkoutRes.json()).toMatchObject({
+      id: 'cs_123',
+      status: 'pending',
+      url: 'https://pay.example.test/cs_123',
+      kind: 'subscription',
+      expiresAt: 1770000300,
+    })
+    expect(billingRequestBodies[0]).toEqual({
+      kind: 'subscription',
+      plan_id: 'subscription_2',
+      return_to: 'account',
+    })
+
+    const checkoutStatus = buildReq('GET', '/api/gmaster-auth/billing/checkout/cs_%2F123')
+    const checkoutStatusRes = await handleGMasterAuthApi(checkoutStatus.req, checkoutStatus.url, checkoutStatus.segments)
+    expect(checkoutStatusRes.status).toBe(200)
+    expect(await checkoutStatusRes.json()).toMatchObject({ id: 'cs_/123', status: 'paid' })
+
+    const transactions = buildReq('GET', '/api/gmaster-auth/billing/transactions')
+    const transactionsRes = await handleGMasterAuthApi(transactions.req, transactions.url, transactions.segments)
+    expect(transactionsRes.status).toBe(200)
+    expect(await transactionsRes.json()).toEqual({
+      transactions: [{
+        id: 'txn_1',
+        kind: 'topup',
+        status: 'paid',
+        amount: 1200,
+        currency: 'USD',
+        createdAt: 1770000000,
+        description: 'Top up',
+      }],
+    })
+
+    const cancel = buildReq('POST', '/api/gmaster-auth/subscription/cancel')
+    const cancelRes = await handleGMasterAuthApi(cancel.req, cancel.url, cancel.segments)
+    expect(cancelRes.status).toBe(200)
+    expect(await cancelRes.json()).toEqual({ ok: true })
+
+    const resume = buildReq('POST', '/api/gmaster-auth/subscription/resume')
+    const resumeRes = await handleGMasterAuthApi(resume.req, resume.url, resume.segments)
+    expect(resumeRes.status).toBe(200)
+    expect(await resumeRes.json()).toEqual({ ok: true })
+  })
+
+  test('billing checkout validates request body and unknown nested routes stay 404', async () => {
+    await gmasterAuthService.saveTokens({
+      accessToken: 'desktop-access',
+      refreshToken: null,
+      expiresAt: null,
+      user: { id: 7, username: 'alice', displayName: 'Alice' },
+    })
+
+    const invalid = buildReq('POST', '/api/gmaster-auth/billing/checkout', {
+      kind: 'topup',
+      planId: '',
+      returnTo: 'dashboard',
+    })
+    const invalidRes = await handleGMasterAuthApi(invalid.req, invalid.url, invalid.segments)
+    expect(invalidRes.status).toBe(400)
+
+    const unknown = buildReq('GET', '/api/gmaster-auth/billing/checkout/cs_123/extra')
+    const unknownRes = await handleGMasterAuthApi(unknown.req, unknown.url, unknown.segments)
+    expect(unknownRes.status).toBe(404)
+  })
+
+  test('billing routes preserve stable G-Master API error codes', async () => {
+    await gmasterAuthService.saveTokens({
+      accessToken: 'desktop-access',
+      refreshToken: null,
+      expiresAt: null,
+      user: { id: 7, username: 'alice', displayName: 'Alice' },
+    })
+    gmasterAuthService.setFetchFn(async (url) => {
+      if (String(url).endsWith('/api/gaster-code/billing/plans')) {
+        return Response.json({
+          success: false,
+          code: 'GMASTER_BILLING_PLAN_UNAVAILABLE',
+          message: 'subscription plan is unavailable',
+        })
+      }
+      return Response.json({ success: false, message: `unexpected ${String(url)}` }, { status: 500 })
+    })
+
+    const plans = buildReq('GET', '/api/gmaster-auth/billing/plans')
+    const res = await handleGMasterAuthApi(plans.req, plans.url, plans.segments)
+
+    expect(res.status).toBe(400)
+    expect(await res.json()).toEqual({
+      error: 'GMASTER_BILLING_PLAN_UNAVAILABLE',
+      message: 'subscription plan is unavailable',
+    })
   })
 
   test('POST /api/gmaster-auth/sync-provider upserts managed provider', async () => {

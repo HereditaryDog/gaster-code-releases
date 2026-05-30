@@ -285,7 +285,7 @@ export function getWebSocketProxyUrl(url: string): string | undefined {
  *   requests get misrouted to api.anthropic.com. Only the Anthropic SDK client
  *   should pass `true` here.
  */
-export function getProxyFetchOptions(opts?: { forAnthropicAPI?: boolean; proxyUrl?: string }): {
+export function getProxyFetchOptions(opts?: { forAnthropicAPI?: boolean }): {
   tls?: TLSConfig
   dispatcher?: undici.Dispatcher
   proxy?: string
@@ -304,7 +304,7 @@ export function getProxyFetchOptions(opts?: { forAnthropicAPI?: boolean; proxyUr
     }
   }
 
-  const proxyUrl = opts?.proxyUrl || getProxyUrl()
+  const proxyUrl = getProxyUrl()
 
   // If we have a proxy, use the proxy agent (which includes mTLS config)
   if (proxyUrl) {

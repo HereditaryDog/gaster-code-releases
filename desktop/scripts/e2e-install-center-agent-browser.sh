@@ -21,7 +21,7 @@ ARTIFACT_DIR="$(mktemp -d "/tmp/gaster-code-install-e2e-${RUN_ID}-XXXX")"
 SERVER_LOG="${ARTIFACT_DIR}/server.log"
 WEB_LOG="${ARTIFACT_DIR}/web.log"
 
-if [[ "${GASTER_CODE_E2E_USE_REAL_CONFIG:-1}" == "1" ]]; then
+if [[ "${CC_HAHA_E2E_USE_REAL_CONFIG:-1}" == "1" ]]; then
   CONFIG_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
 else
   CONFIG_DIR="${CLAUDE_CONFIG_DIR:-${ARTIFACT_DIR}/claude-config}"

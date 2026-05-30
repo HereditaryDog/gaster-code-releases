@@ -89,6 +89,24 @@ describe('persistent storage upgrade migrations', () => {
     expect(rewritten.providers?.[0]?.extraFutureField).toBe('keep-me')
   })
 
+  test('imports legacy cc-haha managed settings into Gaster Code storage', async () => {
+    const legacyDir = path.join(tempDir, 'cc-haha')
+    await fs.mkdir(legacyDir, { recursive: true })
+    await fs.writeFile(
+      path.join(legacyDir, 'settings.json'),
+      JSON.stringify({ env: { ANTHROPIC_MODEL: 'legacy-model' } }, null, 2),
+      'utf-8',
+    )
+
+    const report = await ensurePersistentStorageUpgraded()
+
+    expect(report.failures).toEqual([])
+    expect(report.migratedEntries).toContain('legacy cc-haha/settings.json')
+    expect(JSON.parse(await fs.readFile(path.join(tempDir, 'gaster-code', 'settings.json'), 'utf-8'))).toEqual({
+      env: { ANTHROPIC_MODEL: 'legacy-model' },
+    })
+  })
+
   test('does not write Gaster schema metadata into shared user settings', async () => {
     await fs.writeFile(
       path.join(tempDir, 'settings.json'),

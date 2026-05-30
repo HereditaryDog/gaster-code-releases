@@ -28,11 +28,11 @@ await mkdir(binariesDir, { recursive: true })
 
 // 单一合并 sidecar：server / cli 共享一份 bun runtime + 共享依赖代码。
 // 调用方（Tauri lib.rs / conversationService）通过第一个 positional 参数
-// 选择 'server' 或 'cli' 模式，详见 desktop/sidecars/gaster-sidecar.ts。
+// 选择 'server' 或 'cli' 模式，详见 desktop/sidecars/claude-sidecar.ts。
 await compileExecutable({
-  entrypoint: path.join(desktopRoot, 'sidecars/gaster-sidecar.ts'),
-  outfileBase: path.join(binariesDir, `gaster-sidecar-${targetTriple}`),
-  productName: 'Gaster Code Sidecar',
+  entrypoint: path.join(desktopRoot, 'sidecars/claude-sidecar.ts'),
+  outfileBase: path.join(binariesDir, `claude-sidecar-${targetTriple}`),
+  productName: 'Claude Code Sidecar',
   bunTarget,
 })
 

@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { resetMcpStdioEnvironmentCacheForTests } from '../../utils/mcpStdioEnvironment.js'
-import { GASTER_ENV } from '../../utils/gasterEnv.js'
+import { GASTER_ENV, LEGACY_GASTER_ENV } from '../../utils/gasterEnv.js'
 import { inspectMcpHostCommand } from './mcpHostPreflight.js'
 
 let tmpDir: string
@@ -13,6 +13,7 @@ let originalEnv: {
   SHELL?: string
   ZDOTDIR?: string
   GASTER_CODE_DISABLE_TERMINAL_SHELL_ENV?: string
+  CC_HAHA_DISABLE_TERMINAL_SHELL_ENV?: string
 }
 
 async function writeExecutable(filePath: string, content: string) {
@@ -52,8 +53,11 @@ describe('MCP host preflight', () => {
       ZDOTDIR: process.env.ZDOTDIR,
       GASTER_CODE_DISABLE_TERMINAL_SHELL_ENV:
         process.env[GASTER_ENV.TERMINAL_SHELL_ENV_DISABLED],
+      CC_HAHA_DISABLE_TERMINAL_SHELL_ENV:
+        process.env[LEGACY_GASTER_ENV.TERMINAL_SHELL_ENV_DISABLED],
     }
     delete process.env[GASTER_ENV.TERMINAL_SHELL_ENV_DISABLED]
+    delete process.env[LEGACY_GASTER_ENV.TERMINAL_SHELL_ENV_DISABLED]
     resetMcpStdioEnvironmentCacheForTests()
   })
 

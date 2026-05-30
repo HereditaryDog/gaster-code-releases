@@ -3,7 +3,7 @@ import { isThemeMode, THEME_MODES, type ThemeMode } from '../types/settings'
 import { readMigratedStorage, writeMigratedStorage } from '../lib/storageMigration'
 
 const THEME_STORAGE_KEY = 'gaster-code-theme'
-const LEGACY_THEME_STORAGE_KEYS = ['gaster-code-legacy-theme']
+const LEGACY_THEME_STORAGE_KEYS = ['cc-haha-theme']
 const SIDEBAR_WIDTH_STORAGE_KEY = 'gaster-code-sidebar-width'
 export const SIDEBAR_MIN_WIDTH = 240
 export const SIDEBAR_DEFAULT_WIDTH = 280

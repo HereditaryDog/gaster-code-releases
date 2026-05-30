@@ -1,12 +1,12 @@
-// desktop/src/stores/gasterOAuthStore.ts
+// desktop/src/stores/hahaOAuthStore.ts
 
 import { create } from 'zustand'
-import { gasterOAuthApi, type GasterOAuthStatus } from '../api/gasterOAuth'
+import { hahaOAuthApi, type HahaOAuthStatus } from '../api/hahaOAuth'
 
 const POLL_INTERVAL_MS = 2_000
 
-type GasterOAuthState = {
-  status: GasterOAuthStatus | null
+type HahaOAuthState = {
+  status: HahaOAuthStatus | null
   isPolling: boolean
   isLoading: boolean
   error: string | null
@@ -18,7 +18,7 @@ type GasterOAuthState = {
   stopPolling: () => void
 }
 
-export const useGasterOAuthStore = create<GasterOAuthState>((set, get) => {
+export const useHahaOAuthStore = create<HahaOAuthState>((set, get) => {
   let pollTimer: ReturnType<typeof setTimeout> | null = null
 
   return {
@@ -29,7 +29,7 @@ export const useGasterOAuthStore = create<GasterOAuthState>((set, get) => {
 
     fetchStatus: async () => {
       try {
-        const status = await gasterOAuthApi.status()
+        const status = await hahaOAuthApi.status()
         set({ status, error: null })
       } catch (err) {
         set({ error: err instanceof Error ? err.message : String(err) })
@@ -39,7 +39,7 @@ export const useGasterOAuthStore = create<GasterOAuthState>((set, get) => {
     login: async () => {
       set({ isLoading: true, error: null })
       try {
-        const res = await gasterOAuthApi.start()
+        const res = await hahaOAuthApi.start()
         set({ isLoading: false })
         return { authorizeUrl: res.authorizeUrl }
       } catch (err) {
@@ -55,7 +55,7 @@ export const useGasterOAuthStore = create<GasterOAuthState>((set, get) => {
       get().stopPolling()
       set({ isLoading: true })
       try {
-        await gasterOAuthApi.logout()
+        await hahaOAuthApi.logout()
         set({ status: { loggedIn: false }, isLoading: false })
       } catch (err) {
         set({

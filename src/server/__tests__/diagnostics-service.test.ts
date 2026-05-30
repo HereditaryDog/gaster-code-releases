@@ -95,7 +95,7 @@ describe('DiagnosticsService', () => {
     const archiveText = gunzipSync(await fs.readFile(bundle.path)).toString('utf-8')
     expect(archiveText).toContain('Gaster Code diagnostics bundle')
     expect(archiveText).toContain('# Gaster Code recent diagnostics')
-    expect(archiveText).not.toContain('gaster-code-legacy diagnostics')
+    expect(archiveText).not.toContain('cc-haha diagnostics')
     expect(archiveText).toContain('README.txt')
     expect(archiveText).toContain('recent-errors.md')
     expect(archiveText).toContain('cli-diagnostics.jsonl')

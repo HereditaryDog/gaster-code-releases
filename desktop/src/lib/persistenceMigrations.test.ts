@@ -15,7 +15,7 @@ describe('desktop persistence migrations', () => {
   })
 
   test('migrates legacy open-tab arrays into the current Gaster Code tab persistence shape', () => {
-    window.localStorage.setItem('gaster-code-legacy-open-tabs', JSON.stringify([
+    window.localStorage.setItem('cc-haha-open-tabs', JSON.stringify([
       { sessionId: 'session-1', title: 'Old tab' },
       { sessionId: '__terminal__legacy', title: 'Terminal 1', type: 'terminal' },
       { sessionId: 123, title: 'bad' },
@@ -23,12 +23,12 @@ describe('desktop persistence migrations', () => {
 
     const report = runDesktopPersistenceMigrations()
 
-    expect(report.migratedKeys).toContain('gaster-code-legacy-open-tabs')
+    expect(report.migratedKeys).toContain('cc-haha-open-tabs')
     expect(JSON.parse(window.localStorage.getItem('gaster-code-open-tabs') || '{}')).toEqual({
       openTabs: [{ sessionId: 'session-1', title: 'Old tab', type: 'session' }],
       activeTabId: 'session-1',
     })
-    expect(window.localStorage.getItem('gaster-code-legacy-open-tabs')).toBeNull()
+    expect(window.localStorage.getItem('cc-haha-open-tabs')).toBeNull()
     expect(window.localStorage.getItem(DESKTOP_PERSISTENCE_VERSION_KEY)).toBe(String(CURRENT_DESKTOP_PERSISTENCE_SCHEMA_VERSION))
   })
 
@@ -72,7 +72,7 @@ describe('desktop persistence migrations', () => {
 
   test('uses a valid legacy value when the current key is malformed', () => {
     window.localStorage.setItem('gaster-code-session-runtime', '{bad')
-    window.localStorage.setItem('gaster-code-legacy-session-runtime', JSON.stringify({
+    window.localStorage.setItem('cc-haha-session-runtime', JSON.stringify({
       restored: { providerId: null, modelId: 'claude-sonnet-4-6' },
     }))
 
@@ -81,7 +81,7 @@ describe('desktop persistence migrations', () => {
     expect(JSON.parse(window.localStorage.getItem('gaster-code-session-runtime') || '{}')).toEqual({
       restored: { providerId: null, modelId: 'claude-sonnet-4-6' },
     })
-    expect(window.localStorage.getItem('gaster-code-legacy-session-runtime')).toBeNull()
+    expect(window.localStorage.getItem('cc-haha-session-runtime')).toBeNull()
   })
 
   test('preserves a valid Gaster Code app zoom value', () => {

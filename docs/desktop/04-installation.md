@@ -1,8 +1,8 @@
 # 安装指南
 
-当前源码补丁版本：**V 1.0.6**。这个版本在 1.0.0 正式公开版本基础上包含复杂提示词绘图超时修复，并继续优化长对话会话切换性能、Markdown 渲染缓存和渐进加载、标签拖拽性能以及大型工作区 Markdown 预览；同时补充会话流式状态、H5 诊断、网络超时/代理设置和远程适配器输出稳定性改进。
+当前稳定版本：**V 1.0.7**。这个版本合并桌面渲染性能优化、G-Master API 账号中心与计费能力、release hygiene 文档修复，并继续保留 GPT Image 2 异步绘图和原始提示词提交路径。
 
-> 当前公开可下载安装包版本：**V 1.0.6**。正式安装包由 release workflow 完成签名、打包和公开资产同步；本地 Apple Silicon 测试包使用 `Gaster Code-a 1.0.6.dmg` 命名。
+> 本版本使用公开 release-only 仓库提供 updater 元数据和安装包下载。`0.2.1-gastercode.1` 及更早安装包仍内置私有主仓库 endpoint，无法自动发现本版本，需要手动下载安装一次；安装本版本之后，后续更新会从公开 release-only 仓库获取。
 
 ## 下载
 
@@ -10,10 +10,10 @@
 
 | 平台 | 文件 |
 |------|------|
-| macOS (Apple Silicon) | `Gaster-Code_1.0.6_macos_arm64_dmg.dmg` |
-| macOS (Intel) | `Gaster-Code_1.0.6_macos_x64_dmg.dmg` |
-| Windows x64 | `Gaster-Code_1.0.6_windows_x64_nsis.exe` |
-| Linux x64 | `Gaster-Code_1.0.6_linux_x64_deb.deb` |
+| macOS (Apple Silicon) | `Gaster-Code_1.0.7_macos_arm64_dmg.dmg` |
+| macOS (Intel) | `Gaster-Code_1.0.7_macos_x64_dmg.dmg` |
+| Windows x64 | `Gaster-Code_1.0.7_windows_x64_nsis.exe` |
+| Linux x64 | `Gaster-Code_1.0.7_linux_x64_deb.deb` |
 
 > 发布策略：不拆平台代码分支。当前 tag 自动发布默认构建 macOS ARM64、macOS x64、Windows x64 和 Linux x64；Linux ARM64 可以在手动发布工作流中按需启用。
 
@@ -52,7 +52,7 @@ sudo xattr -cr /Applications/Gaster\ Code.app
 2. 选择 **注册 G-Master 账号**：跳转到 G-Master API 注册页，注册完成后继续桌面授权流程。
 3. 选择 **使用自定义模型服务商**：进入设置页，自行配置 Anthropic / OpenAI 兼容服务商。
 
-桌面端只负责登录授权和本地 Provider 同步；注册、找回密码、订阅支付、余额充值等操作都在 G-Master API 网页完成。
+桌面端现在内置 G-Master API 账号中心，可在设置 → **个人设置** 查看余额、订阅状态、账单记录，并从桌面端发起充值或订阅。支付确认仍会打开 G-Master API 的安全收银台页面；桌面端不会保存支付密钥、银行卡信息或支付渠道密钥。
 
 ## Web UI 模式
 

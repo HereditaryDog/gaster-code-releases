@@ -3,7 +3,7 @@ import type { RuntimeSelection } from '../types/runtime'
 import { readMigratedStorage, writeMigratedStorage } from '../lib/storageMigration'
 
 const STORAGE_KEY = 'gaster-code-session-runtime'
-const LEGACY_STORAGE_KEYS = ['gaster-code-legacy-session-runtime']
+const LEGACY_STORAGE_KEYS = ['cc-haha-session-runtime']
 
 export const DRAFT_RUNTIME_SELECTION_KEY = '__draft__'
 

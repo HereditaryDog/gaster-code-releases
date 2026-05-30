@@ -336,7 +336,7 @@ struct StoredWindowState {
 
 /// 与 ServerState 平级的 adapter 子进程状态。
 ///
-/// adapter sidecar（gaster-sidecar adapters --telegram 等）的生命周期
+/// adapter sidecar（claude-sidecar adapters --telegram 等）的生命周期
 /// 跟 server 不同：它没有 HTTP 端口可探活，没配凭据时会自己干净退出，
 /// 而且需要支持运行时热重启 —— 用户在设置页保存 IM 凭据后，
 /// 前端会通过 invoke('restart_adapters_sidecar') 来重启它，让新凭据生效。
@@ -1460,7 +1460,7 @@ fn start_server_sidecar(app: &AppHandle) -> Result<ServerRuntime, String> {
     // 单一合并 sidecar：第一个参数选 server / cli / adapters 模式。
     let mut sidecar = app
         .shell()
-        .sidecar("gaster-sidecar")
+        .sidecar("claude-sidecar")
         .map_err(|err| format!("resolve sidecar: {err}"))?;
     for (key, value) in terminal_environment(&default_shell()) {
         sidecar = sidecar.env(key, value);
@@ -1591,7 +1591,7 @@ fn start_adapters_sidecars(app: &AppHandle) -> Result<Vec<CommandChild>, String>
     ] {
         let mut sidecar = app
             .shell()
-            .sidecar("gaster-sidecar")
+            .sidecar("claude-sidecar")
             .map_err(|err| format!("resolve {label} adapter sidecar: {err}"))?;
         for (key, value) in terminal_environment(&default_shell()) {
             sidecar = sidecar.env(key, value);
@@ -1697,7 +1697,7 @@ fn kill_stale_unix_adapter_sidecars() {
         if pid == current_pid {
             continue;
         }
-        if !command.contains("gaster-sidecar") || !command.contains(" adapters") {
+        if !command.contains("claude-sidecar") || !command.contains(" adapters") {
             continue;
         }
 
@@ -1708,9 +1708,9 @@ fn kill_stale_unix_adapter_sidecars() {
 #[cfg(target_os = "windows")]
 fn kill_windows_sidecars() {
     for image_name in [
-        "gaster-sidecar-x86_64-pc-windows-msvc.exe",
-        "gaster-sidecar-aarch64-pc-windows-msvc.exe",
-        "gaster-sidecar.exe",
+        "claude-sidecar-x86_64-pc-windows-msvc.exe",
+        "claude-sidecar-aarch64-pc-windows-msvc.exe",
+        "claude-sidecar.exe",
     ] {
         let _ = StdCommand::new("taskkill")
             .args(["/F", "/T", "/IM", image_name])

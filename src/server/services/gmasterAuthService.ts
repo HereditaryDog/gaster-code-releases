@@ -6,6 +6,7 @@ import {
   getGasterConfigPath,
   resolveExistingGasterConfigPath,
 } from '../../utils/gasterConfig.js'
+import { ApiError } from '../middleware/errorHandler.js'
 
 export type GMasterUser = {
   id: number
@@ -32,6 +33,8 @@ export type GMasterAuthStatus =
 
 export type GMasterAuthIntent = 'login' | 'register'
 
+export type GMasterBillingKind = 'topup' | 'subscription'
+
 export type GMasterProviderConfig = {
   name: string
   baseUrl: string
@@ -46,7 +49,20 @@ export type GMasterProviderConfig = {
   availableModels?: string[]
 }
 
-export type GMasterAccountInfo = {
+export type GMasterEntitlements = {
+  canUseBuiltinProvider: boolean
+  enabledModels: string[]
+  enabledFeatures: string[]
+  expiresAt: number | null
+}
+
+export type GMasterWallet = {
+  balance: number
+  currency: string
+  lowBalance: boolean
+}
+
+export type GMasterAccountOverview = {
   user: GMasterUser
   subscription: GMasterSubscriptionSnapshot | null
   quota: {
@@ -54,10 +70,14 @@ export type GMasterAccountInfo = {
     used: number | null
     unlimited: boolean
   } | null
+  wallet: GMasterWallet | null
+  entitlements: GMasterEntitlements | null
   canUseBuiltinProvider: boolean
   billingUrl: string | null
   accountUrl: string | null
 }
+
+export type GMasterAccountInfo = GMasterAccountOverview
 
 export type GMasterSubscriptionSnapshot = {
   active: boolean
@@ -75,6 +95,41 @@ export type GMasterSubscriptionItem = {
   amountRemaining: number
   unlimited: boolean
   upgradeGroup: string
+  cancelAtPeriodEnd?: boolean
+  resumable?: boolean
+}
+
+export type GMasterBillingPlan = {
+  id: string
+  kind: GMasterBillingKind
+  name: string
+  description: string
+  price: number
+  currency: string
+  interval: 'month' | 'year' | 'one_time'
+  quotaAmount: number | null
+  unlimited: boolean
+  recommended: boolean
+}
+
+export type GMasterCheckoutStatus = 'pending' | 'paid' | 'failed' | 'expired' | 'cancelled'
+
+export type GMasterCheckoutSession = {
+  id: string
+  url: string
+  status: GMasterCheckoutStatus
+  kind: GMasterBillingKind
+  expiresAt: number | null
+}
+
+export type GMasterBillingTransaction = {
+  id: string
+  kind: 'topup' | 'subscription' | 'usage' | 'refund' | 'adjustment'
+  status: 'pending' | 'paid' | 'failed' | 'refunded' | 'cancelled'
+  amount: number
+  currency: string
+  createdAt: number
+  description: string
 }
 
 type FetchFn = (url: string, init?: RequestInit) => Promise<Response>
@@ -90,6 +145,7 @@ type PendingGMasterAuthSession = {
 
 type ApiEnvelope<T> = {
   success?: boolean
+  code?: string
   message?: string
   data?: T
 }
@@ -103,6 +159,14 @@ const SESSION_TTL_MS = 30 * 60 * 1000
 const REQUEST_TIMEOUT_MS = 15_000
 const TOKEN_REFRESH_SKEW_SECONDS = 60
 const DEFAULT_BASE_URL = 'https://gmapi.fun'
+
+const GMASTER_ERROR_STATUS: Record<string, number> = {
+  GMASTER_AUTH_EXPIRED: 401,
+  GMASTER_BILLING_CHECKOUT_FAILED: 400,
+  GMASTER_BILLING_PAYMENT_PENDING: 409,
+  GMASTER_BILLING_PLAN_UNAVAILABLE: 400,
+  GMASTER_BILLING_PROVIDER_UNAVAILABLE: 503,
+}
 
 function base64Url(bytes: Buffer): string {
   return bytes
@@ -246,6 +310,7 @@ function validateAuthorizeUrl(authorizeUrl: string, expectedBaseUrl: string): vo
 function normalizeAccountInfo(raw: any): GMasterAccountInfo {
   const subscription = raw?.subscription
   const quota = raw?.quota
+  const entitlements = raw?.entitlements
   return {
     user: normalizeUser(raw?.user),
     subscription: subscription ? normalizeSubscriptionSnapshot(subscription) : null,
@@ -256,11 +321,41 @@ function normalizeAccountInfo(raw: any): GMasterAccountInfo {
           unlimited: Boolean(quota.unlimited),
         }
       : null,
+    wallet: normalizeWallet(raw?.wallet),
+    entitlements: entitlements ? normalizeEntitlements(entitlements) : null,
     canUseBuiltinProvider: Boolean(
       raw?.can_use_builtin_provider ?? raw?.canUseBuiltinProvider,
     ),
     billingUrl: raw?.billing_url ?? raw?.billingUrl ?? null,
     accountUrl: raw?.account_url ?? raw?.accountUrl ?? null,
+  }
+}
+
+function normalizeWallet(raw: any): GMasterWallet | null {
+  if (!isRecord(raw)) return null
+  return {
+    balance: Number(raw.balance ?? 0),
+    currency: String(raw.currency ?? ''),
+    lowBalance: Boolean(raw.low_balance ?? raw.lowBalance),
+  }
+}
+
+function normalizeEntitlements(raw: any): GMasterEntitlements {
+  return {
+    canUseBuiltinProvider: Boolean(
+      raw?.can_use_builtin_provider ?? raw?.canUseBuiltinProvider,
+    ),
+    enabledModels: Array.isArray(raw?.enabled_models)
+      ? raw.enabled_models.map(String)
+      : Array.isArray(raw?.enabledModels)
+        ? raw.enabledModels.map(String)
+        : [],
+    enabledFeatures: Array.isArray(raw?.enabled_features)
+      ? raw.enabled_features.map(String)
+      : Array.isArray(raw?.enabledFeatures)
+        ? raw.enabledFeatures.map(String)
+        : [],
+    expiresAt: raw?.expires_at ?? raw?.expiresAt ?? null,
   }
 }
 
@@ -284,6 +379,99 @@ function normalizeSubscriptionItem(raw: any): GMasterSubscriptionItem {
     amountRemaining: Number(raw?.amount_remaining ?? raw?.amountRemaining ?? 0),
     unlimited: Boolean(raw?.unlimited),
     upgradeGroup: String(raw?.upgrade_group ?? raw?.upgradeGroup ?? ''),
+    ...(
+      raw?.cancel_at_period_end !== undefined || raw?.cancelAtPeriodEnd !== undefined
+        ? { cancelAtPeriodEnd: Boolean(raw?.cancel_at_period_end ?? raw?.cancelAtPeriodEnd) }
+        : {}
+    ),
+    ...(raw?.resumable !== undefined ? { resumable: Boolean(raw.resumable) } : {}),
+  }
+}
+
+function normalizeBillingKind(value: unknown): GMasterBillingKind {
+  return value === 'subscription' ? 'subscription' : 'topup'
+}
+
+function normalizeBillingInterval(value: unknown): GMasterBillingPlan['interval'] {
+  if (value === 'month' || value === 'year' || value === 'one_time') return value
+  return 'one_time'
+}
+
+function normalizeBillingPlan(raw: any): GMasterBillingPlan {
+  return {
+    id: String(raw?.id ?? raw?.plan_id ?? raw?.planId ?? ''),
+    kind: normalizeBillingKind(raw?.kind),
+    name: String(raw?.name ?? ''),
+    description: String(raw?.description ?? ''),
+    price: Number(raw?.price ?? 0),
+    currency: String(raw?.currency ?? ''),
+    interval: normalizeBillingInterval(raw?.interval),
+    quotaAmount: raw?.quota_amount ?? raw?.quotaAmount ?? null,
+    unlimited: Boolean(raw?.unlimited),
+    recommended: Boolean(raw?.recommended),
+  }
+}
+
+function normalizeCheckoutStatus(value: unknown): GMasterCheckoutStatus {
+  if (
+    value === 'paid' ||
+    value === 'failed' ||
+    value === 'expired' ||
+    value === 'cancelled'
+  ) {
+    return value
+  }
+  return 'pending'
+}
+
+function normalizeCheckoutSession(raw: any): GMasterCheckoutSession {
+  return {
+    id: String(raw?.id ?? ''),
+    url: String(raw?.url ?? raw?.checkout_url ?? raw?.checkoutUrl ?? ''),
+    status: normalizeCheckoutStatus(raw?.status),
+    kind: normalizeBillingKind(raw?.kind),
+    expiresAt: raw?.expires_at ?? raw?.expiresAt ?? null,
+  }
+}
+
+function statusForGMasterError(code: string | undefined, fallbackStatus: number): number {
+  if (code && GMASTER_ERROR_STATUS[code]) return GMASTER_ERROR_STATUS[code]
+  return fallbackStatus
+}
+
+function normalizeTransactionKind(value: unknown): GMasterBillingTransaction['kind'] {
+  if (
+    value === 'subscription' ||
+    value === 'usage' ||
+    value === 'refund' ||
+    value === 'adjustment'
+  ) {
+    return value
+  }
+  return 'topup'
+}
+
+function normalizeTransactionStatus(value: unknown): GMasterBillingTransaction['status'] {
+  if (
+    value === 'paid' ||
+    value === 'failed' ||
+    value === 'refunded' ||
+    value === 'cancelled'
+  ) {
+    return value
+  }
+  return 'pending'
+}
+
+function normalizeBillingTransaction(raw: any): GMasterBillingTransaction {
+  return {
+    id: String(raw?.id ?? ''),
+    kind: normalizeTransactionKind(raw?.kind),
+    status: normalizeTransactionStatus(raw?.status),
+    amount: Number(raw?.amount ?? 0),
+    currency: String(raw?.currency ?? ''),
+    createdAt: Number(raw?.created_at ?? raw?.createdAt ?? 0),
+    description: String(raw?.description ?? ''),
   }
 }
 
@@ -483,6 +671,100 @@ export class GMasterAuthService {
       },
     })
     return normalizeAccountInfo(data)
+  }
+
+  async fetchBillingPlans(): Promise<{ plans: GMasterBillingPlan[] }> {
+    const tokens = await this.requireTokens()
+    const data = await this.fetchJson<any>('/api/gaster-code/billing/plans', {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${tokens.accessToken}`,
+      },
+    })
+    const plans = Array.isArray(data?.plans)
+      ? data.plans
+      : Array.isArray(data)
+        ? data
+        : []
+    return { plans: plans.map(normalizeBillingPlan) }
+  }
+
+  async createCheckout({
+    kind,
+    planId,
+    returnTo = 'account',
+  }: {
+    kind: GMasterBillingKind
+    planId: string
+    returnTo?: 'account'
+  }): Promise<GMasterCheckoutSession> {
+    const tokens = await this.requireTokens()
+    const data = await this.fetchJson<any>('/api/gaster-code/billing/checkout', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${tokens.accessToken}`,
+      },
+      body: JSON.stringify({
+        kind,
+        plan_id: planId,
+        return_to: returnTo,
+      }),
+    })
+    return normalizeCheckoutSession(data)
+  }
+
+  async fetchCheckoutStatus(id: string): Promise<GMasterCheckoutSession> {
+    const tokens = await this.requireTokens()
+    const encodedId = encodeURIComponent(id)
+    const data = await this.fetchJson<any>(
+      `/api/gaster-code/billing/checkout/${encodedId}`,
+      {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${tokens.accessToken}`,
+        },
+      },
+    )
+    return normalizeCheckoutSession(data)
+  }
+
+  async fetchBillingTransactions(): Promise<{ transactions: GMasterBillingTransaction[] }> {
+    const tokens = await this.requireTokens()
+    const data = await this.fetchJson<any>('/api/gaster-code/billing/transactions', {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${tokens.accessToken}`,
+      },
+    })
+    const transactions = Array.isArray(data?.transactions)
+      ? data.transactions
+      : Array.isArray(data)
+        ? data
+        : []
+    return { transactions: transactions.map(normalizeBillingTransaction) }
+  }
+
+  async cancelSubscription(): Promise<{ ok: true }> {
+    const tokens = await this.requireTokens()
+    await this.fetchJson<any>('/api/gaster-code/subscription/cancel', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${tokens.accessToken}`,
+      },
+    })
+    return { ok: true }
+  }
+
+  async resumeSubscription(): Promise<{ ok: true }> {
+    const tokens = await this.requireTokens()
+    await this.fetchJson<any>('/api/gaster-code/subscription/resume', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${tokens.accessToken}`,
+      },
+    })
+    return { ok: true }
   }
 
   async fetchProviderToken(): Promise<GMasterProviderConfig> {
@@ -710,10 +992,25 @@ export class GMasterAuthService {
 
     if (!response.ok) {
       const message = payload?.message || text || response.statusText
+      if (payload?.code) {
+        throw new ApiError(
+          statusForGMasterError(payload.code, response.status),
+          message,
+          payload.code,
+        )
+      }
       throw new Error(`G-Master API request failed (${response.status}): ${message}`)
     }
     if (payload?.success === false) {
-      throw new Error(payload.message || 'G-Master API request failed')
+      const message = payload.message || 'G-Master API request failed'
+      if (payload.code) {
+        throw new ApiError(
+          statusForGMasterError(payload.code, 400),
+          message,
+          payload.code,
+        )
+      }
+      throw new Error(message)
     }
     if (!payload || payload.data === undefined) {
       throw new Error('G-Master API response missing data')

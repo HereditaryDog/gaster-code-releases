@@ -6,6 +6,12 @@
  * GET    /api/gmaster-auth                — current auth status, without tokens
  * GET    /api/gmaster-auth/status         — current auth status, without tokens
  * GET    /api/gmaster-auth/me             — current G-Master account info
+ * GET    /api/gmaster-auth/billing/plans  — list G-Master billing plans
+ * POST   /api/gmaster-auth/billing/checkout — create a checkout session
+ * GET    /api/gmaster-auth/billing/checkout/:id — fetch checkout session status
+ * GET    /api/gmaster-auth/billing/transactions — list billing transactions
+ * POST   /api/gmaster-auth/subscription/cancel — cancel current subscription
+ * POST   /api/gmaster-auth/subscription/resume — resume current subscription
  * POST   /api/gmaster-auth/provider-token — fetch provider config for proxy use
  * POST   /api/gmaster-auth/sync-provider  — upsert managed G-Master provider
  * DELETE /api/gmaster-auth                — logout, revoking remote session and deleting local tokens
@@ -33,6 +39,12 @@ const StartRequestSchema = z.object({
   intent: z.enum(['login', 'register']).default('login'),
 })
 
+const CreateCheckoutRequestSchema = z.object({
+  kind: z.enum(['topup', 'subscription']),
+  planId: z.string().trim().min(1),
+  returnTo: z.enum(['account']).default('account'),
+})
+
 function html(body: string): Response {
   return new Response(body, {
     status: 200,
@@ -47,6 +59,10 @@ export async function handleGMasterAuthApi(
 ): Promise<Response> {
   try {
     const action = segments[2] // segments: ['api', 'gmaster-auth', <action?>]
+    if (action === 'billing' || action === 'subscription') {
+      return await handleGMasterAuthNestedApi(req, segments)
+    }
+
     if (segments.length > 3) {
       return Response.json({ error: 'Not Found' }, { status: 404 })
     }
@@ -125,6 +141,86 @@ export async function handleGMasterAuthApi(
   } catch (error) {
     return errorResponse(error)
   }
+}
+
+async function handleGMasterAuthNestedApi(
+  req: Request,
+  segments: string[],
+): Promise<Response> {
+  const resource = segments[2]
+  const action = segments[3]
+  const subaction = segments[4]
+
+  if (
+    resource === 'billing' &&
+    action === 'plans' &&
+    segments.length === 4 &&
+    req.method === 'GET'
+  ) {
+    return Response.json(await gmasterAuthService.fetchBillingPlans())
+  }
+
+  if (
+    resource === 'billing' &&
+    action === 'checkout' &&
+    segments.length === 4 &&
+    req.method === 'POST'
+  ) {
+    let body: unknown
+    try {
+      body = await req.json()
+    } catch {
+      throw ApiError.badRequest('Invalid JSON body')
+    }
+
+    const parsed = CreateCheckoutRequestSchema.safeParse(body)
+    if (!parsed.success) {
+      throw ApiError.badRequest('kind, planId, and optional returnTo required')
+    }
+
+    return Response.json(await gmasterAuthService.createCheckout(parsed.data))
+  }
+
+  if (
+    resource === 'billing' &&
+    action === 'checkout' &&
+    typeof subaction === 'string' &&
+    segments.length === 5 &&
+    req.method === 'GET'
+  ) {
+    return Response.json(
+      await gmasterAuthService.fetchCheckoutStatus(decodeURIComponent(subaction)),
+    )
+  }
+
+  if (
+    resource === 'billing' &&
+    action === 'transactions' &&
+    segments.length === 4 &&
+    req.method === 'GET'
+  ) {
+    return Response.json(await gmasterAuthService.fetchBillingTransactions())
+  }
+
+  if (
+    resource === 'subscription' &&
+    action === 'cancel' &&
+    segments.length === 4 &&
+    req.method === 'POST'
+  ) {
+    return Response.json(await gmasterAuthService.cancelSubscription())
+  }
+
+  if (
+    resource === 'subscription' &&
+    action === 'resume' &&
+    segments.length === 4 &&
+    req.method === 'POST'
+  ) {
+    return Response.json(await gmasterAuthService.resumeSubscription())
+  }
+
+  return Response.json({ error: 'Not Found' }, { status: 404 })
 }
 
 export async function handleGMasterAuthCallback(url: URL): Promise<Response> {

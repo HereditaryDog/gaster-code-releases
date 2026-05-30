@@ -24,7 +24,22 @@ export type GMasterAuthStatus =
 
 export type GMasterAuthIntent = 'login' | 'register'
 
-export type GMasterAccountInfo = {
+export type GMasterBillingKind = 'topup' | 'subscription'
+
+export type GMasterEntitlements = {
+  canUseBuiltinProvider: boolean
+  enabledModels: string[]
+  enabledFeatures: string[]
+  expiresAt: number | null
+}
+
+export type GMasterWallet = {
+  balance: number
+  currency: string
+  lowBalance: boolean
+}
+
+export type GMasterAccountOverview = {
   user: GMasterUser
   subscription: GMasterSubscriptionSnapshot | null
   quota: {
@@ -32,10 +47,14 @@ export type GMasterAccountInfo = {
     used: number | null
     unlimited: boolean
   } | null
+  wallet: GMasterWallet | null
+  entitlements: GMasterEntitlements | null
   canUseBuiltinProvider: boolean
   billingUrl: string | null
   accountUrl: string | null
 }
+
+export type GMasterAccountInfo = GMasterAccountOverview
 
 export type GMasterSubscriptionSnapshot = {
   active: boolean
@@ -53,6 +72,41 @@ export type GMasterSubscriptionItem = {
   amountRemaining: number
   unlimited: boolean
   upgradeGroup: string
+  cancelAtPeriodEnd?: boolean
+  resumable?: boolean
+}
+
+export type GMasterBillingPlan = {
+  id: string
+  kind: GMasterBillingKind
+  name: string
+  description: string
+  price: number
+  currency: string
+  interval: 'month' | 'year' | 'one_time'
+  quotaAmount: number | null
+  unlimited: boolean
+  recommended: boolean
+}
+
+export type GMasterCheckoutStatus = 'pending' | 'paid' | 'failed' | 'expired' | 'cancelled'
+
+export type GMasterCheckoutSession = {
+  id: string
+  url: string
+  status: GMasterCheckoutStatus
+  kind: GMasterBillingKind
+  expiresAt: number | null
+}
+
+export type GMasterBillingTransaction = {
+  id: string
+  kind: 'topup' | 'subscription' | 'usage' | 'refund' | 'adjustment'
+  status: 'pending' | 'paid' | 'failed' | 'refunded' | 'cancelled'
+  amount: number
+  currency: string
+  createdAt: number
+  description: string
 }
 
 function currentServerPort(): number {
@@ -76,7 +130,34 @@ export const gmasterAuthApi = {
     return api.get<GMasterAuthStatus>('/api/gmaster-auth/status')
   },
   me() {
-    return api.get<GMasterAccountInfo>('/api/gmaster-auth/me')
+    return api.get<GMasterAccountOverview>('/api/gmaster-auth/me')
+  },
+  plans() {
+    return api.get<{ plans: GMasterBillingPlan[] }>('/api/gmaster-auth/billing/plans')
+  },
+  createCheckout(input: {
+    kind: GMasterBillingKind
+    planId: string
+    returnTo?: 'account'
+  }) {
+    return api.post<GMasterCheckoutSession>(
+      '/api/gmaster-auth/billing/checkout',
+      input,
+    )
+  },
+  checkoutStatus(id: string) {
+    return api.get<GMasterCheckoutSession>(
+      `/api/gmaster-auth/billing/checkout/${encodeURIComponent(id)}`,
+    )
+  },
+  transactions() {
+    return api.get<{ transactions: GMasterBillingTransaction[] }>('/api/gmaster-auth/billing/transactions')
+  },
+  cancelSubscription() {
+    return api.post<{ ok: true }>('/api/gmaster-auth/subscription/cancel')
+  },
+  resumeSubscription() {
+    return api.post<{ ok: true }>('/api/gmaster-auth/subscription/resume')
   },
   syncProvider() {
     return api.post<{ provider: SavedProvider }>('/api/gmaster-auth/sync-provider')

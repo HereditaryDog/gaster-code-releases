@@ -8,6 +8,7 @@ const DEEPSEEK_CAPABILITY_ENV_KEYS = [
 
 const LEGACY_DISABLED_THINKING_KEYS = [
   'GASTER_CODE_SEND_DISABLED_THINKING',
+  'CC_HAHA_SEND_DISABLED_THINKING',
 ] as const
 
 function looksLikeDeepSeekManagedEnv(env: Record<string, string>): boolean {

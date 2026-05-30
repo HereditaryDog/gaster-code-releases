@@ -14,10 +14,24 @@ describe('provider managed env compatibility', () => {
 
     expect(changed).toBe(true)
     expect(env.GASTER_CODE_SEND_DISABLED_THINKING).toBeUndefined()
+    expect(env.CC_HAHA_SEND_DISABLED_THINKING).toBeUndefined()
     expect(env.ANTHROPIC_DEFAULT_HAIKU_MODEL_SUPPORTED_CAPABILITIES).toBe(deepSeekCapabilities)
     expect(env.ANTHROPIC_DEFAULT_SONNET_MODEL_SUPPORTED_CAPABILITIES).toBe(deepSeekCapabilities)
     expect(env.ANTHROPIC_DEFAULT_OPUS_MODEL_SUPPORTED_CAPABILITIES).toBe(deepSeekCapabilities)
     expect(env.USER_CUSTOM_ENV).toBe('keep-me')
+  })
+
+  test('normalizes legacy DeepSeek disabled-thinking env for migrated users', () => {
+    const { env, changed } = normalizeLegacyDeepSeekManagedEnv({
+      ANTHROPIC_DEFAULT_SONNET_MODEL: 'deepseek-reasoner',
+      CC_HAHA_SEND_DISABLED_THINKING: '1',
+    })
+
+    expect(changed).toBe(true)
+    expect(env.CC_HAHA_SEND_DISABLED_THINKING).toBeUndefined()
+    expect(env.ANTHROPIC_DEFAULT_HAIKU_MODEL_SUPPORTED_CAPABILITIES).toBe(deepSeekCapabilities)
+    expect(env.ANTHROPIC_DEFAULT_SONNET_MODEL_SUPPORTED_CAPABILITIES).toBe(deepSeekCapabilities)
+    expect(env.ANTHROPIC_DEFAULT_OPUS_MODEL_SUPPORTED_CAPABILITIES).toBe(deepSeekCapabilities)
   })
 
   test('does not change non-DeepSeek providers that still opt into disabled thinking', () => {

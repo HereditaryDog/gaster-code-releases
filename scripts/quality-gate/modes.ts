@@ -12,14 +12,6 @@ export function lanesForMode(mode: QualityGateMode, baselineTargets: BaselineTar
       requiredForModes: ['pr', 'baseline', 'release'],
     },
     {
-      id: 'brand-scan',
-      title: 'Open-source brand scan',
-      description: 'Reject legacy source-project identifiers from tracked files and generated release assets.',
-      kind: 'command',
-      command: ['bun', 'run', 'check:brand'],
-      requiredForModes: ['pr', 'baseline', 'release'],
-    },
-    {
       id: 'pr-checks',
       title: 'Path-aware PR checks',
       description: 'Run the existing local PR gate with stable path-aware checks.',

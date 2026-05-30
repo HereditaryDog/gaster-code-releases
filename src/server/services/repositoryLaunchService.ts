@@ -4,7 +4,6 @@ import * as path from 'node:path'
 import { promisify } from 'node:util'
 import { ApiError } from '../middleware/errorHandler.js'
 import { findCanonicalGitRoot, findGitRoot } from '../../utils/git.js'
-import { registerFilesystemAccessRoot } from './filesystemAccessRoots.js'
 import {
   ensureWorktreesDirExcluded,
   performPostCreationSetup,
@@ -327,8 +326,6 @@ export async function getRepositoryContext(workDir: string): Promise<RepositoryC
   let absWorkDir: string
   try {
     absWorkDir = await resolveDirectory(workDir)
-    registerFilesystemAccessRoot(workDir)
-    registerFilesystemAccessRoot(absWorkDir)
   } catch (error) {
     return {
       state: 'missing_workdir',
@@ -361,7 +358,6 @@ export async function getRepositoryContext(workDir: string): Promise<RepositoryC
 
   try {
     const repoRoot = findCanonicalGitRoot(gitRoot) ?? gitRoot
-    registerFilesystemAccessRoot(repoRoot)
     const [branchResult, defaultBranch, statusResult, worktreeResult] = await Promise.all([
       runGit(gitRoot, ['branch', '--show-current']),
       getDefaultBranch(gitRoot),

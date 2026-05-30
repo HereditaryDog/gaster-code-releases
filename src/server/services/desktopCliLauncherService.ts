@@ -21,6 +21,8 @@ import { getUserBinDir } from '../../utils/xdg.js'
 const DESKTOP_CLI_NAME = 'gaster-code'
 const PATH_BLOCK_START = '# >>> Gaster Code PATH >>>'
 const PATH_BLOCK_END = '# <<< Gaster Code PATH <<<'
+const LEGACY_PATH_BLOCK_START = '# >>> Claude Code Haha PATH >>>'
+const LEGACY_PATH_BLOCK_END = '# <<< Claude Code Haha PATH <<<'
 const WINDOWS_PATH_TARGET = 'Windows User PATH'
 const WINDOWS_USER_BIN_EXPR = '%USERPROFILE%\\.local\\bin'
 
@@ -86,12 +88,17 @@ export function upsertManagedPathBlock(
 ): string {
   const nextBlock = `${block.trimEnd()}\n`
 
-  const escapedStart = PATH_BLOCK_START.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  const escapedEnd = PATH_BLOCK_END.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  const pattern = new RegExp(`${escapedStart}[\\s\\S]*?${escapedEnd}\\n?`, 'm')
+  for (const [start, end] of [
+    [PATH_BLOCK_START, PATH_BLOCK_END],
+    [LEGACY_PATH_BLOCK_START, LEGACY_PATH_BLOCK_END],
+  ]) {
+    const escapedStart = start.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const escapedEnd = end.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const pattern = new RegExp(`${escapedStart}[\\s\\S]*?${escapedEnd}\\n?`, 'm')
 
-  if (pattern.test(existingContent)) {
-    return existingContent.replace(pattern, nextBlock)
+    if (pattern.test(existingContent)) {
+      return existingContent.replace(pattern, nextBlock)
+    }
   }
 
   const trimmed = existingContent.trimEnd()

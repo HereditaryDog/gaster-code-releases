@@ -74,7 +74,7 @@ fi
 #      避免 sidecar 被重复编译浪费 ~10s
 # 任一步失败,整个脚本立即退出(set -e)。
 echo "[build-macos-arm64] Cleaning stale sidecar binaries and bundle output..."
-rm -rf "${DESKTOP_DIR}/src-tauri/binaries/gaster-sidecar-"*
+rm -rf "${DESKTOP_DIR}/src-tauri/binaries/claude-sidecar-"*
 rm -rf "${DESKTOP_DIR}/src-tauri/target/${TARGET_TRIPLE}/release/bundle"
 rm -rf "${DESKTOP_DIR}/src-tauri/target/release/bundle"
 rm -rf "${DESKTOP_DIR}/dist"
@@ -230,7 +230,7 @@ codesign_cdhash() {
 
 sign_canonical_app_bundle() {
   local app_bundle="$1"
-  local sidecar="${app_bundle}/Contents/MacOS/gaster-sidecar"
+  local sidecar="${app_bundle}/Contents/MacOS/claude-sidecar"
   local sidecar_cdhash_before=""
   local sidecar_cdhash_after=""
 
@@ -240,7 +240,7 @@ sign_canonical_app_bundle() {
 
   # Tauri --no-sign leaves the outer .app with no sealed resources, which
   # fails strict bundle validation once Resources/icon.icns exists. Sign only
-  # the outer bundle: do not pass --deep, because re-signing gaster-sidecar
+  # the outer bundle: do not pass --deep, because re-signing claude-sidecar
   # changes its code-signature hash and breaks existing macOS Keychain ACLs.
   codesign --force --sign - --timestamp=none "${app_bundle}"
 

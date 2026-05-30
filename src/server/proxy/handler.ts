@@ -17,54 +17,8 @@ import { openaiResponsesToAnthropic } from './transform/openaiResponsesToAnthrop
 import { openaiChatStreamToAnthropic } from './streaming/openaiChatStreamToAnthropic.js'
 import { openaiResponsesStreamToAnthropic } from './streaming/openaiResponsesStreamToAnthropic.js'
 import type { AnthropicRequest } from './transform/types.js'
-import { getProxyFetchOptions } from '../../utils/proxy.js'
-import { getManualNetworkProxyUrl, loadNetworkSettings } from '../services/networkSettings.js'
 
 const providerService = new ProviderService()
-
-type ProxyFetchOptions = ReturnType<typeof getProxyFetchOptions>
-type UpstreamRequestInit = RequestInit & ProxyFetchOptions
-
-function createTimeoutController(timeoutMs: number): {
-  signal: AbortSignal
-  clear: () => void
-} {
-  const controller = new AbortController()
-  const timer = setTimeout(() => {
-    controller.abort(new DOMException('The operation timed out.', 'TimeoutError'))
-  }, timeoutMs)
-
-  return {
-    signal: controller.signal,
-    clear: () => clearTimeout(timer),
-  }
-}
-
-async function fetchUpstreamWithTimeout(
-  url: string,
-  init: Omit<UpstreamRequestInit, 'signal'>,
-  timeoutMs: number,
-  isStream: boolean,
-): Promise<Response> {
-  if (!isStream) {
-    return fetch(url, {
-      ...init,
-      signal: AbortSignal.timeout(timeoutMs),
-    })
-  }
-
-  // Streaming generations can legitimately run for minutes. This timeout only
-  // covers opening the upstream request and receiving response headers.
-  const timeout = createTimeoutController(timeoutMs)
-  try {
-    return await fetch(url, {
-      ...init,
-      signal: timeout.signal,
-    })
-  } finally {
-    timeout.clear()
-  }
-}
 
 export async function handleProxyRequest(req: Request, url: URL): Promise<Response> {
   const providerMatch = url.pathname.match(/^\/proxy\/providers\/([^/]+)\/v1\/messages$/)
@@ -127,14 +81,12 @@ export async function handleProxyRequest(req: Request, url: URL): Promise<Respon
 
   const isStream = body.stream === true
   const baseUrl = config.baseUrl.replace(/\/+$/, '')
-  const networkSettings = await loadNetworkSettings()
-  const proxyUrl = getManualNetworkProxyUrl(networkSettings)
 
   try {
     if (config.apiFormat === 'openai_chat') {
-      return await handleOpenaiChat(body, baseUrl, config.apiKey, isStream, networkSettings.aiRequestTimeoutMs, proxyUrl)
+      return await handleOpenaiChat(body, baseUrl, config.apiKey, isStream)
     } else {
-      return await handleOpenaiResponses(body, baseUrl, config.apiKey, isStream, networkSettings.aiRequestTimeoutMs, proxyUrl)
+      return await handleOpenaiResponses(body, baseUrl, config.apiKey, isStream)
     }
   } catch (err) {
     console.error('[Proxy] Upstream request failed:', err)
@@ -156,22 +108,19 @@ async function handleOpenaiChat(
   baseUrl: string,
   apiKey: string,
   isStream: boolean,
-  aiRequestTimeoutMs: number,
-  proxyUrl: string | undefined,
 ): Promise<Response> {
   const transformed = anthropicToOpenaiChat(body)
   const url = `${baseUrl}/v1/chat/completions`
-  const proxyOptions = getProxyFetchOptions({ proxyUrl })
 
-  const upstream = await fetchUpstreamWithTimeout(url, {
+  const upstream = await fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify(transformed),
-    ...proxyOptions,
-  }, aiRequestTimeoutMs, isStream)
+    signal: isStream ? AbortSignal.timeout(30_000) : AbortSignal.timeout(300_000),
+  })
 
   if (!upstream.ok) {
     const errText = await upstream.text().catch(() => '')
@@ -216,22 +165,19 @@ async function handleOpenaiResponses(
   baseUrl: string,
   apiKey: string,
   isStream: boolean,
-  aiRequestTimeoutMs: number,
-  proxyUrl: string | undefined,
 ): Promise<Response> {
   const transformed = anthropicToOpenaiResponses(body)
   const url = `${baseUrl}/v1/responses`
-  const proxyOptions = getProxyFetchOptions({ proxyUrl })
 
-  const upstream = await fetchUpstreamWithTimeout(url, {
+  const upstream = await fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify(transformed),
-    ...proxyOptions,
-  }, aiRequestTimeoutMs, isStream)
+    signal: isStream ? AbortSignal.timeout(30_000) : AbortSignal.timeout(300_000),
+  })
 
   if (!upstream.ok) {
     const errText = await upstream.text().catch(() => '')

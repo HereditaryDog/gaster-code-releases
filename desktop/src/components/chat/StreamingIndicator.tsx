@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react'
-import { RefreshCw } from 'lucide-react'
 import { useChatStore } from '../../stores/chatStore'
 import { useTabStore } from '../../stores/tabStore'
-import { useTranslation, type TranslationKey } from '../../i18n'
+
+const BRAND_G_PATH =
+  'M512 449.142857l414.285714 0q6.857143 38.285714 6.857143 73.142857 0 124-52 221.428571t-148.285714 152.285714-220.857143 54.857143q-89.714286 0-170.857143-34.571429t-140-93.428571-93.428571-140-34.571429-170.857143 34.571429-170.857143 93.428571-140 140-93.428571 170.857143-34.571429q171.428571 0 294.285714 114.857143l-119.428571 114.857143q-70.285714-68-174.857143-68-73.714286 0-136.285714 37.142857t-99.142857 100.857143-36.571429 139.142857 36.571429 139.142857 99.142857 100.857143 136.285714 37.142857q49.714286 0 91.428571-13.714286t68.571429-34.285714 46.857143-46.857143 29.428571-49.714286 12.857143-44.571429l-249.142857 0 0-150.857143z'
 
 function formatElapsed(seconds: number): string {
   if (seconds < 60) return `${seconds}s`
@@ -11,99 +11,26 @@ function formatElapsed(seconds: number): string {
   return `${m}m ${s}s`
 }
 
-function translateServerVerb(
-  t: (key: TranslationKey) => string,
-  verb: string,
-): string {
-  const key = `serverVerb.${verb}` as TranslationKey
-  const translated = t(key)
-  return translated === key ? verb : translated
-}
-
-function formatRetrySeconds(ms: number): number {
-  return Math.max(0, Math.ceil(ms / 1000))
-}
-
-function formatErrorType(errorType: string | undefined): string | null {
-  if (!errorType) return null
-  return errorType
-    .replace(/[_-]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-}
-
 export function StreamingIndicator() {
-  const t = useTranslation()
-  const [now, setNow] = useState(() => Date.now())
   const activeTabId = useTabStore((s) => s.activeTabId)
   const sessionState = useChatStore((s) => activeTabId ? s.sessions[activeTabId] : undefined)
   const chatState = sessionState?.chatState ?? 'idle'
   const statusVerb = sessionState?.statusVerb ?? ''
-  const apiRetry = sessionState?.apiRetry ?? null
   const elapsedSeconds = sessionState?.elapsedSeconds ?? 0
   const tokenUsage = sessionState?.tokenUsage ?? { input_tokens: 0, output_tokens: 0 }
-
-  useEffect(() => {
-    if (!apiRetry) return undefined
-    setNow(Date.now())
-    const timer = window.setInterval(() => setNow(Date.now()), 1000)
-    return () => window.clearInterval(timer)
-  }, [apiRetry?.receivedAt, apiRetry?.retryDelayMs])
-
-  if (apiRetry) {
-    const remainingMs = Math.max(0, apiRetry.retryDelayMs - (now - apiRetry.receivedAt))
-    const statusText = apiRetry.errorStatus !== null
-      ? t('chat.retry.httpStatus', { status: apiRetry.errorStatus })
-      : formatErrorType(apiRetry.errorType) ?? t('chat.retry.networkError')
-    const detailText = apiRetry.errorMessage?.trim()
-
-    return (
-      <div
-        data-testid="api-retry-indicator"
-        role="status"
-        aria-live="polite"
-        className="mb-2 flex w-full max-w-[min(720px,100%)] flex-wrap items-center gap-2 rounded-md border border-amber-500/35 bg-amber-50/80 px-3 py-2 text-xs text-amber-950 shadow-sm dark:border-amber-400/25 dark:bg-amber-950/30 dark:text-amber-100"
-      >
-        <RefreshCw size={14} strokeWidth={2.2} className="shrink-0 animate-spin text-amber-700 dark:text-amber-300" aria-hidden="true" />
-        <span className="font-medium">{t('chat.retry.title')}</span>
-        <span className="rounded-[4px] border border-amber-700/20 bg-white/70 px-1.5 py-0.5 font-mono text-[11px] leading-none text-amber-900 dark:border-amber-300/20 dark:bg-black/15 dark:text-amber-100">
-          {t('chat.retry.attempt', { attempt: apiRetry.attempt, max: apiRetry.maxRetries })}
-        </span>
-        <span className="rounded-[4px] border border-amber-700/20 bg-white/70 px-1.5 py-0.5 font-mono text-[11px] leading-none text-amber-900 dark:border-amber-300/20 dark:bg-black/15 dark:text-amber-100">
-          {statusText}
-        </span>
-        <span className="text-amber-800 dark:text-amber-200">
-          {t('chat.retry.waiting', { seconds: formatRetrySeconds(remainingMs) })}
-        </span>
-        {detailText && (
-          <span className="min-w-0 max-w-full truncate text-amber-700 dark:text-amber-200" title={detailText}>
-            {detailText}
-          </span>
-        )}
-      </div>
-    )
-  }
-
   let verb: string
   if (statusVerb) {
-    verb = translateServerVerb(t, statusVerb)
+    verb = statusVerb
   } else {
-    verb = chatState === 'thinking'
-      ? t('serverVerb.Thinking')
-      : chatState === 'compacting'
-        ? t('serverVerb.Compacting conversation')
-      : chatState === 'tool_executing'
-        ? t('serverVerb.Running')
-        : t('serverVerb.Working')
+    verb = chatState === 'thinking' ? 'Thinking' : chatState === 'tool_executing' ? 'Running' : 'Working'
   }
 
   return (
     <div className="mb-2 flex w-fit items-center gap-2 rounded-full border border-[var(--color-border)]/40 bg-[var(--color-surface-container-low)] px-3 py-1">
-      <span
-        className="chat-streaming-indicator__glyph inline-flex h-4 w-4 items-center justify-center rounded-full bg-[var(--color-brand)]/10 text-[10px] font-semibold text-[var(--color-brand)] animate-pulse"
-        aria-hidden="true"
-      >
-        G
+      <span className="chat-streaming-indicator__glyph text-[var(--color-brand)] animate-shimmer" aria-hidden="true">
+        <svg viewBox="0 0 1024 1024" className="h-[0.7rem] w-[0.7rem] fill-current">
+          <path d={BRAND_G_PATH} />
+        </svg>
       </span>
       <span className="text-xs font-medium text-[var(--color-text-secondary)]">{verb}...</span>
       {elapsedSeconds > 0 && (

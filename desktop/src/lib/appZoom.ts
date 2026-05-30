@@ -1,6 +1,6 @@
 export const APP_ZOOM_STORAGE_KEY = 'gaster-code-app-zoom'
-export const LEGACY_APP_ZOOM_STORAGE_KEYS = ['gaster-code-legacy-app-zoom', 'gaster-code-legacy-ui-zoom']
-export const LEGACY_UI_ZOOM_STORAGE_KEY = 'gaster-code-legacy-ui-zoom'
+export const LEGACY_APP_ZOOM_STORAGE_KEYS = ['cc-haha-app-zoom', 'cc-haha-ui-zoom']
+export const LEGACY_UI_ZOOM_STORAGE_KEY = 'cc-haha-ui-zoom'
 export const DEFAULT_APP_ZOOM = 1
 export const MIN_APP_ZOOM = 0.5
 export const MAX_APP_ZOOM = 2

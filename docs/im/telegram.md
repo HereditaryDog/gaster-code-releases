@@ -20,8 +20,8 @@ Telegram 方案适合个人私聊远程使用。当前实现只处理 `private c
 
 按提示走完三步：
 
-- **取一个机器人名称**，例如 `GasterCode机器人`
-- **取一个机器人用户名**，要求全英文字母，且必须以 `_bot` 结尾，例如 `gaster_code_bot`
+- **取一个机器人名称**，例如 `ClaudeCodeHaha机器人`
+- **取一个机器人用户名**，要求全英文字母，且必须以 `_bot` 结尾，例如 `jiang_cc_hah_bot`
 - 创建成功后，复制 BotFather 返回的 **Bot Token**
 
 ![复制 Bot Token](../images/im/telegram/03-bot-token.png)

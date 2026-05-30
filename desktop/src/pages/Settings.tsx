@@ -13,9 +13,10 @@ import { useTranslation } from '../i18n'
 import { Modal } from '../components/shared/Modal'
 import { ConfirmDialog } from '../components/shared/ConfirmDialog'
 import { Input } from '../components/shared/Input'
+import { Textarea } from '../components/shared/Textarea'
 import { Button } from '../components/shared/Button'
 import { Dropdown } from '../components/shared/Dropdown'
-import type { AppMode, PermissionMode, EffortLevel, ThemeMode, UpdateProxyMode, NetworkProxyMode, WebSearchMode } from '../types/settings'
+import type { AppMode, PermissionMode, EffortLevel, ThemeMode, UpdateProxyMode, WebSearchMode } from '../types/settings'
 import type { Locale } from '../i18n'
 import type { SavedProvider, UpdateProviderInput, ProviderTestResult, ModelMapping, ApiFormat, ProviderAuthStrategy } from '../types/provider'
 import type { ProviderPreset } from '../types/providerPreset'
@@ -63,10 +64,6 @@ import {
 } from '../lib/providerSettingsJson'
 import { copyTextToClipboard } from '../components/chat/clipboard'
 
-const NETWORK_TIMEOUT_MIN_SECONDS = 5
-const NETWORK_TIMEOUT_MAX_SECONDS = 600
-const NETWORK_TIMEOUT_STEP_SECONDS = 30
-
 function buildH5LaunchUrl(baseUrl: string | null, token: string | null): string | null {
   if (!baseUrl) return null
 
@@ -81,67 +78,6 @@ function buildH5LaunchUrl(baseUrl: string | null, token: string | null): string 
     return token
       ? `${baseUrl}${baseUrl.includes('?') ? '&' : '?'}serverUrl=${encodeURIComponent(baseUrl)}&h5Token=${encodeURIComponent(token)}`
       : baseUrl
-  }
-}
-
-function isLanH5BaseUrl(url: URL): boolean {
-  return url.protocol === 'http:' &&
-    !!url.port &&
-    (
-      url.hostname === 'localhost' ||
-      url.hostname === '127.0.0.1' ||
-      url.hostname.startsWith('10.') ||
-      url.hostname.startsWith('192.168.') ||
-      /^172\.(1[6-9]|2\d|3[0-1])\./.test(url.hostname) ||
-      url.hostname.startsWith('169.254.')
-    )
-}
-
-function extractH5AccessAddressDraft(baseUrl: string | null): string {
-  if (!baseUrl) return ''
-
-  try {
-    const url = new URL(baseUrl)
-    return isLanH5BaseUrl(url) ? url.hostname : baseUrl
-  } catch {
-    return baseUrl
-  }
-}
-
-function extractHostnameFromUrl(value: string | null): string | null {
-  if (!value) return null
-  try {
-    return new URL(value).hostname || null
-  } catch {
-    return null
-  }
-}
-
-function extractH5AccessPort(baseUrl: string | null): string | null {
-  if (!baseUrl) return null
-
-  try {
-    const url = new URL(baseUrl)
-    return url.port || null
-  } catch {
-    return null
-  }
-}
-
-function buildH5PublicBaseUrlFromHostDraft(draft: string, currentBaseUrl: string | null): string | null {
-  const trimmed = draft.trim()
-  if (!trimmed) return null
-  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)) return trimmed
-
-  try {
-    const current = currentBaseUrl ? new URL(currentBaseUrl) : null
-    if (!current) return trimmed
-
-    const port = current.port ? `:${current.port}` : ''
-    const path = current.pathname === '/' ? '' : current.pathname.replace(/\/+$/, '')
-    return `${current.protocol}//${trimmed}${port}${path}`
-  } catch {
-    return trimmed
   }
 }
 
@@ -1808,8 +1744,6 @@ function GeneralSettings() {
     setDesktopNotificationsEnabled,
     webSearch,
     setWebSearch,
-    network,
-    setNetwork,
     responseLanguage,
     setResponseLanguage,
     uiZoom,
@@ -1821,10 +1755,6 @@ function GeneralSettings() {
   } = useSettingsStore()
   const t = useTranslation()
   const [webSearchDraft, setWebSearchDraft] = useState(webSearch)
-  const [networkDraft, setNetworkDraft] = useState(network)
-  const [networkTimeoutInput, setNetworkTimeoutInput] = useState(String(Math.round(network.aiRequestTimeoutMs / 1000)))
-  const [networkSaveError, setNetworkSaveError] = useState<string | null>(null)
-  const [isSavingNetwork, setIsSavingNetwork] = useState(false)
   const [notificationPermission, setNotificationPermission] = useState<DesktopNotificationPermission>('default')
   const [notificationActionRunning, setNotificationActionRunning] = useState(false)
   const [zoomDraft, setZoomDraft] = useState(uiZoom)
@@ -1843,12 +1773,6 @@ function GeneralSettings() {
   useEffect(() => {
     setWebSearchDraft(webSearch)
   }, [webSearch])
-
-  useEffect(() => {
-    setNetworkDraft(network)
-    setNetworkTimeoutInput(String(Math.round(network.aiRequestTimeoutMs / 1000)))
-    setNetworkSaveError(null)
-  }, [network])
 
   useEffect(() => {
     if (!zoomDragging) {
@@ -1928,19 +1852,6 @@ function GeneralSettings() {
     { value: 'disabled', label: t('settings.general.webSearch.mode.disabled') },
   ]
 
-  const NETWORK_PROXY_MODES: Array<{ value: NetworkProxyMode; label: string; description: string }> = [
-    {
-      value: 'system',
-      label: t('settings.general.networkProxyModeSystem'),
-      description: t('settings.general.networkProxyModeSystemDescription'),
-    },
-    {
-      value: 'manual',
-      label: t('settings.general.networkProxyModeManual'),
-      description: t('settings.general.networkProxyModeManualDescription'),
-    },
-  ]
-
   const notificationStatusLabel: Record<DesktopNotificationPermission, string> = {
     granted: t('settings.general.notificationsStatusGranted'),
     denied: t('settings.general.notificationsStatusDenied'),
@@ -1990,79 +1901,6 @@ function GeneralSettings() {
       }
     } finally {
       setNotificationActionRunning(false)
-    }
-  }
-
-  const networkProxyUrl = networkDraft.proxy.url.trim()
-  const networkProxyError =
-    networkDraft.proxy.mode === 'manual' && !networkProxyUrl
-      ? t('settings.general.networkProxyUrlRequired')
-      : networkDraft.proxy.mode === 'manual' && !isValidHttpProxyUrl(networkProxyUrl)
-        ? t('settings.general.networkProxyUrlInvalid')
-        : null
-  const timeoutSeconds = Math.round(networkDraft.aiRequestTimeoutMs / 1000)
-  const parsedNetworkTimeoutSeconds = (() => {
-    const trimmed = networkTimeoutInput.trim()
-    if (!/^\d+$/.test(trimmed)) return null
-    const seconds = Number(trimmed)
-    if (!Number.isFinite(seconds) || seconds < NETWORK_TIMEOUT_MIN_SECONDS || seconds > NETWORK_TIMEOUT_MAX_SECONDS) return null
-    return seconds
-  })()
-  const networkTimeoutError =
-    networkTimeoutInput.trim().length === 0
-      ? t('settings.general.networkTimeoutRequired')
-      : parsedNetworkTimeoutSeconds === null
-        ? t('settings.general.networkTimeoutRange', {
-            min: String(NETWORK_TIMEOUT_MIN_SECONDS),
-            max: String(NETWORK_TIMEOUT_MAX_SECONDS),
-          })
-        : null
-  const networkDirty =
-    networkDraft.aiRequestTimeoutMs !== network.aiRequestTimeoutMs ||
-    networkDraft.proxy.mode !== network.proxy.mode ||
-    networkDraft.proxy.url.trim() !== network.proxy.url.trim()
-
-  const setNetworkTimeoutSeconds = (seconds: number) => {
-    const nextSeconds = Math.min(Math.max(Math.round(seconds), NETWORK_TIMEOUT_MIN_SECONDS), NETWORK_TIMEOUT_MAX_SECONDS)
-    setNetworkTimeoutInput(String(nextSeconds))
-    setNetworkDraft((current) => ({
-      ...current,
-      aiRequestTimeoutMs: nextSeconds * 1000,
-    }))
-    setNetworkSaveError(null)
-  }
-
-  const saveNetworkSettings = async () => {
-    if (networkProxyError) {
-      setNetworkSaveError(networkProxyError)
-      return
-    }
-    if (networkTimeoutError || parsedNetworkTimeoutSeconds === null) {
-      setNetworkSaveError(networkTimeoutError ?? t('settings.general.networkTimeoutRange', {
-        min: String(NETWORK_TIMEOUT_MIN_SECONDS),
-        max: String(NETWORK_TIMEOUT_MAX_SECONDS),
-      }))
-      return
-    }
-
-    setIsSavingNetwork(true)
-    setNetworkSaveError(null)
-    try {
-      await setNetwork({
-        aiRequestTimeoutMs: parsedNetworkTimeoutSeconds * 1000,
-        proxy: {
-          mode: networkDraft.proxy.mode,
-          url: networkProxyUrl,
-        },
-      })
-      useUIStore.getState().addToast({
-        type: 'success',
-        message: t('settings.general.networkSaved'),
-      })
-    } catch (error) {
-      setNetworkSaveError(error instanceof Error ? error.message : String(error))
-    } finally {
-      setIsSavingNetwork(false)
     }
   }
 
@@ -2360,156 +2198,6 @@ function GeneralSettings() {
         </div>
       </div>
 
-      <div className="mt-8">
-        <h2 className="text-base font-semibold text-[var(--color-text-primary)] mb-1">{t('settings.general.networkTitle')}</h2>
-        <p className="text-sm text-[var(--color-text-tertiary)] mb-3">{t('settings.general.networkDescription')}</p>
-        <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-container-low)] px-4 py-4">
-          <div className="grid grid-cols-2 gap-2">
-            {NETWORK_PROXY_MODES.map((mode) => (
-              <button
-                key={mode.value}
-                type="button"
-                onClick={() => {
-                  setNetworkDraft((current) => ({
-                    ...current,
-                    proxy: { ...current.proxy, mode: mode.value },
-                  }))
-                  setNetworkSaveError(null)
-                }}
-                aria-pressed={networkDraft.proxy.mode === mode.value}
-                className={`rounded-lg border px-3 py-2 text-left transition-colors ${
-                  networkDraft.proxy.mode === mode.value
-                    ? 'border-[var(--color-brand)] bg-[var(--color-surface-selected)] text-[var(--color-text-primary)]'
-                    : 'border-[var(--color-border)] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)]'
-                }`}
-              >
-                <div className="text-xs font-semibold">{mode.label}</div>
-                <div className="mt-1 text-[11px] leading-4 text-[var(--color-text-tertiary)]">
-                  {mode.description}
-                </div>
-              </button>
-            ))}
-          </div>
-
-          {networkDraft.proxy.mode === 'manual' && (
-            <div className="mt-4">
-              <Input
-                id="network-proxy-url"
-                label={t('settings.general.networkProxyUrl')}
-                value={networkDraft.proxy.url}
-                placeholder="http://127.0.0.1:7890"
-                autoComplete="off"
-                onChange={(event) => {
-                  setNetworkDraft((current) => ({
-                    ...current,
-                    proxy: { ...current.proxy, url: event.target.value },
-                  }))
-                  setNetworkSaveError(null)
-                }}
-              />
-              <p className={`mt-1 text-[11px] leading-4 ${networkProxyError ? 'text-[var(--color-error)]' : 'text-[var(--color-text-tertiary)]'}`}>
-                {networkProxyError ?? t('settings.general.networkProxyUrlHint')}
-              </p>
-            </div>
-          )}
-
-          <div className="mt-4">
-            <div className="mb-2 flex items-center justify-between gap-3">
-              <label htmlFor="network-timeout-seconds" className="text-sm font-medium text-[var(--color-text-primary)]">
-                {t('settings.general.networkTimeout')}
-              </label>
-              <span className="rounded-md bg-[var(--color-surface)] px-2 py-1 text-xs font-medium text-[var(--color-text-secondary)]">
-                {t('settings.general.networkTimeoutValue', { seconds: String(timeoutSeconds) })}
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button
-                type="button"
-                size="sm"
-                variant="secondary"
-                className="h-10 w-10 px-0"
-                aria-label={t('settings.general.networkTimeoutDecrease')}
-                onClick={() => setNetworkTimeoutSeconds((parsedNetworkTimeoutSeconds ?? timeoutSeconds) - NETWORK_TIMEOUT_STEP_SECONDS)}
-              >
-                -30
-              </Button>
-              <div className="relative min-w-0 flex-1">
-                <input
-                  id="network-timeout-seconds"
-                  type="number"
-                  min={NETWORK_TIMEOUT_MIN_SECONDS}
-                  max={NETWORK_TIMEOUT_MAX_SECONDS}
-                  step={1}
-                  inputMode="numeric"
-                  value={networkTimeoutInput}
-                  aria-invalid={networkTimeoutError ? true : undefined}
-                  aria-describedby="network-timeout-help"
-                  onChange={(event) => {
-                    const nextValue = event.currentTarget.value
-                    if (!/^\d*$/.test(nextValue)) return
-                    setNetworkTimeoutInput(nextValue)
-                    const seconds = Number(nextValue)
-                    if (nextValue.length > 0 && seconds >= NETWORK_TIMEOUT_MIN_SECONDS && seconds <= NETWORK_TIMEOUT_MAX_SECONDS) {
-                      setNetworkDraft((current) => ({
-                        ...current,
-                        aiRequestTimeoutMs: seconds * 1000,
-                      }))
-                    }
-                    setNetworkSaveError(null)
-                  }}
-                  className={`h-10 w-full rounded-[var(--radius-md)] border bg-[var(--color-surface)] px-3 pr-12 text-sm text-[var(--color-text-primary)] outline-none transition-colors duration-150 placeholder:text-[var(--color-text-tertiary)] ${
-                    networkTimeoutError
-                      ? 'border-[var(--color-error)] focus:shadow-[var(--shadow-error-ring)]'
-                      : 'border-[var(--color-border)] focus:border-[var(--color-border-focus)] focus:shadow-[var(--shadow-focus-ring)]'
-                  }`}
-                />
-                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[var(--color-text-tertiary)]">
-                  {t('settings.general.networkTimeoutUnit')}
-                </span>
-              </div>
-              <Button
-                type="button"
-                size="sm"
-                variant="secondary"
-                className="h-10 w-10 px-0"
-                aria-label={t('settings.general.networkTimeoutIncrease')}
-                onClick={() => setNetworkTimeoutSeconds((parsedNetworkTimeoutSeconds ?? timeoutSeconds) + NETWORK_TIMEOUT_STEP_SECONDS)}
-              >
-                +30
-              </Button>
-            </div>
-            <p
-              id="network-timeout-help"
-              className={`mt-2 text-xs leading-5 ${networkTimeoutError ? 'text-[var(--color-error)]' : 'text-[var(--color-text-tertiary)]'}`}
-            >
-              {networkTimeoutError ?? t('settings.general.networkTimeoutHint')}
-            </p>
-          </div>
-
-          <div className="mt-4 flex items-center justify-between gap-3">
-            <p className="min-w-0 text-[11px] leading-4 text-[var(--color-text-tertiary)]">
-              {t('settings.general.networkScopeHint')}
-            </p>
-            <Button
-              size="sm"
-              variant="secondary"
-              className="min-w-[72px] px-4 whitespace-nowrap"
-              disabled={!networkDirty || !!networkProxyError || !!networkTimeoutError || isSavingNetwork}
-              loading={isSavingNetwork}
-              onClick={() => void saveNetworkSettings()}
-            >
-              {t('settings.general.networkSave')}
-            </Button>
-          </div>
-
-          {networkSaveError && (
-            <p className="mt-2 text-[11px] leading-4 text-[var(--color-error)]">
-              {networkSaveError}
-            </p>
-          )}
-        </div>
-      </div>
-
       {isTauriRuntime() && (
         <div className="mt-8 border-t border-[var(--color-border)] pt-8">
           <h2 className="text-base font-semibold text-[var(--color-text-primary)] mb-1">{t('settings.general.storageTitle')}</h2>
@@ -2785,7 +2473,6 @@ function GeneralSettings() {
 function H5AccessSettings() {
   const {
     h5Access,
-    h5AccessDiagnostics,
     h5AccessError,
     enableH5Access,
     disableH5Access,
@@ -2793,8 +2480,8 @@ function H5AccessSettings() {
     updateH5AccessSettings,
   } = useSettingsStore()
   const t = useTranslation()
-  const addToast = useUIStore((s) => s.addToast)
-  const [h5PublicBaseUrlDraft, setH5PublicBaseUrlDraft] = useState(extractH5AccessAddressDraft(h5Access.publicBaseUrl))
+  const [h5PublicBaseUrlDraft, setH5PublicBaseUrlDraft] = useState(h5Access.publicBaseUrl ?? '')
+  const [h5AllowedOriginsDraft, setH5AllowedOriginsDraft] = useState(serializeAllowedOrigins(h5Access.allowedOrigins))
   const [h5GeneratedToken, setH5GeneratedToken] = useState<string | null>(null)
   const [h5TokenVisible, setH5TokenVisible] = useState(false)
   const [h5EnableConfirmOpen, setH5EnableConfirmOpen] = useState(false)
@@ -2805,12 +2492,17 @@ function H5AccessSettings() {
     () => buildH5LaunchUrl(h5AccessUrl, h5GeneratedToken),
     [h5AccessUrl, h5GeneratedToken],
   )
-  const h5AccessPort = extractH5AccessPort(h5AccessUrl)
-  const h5NextPublicBaseUrl = buildH5PublicBaseUrlFromHostDraft(h5PublicBaseUrlDraft, h5Access.publicBaseUrl)
-  const h5AccessDirty = h5NextPublicBaseUrl !== (h5Access.publicBaseUrl ?? null)
+  const h5AllowedOrigins = useMemo(
+    () => parseAllowedOriginsDraft(h5AllowedOriginsDraft),
+    [h5AllowedOriginsDraft],
+  )
+  const h5AccessDirty =
+    h5PublicBaseUrlDraft.trim() !== (h5Access.publicBaseUrl ?? '') ||
+    !arraysEqual(h5AllowedOrigins, h5Access.allowedOrigins)
 
   useEffect(() => {
-    setH5PublicBaseUrlDraft(extractH5AccessAddressDraft(h5Access.publicBaseUrl))
+    setH5PublicBaseUrlDraft(h5Access.publicBaseUrl ?? '')
+    setH5AllowedOriginsDraft(serializeAllowedOrigins(h5Access.allowedOrigins))
   }, [h5Access])
 
   useEffect(() => {
@@ -2849,37 +2541,20 @@ function H5AccessSettings() {
   const handleH5SettingsSave = async () => {
     await runH5Action(async () => {
       await updateH5AccessSettings({
-        publicBaseUrl: h5NextPublicBaseUrl,
+        publicBaseUrl: h5PublicBaseUrlDraft.trim() || null,
+        allowedOrigins: h5AllowedOrigins,
       })
-    })
-  }
-
-  const handleH5SwitchToSuggestedHost = async () => {
-    const suggested = h5AccessDiagnostics?.suggestedHost
-    if (!suggested) return
-    await runH5Action(async () => {
-      const port = extractH5AccessPort(h5Access.publicBaseUrl)
-      const nextUrl = port ? `http://${suggested}:${port}` : `http://${suggested}`
-      await updateH5AccessSettings({ publicBaseUrl: nextUrl })
     })
   }
 
   const handleH5UrlCopy = async () => {
     if (!h5AccessUrl) return
-    const copied = await copyTextToClipboard(h5AccessUrl)
-    addToast({
-      type: copied ? 'success' : 'error',
-      message: copied ? t('settings.general.h5AccessUrlCopied') : t('common.copyFailed'),
-    })
+    await copyTextToClipboard(h5AccessUrl)
   }
 
   const handleH5LaunchUrlCopy = async () => {
     if (!h5LaunchUrl) return
-    const copied = await copyTextToClipboard(h5LaunchUrl)
-    addToast({
-      type: copied ? 'success' : 'error',
-      message: copied ? t('settings.general.h5AccessLaunchUrlCopied') : t('common.copyFailed'),
-    })
+    await copyTextToClipboard(h5LaunchUrl)
   }
 
   const handleH5EnableConfirm = async () => {
@@ -2964,70 +2639,25 @@ function H5AccessSettings() {
             </span>
           </div>
 
-          {h5AccessDiagnostics?.storedHostStaleness === 'unreachable' && h5AccessDiagnostics.storedPublicBaseUrl ? (
-            <div
-              data-testid="h5-access-stale-host-banner"
-              className="mt-4 rounded-lg border border-[var(--color-warning)]/40 bg-[var(--color-warning)]/10 px-3 py-3 text-xs leading-5 text-[var(--color-text-primary)]"
-            >
-              <div className="font-semibold">
-                {t('settings.general.h5AccessStaleHostTitle')}
-              </div>
-              <div className="mt-1 text-[var(--color-text-secondary)]">
-                {h5AccessDiagnostics.suggestedHost
-                  ? t('settings.general.h5AccessStaleHostBody', {
-                      storedHost: extractHostnameFromUrl(h5AccessDiagnostics.storedPublicBaseUrl) ?? h5AccessDiagnostics.storedPublicBaseUrl,
-                    })
-                  : t('settings.general.h5AccessStaleHostNoSuggestion', {
-                      storedHost: extractHostnameFromUrl(h5AccessDiagnostics.storedPublicBaseUrl) ?? h5AccessDiagnostics.storedPublicBaseUrl,
-                    })}
-              </div>
-              {h5AccessDiagnostics.suggestedHost && (
-                <div className="mt-2">
-                  <Button
-                    size="sm"
-                    variant="primary"
-                    loading={h5ActionRunning}
-                    onClick={() => void handleH5SwitchToSuggestedHost()}
-                    data-testid="h5-access-stale-host-apply"
-                  >
-                    {t('settings.general.h5AccessStaleHostApply', {
-                      suggestedHost: h5AccessDiagnostics.suggestedHost,
-                    })}
-                  </Button>
-                </div>
-              )}
-            </div>
-          ) : null}
-
-          {h5AccessDiagnostics?.storedHostStaleness === 'proxy' ? (
-            <div
-              data-testid="h5-access-proxy-note"
-              className="mt-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-container-lowest)] px-3 py-2 text-xs leading-5 text-[var(--color-text-tertiary)]"
-            >
-              {t('settings.general.h5AccessProxyNote')}
-            </div>
-          ) : null}
-
           <div className="mt-4 grid grid-cols-1 gap-3">
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_9rem]">
-              <Input
-                id="h5-access-public-url"
-                label={t('settings.general.h5AccessPublicHost')}
-                value={h5PublicBaseUrlDraft}
-                placeholder={t('settings.general.h5AccessPublicHostPlaceholder')}
-                onChange={(event) => setH5PublicBaseUrlDraft(event.target.value)}
-              />
-              <Input
-                id="h5-access-current-port"
-                label={t('settings.general.h5AccessCurrentPort')}
-                value={h5AccessPort ?? t('settings.general.h5AccessCurrentPortUnknown')}
-                readOnly
-                className="text-[var(--color-text-tertiary)]"
-              />
-            </div>
+            <Input
+              id="h5-access-public-url"
+              label={t('settings.general.h5AccessPublicUrl')}
+              value={h5PublicBaseUrlDraft}
+              placeholder={t('settings.general.h5AccessPublicUrlPlaceholder')}
+              onChange={(event) => setH5PublicBaseUrlDraft(event.target.value)}
+            />
+            <Textarea
+              id="h5-access-allowed-origins"
+              label={t('settings.general.h5AccessAllowedOrigins')}
+              value={h5AllowedOriginsDraft}
+              placeholder={t('settings.general.h5AccessAllowedOriginsPlaceholder')}
+              onChange={(event) => setH5AllowedOriginsDraft(event.target.value)}
+              className="min-h-[88px]"
+            />
             <div className="flex items-center justify-between gap-3">
               <p className="text-xs text-[var(--color-text-tertiary)]">
-                {t('settings.general.h5AccessOpenHint')}
+                {t('settings.general.h5AccessOriginsHint')}
               </p>
               <Button
                 size="sm"
@@ -3187,6 +2817,21 @@ function H5AccessSettings() {
       />
     </div>
   )
+}
+
+function serializeAllowedOrigins(origins: string[]) {
+  return origins.join(', ')
+}
+
+function parseAllowedOriginsDraft(value: string) {
+  return value
+    .split(/[\n,]/)
+    .map((origin) => origin.trim())
+    .filter(Boolean)
+}
+
+function arraysEqual(left: string[], right: string[]) {
+  return left.length === right.length && left.every((value, index) => value === right[index])
 }
 
 // ─── Agents Settings ──────────────────────────────────────
@@ -3750,8 +3395,10 @@ const AUTHORS = [
   { name: 'Till3005', github: 'https://github.com/Till3005' },
   { name: 'jackkkkswwk', github: 'https://github.com/jackkkkswwk' },
 ]
+const ORIGINAL_PROJECT_REPO = 'https://github.com/NanmiCoder/cc-haha'
+const ORIGINAL_PROJECT_LABEL = 'NanmiCoder/cc-haha'
 
-function isValidHttpProxyUrl(value: string) {
+function isValidUpdateProxyUrl(value: string) {
   try {
     const url = new URL(value)
     return url.protocol === 'http:' || url.protocol === 'https:'
@@ -3836,7 +3483,7 @@ function AboutSettings() {
   const manualProxyError =
     updateProxyDraft.mode === 'manual' && !manualProxyUrl
       ? t('update.proxyUrlRequired')
-      : updateProxyDraft.mode === 'manual' && !isValidHttpProxyUrl(manualProxyUrl)
+      : updateProxyDraft.mode === 'manual' && !isValidUpdateProxyUrl(manualProxyUrl)
         ? t('update.proxyUrlInvalid')
         : null
   const updateProxyDirty =
@@ -4114,6 +3761,27 @@ function AboutSettings() {
               <span className="text-xs text-[var(--color-text-tertiary)] ml-auto">GitHub</span>
             </button>
           ))}
+        </div>
+      </div>
+
+      <div className="mt-4 w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-container-low)] px-4 py-3">
+        <div className="flex items-start gap-3">
+          <span className="material-symbols-outlined mt-0.5 text-[20px] text-[var(--color-text-tertiary)]">auto_awesome</span>
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-medium text-[var(--color-text-primary)]">
+              {t('settings.about.originalProject')}
+            </div>
+            <p className="mt-1 text-xs leading-5 text-[var(--color-text-tertiary)]">
+              {t('settings.about.originalProjectDesc')}
+            </p>
+            <button
+              type="button"
+              onClick={() => openUrl(ORIGINAL_PROJECT_REPO)}
+              className="mt-2 rounded-[var(--radius-sm)] text-xs font-medium text-[var(--color-text-accent)] transition-colors hover:text-[var(--color-brand)] focus:outline-none focus:shadow-[var(--shadow-focus-ring)]"
+            >
+              {ORIGINAL_PROJECT_LABEL}
+            </button>
+          </div>
         </div>
       </div>
 

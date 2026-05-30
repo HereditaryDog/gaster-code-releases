@@ -9,7 +9,7 @@ import { useUpdateStore } from '../stores/updateStore'
 import { useGMasterAuthStore } from '../stores/gmasterAuthStore'
 import type { SavedProvider } from '../types/provider'
 import type { ProviderPreset } from '../types/providerPreset'
-import type { NetworkSettings, ThemeMode, UpdateProxySettings } from '../types/settings'
+import type { ThemeMode, UpdateProxySettings } from '../types/settings'
 
 const MOCK_DELETE_PROVIDER = vi.fn()
 const MOCK_GET_SETTINGS = vi.fn()
@@ -135,7 +135,6 @@ describe('Settings > General tab', () => {
       desktopNotificationsEnabled: true,
       uiZoom: 1,
       webSearch: { mode: 'auto', tavilyApiKey: '', braveApiKey: '' },
-      network: { aiRequestTimeoutMs: 120_000, proxy: { mode: 'system', url: '' } },
       setThinkingEnabled: vi.fn().mockImplementation(async (enabled: boolean) => {
         useSettingsStore.setState({ thinkingEnabled: enabled })
       }),
@@ -153,9 +152,6 @@ describe('Settings > General tab', () => {
       }),
       setWebSearch: vi.fn().mockImplementation(async (webSearch) => {
         useSettingsStore.setState({ webSearch })
-      }),
-      setNetwork: vi.fn().mockImplementation(async (network: NetworkSettings) => {
-        useSettingsStore.setState({ network })
       }),
       h5Access: {
         enabled: false,
@@ -329,44 +325,16 @@ describe('Settings > General tab', () => {
     expect(useSettingsStore.getState().setUiZoom).toHaveBeenLastCalledWith(1)
   })
 
-  it('saves provider network timeout and manual proxy from General settings', async () => {
-    render(<Settings />)
-
-    fireEvent.click(screen.getByText('General'))
-
-    const networkSection = screen.getByRole('heading', { name: 'Network' }).parentElement!
-    fireEvent.click(within(networkSection).getByRole('button', { name: /Manual proxy/i }))
-    fireEvent.change(screen.getByLabelText('Proxy URL'), {
-      target: { value: '  http://127.0.0.1:7890  ' },
-    })
-    fireEvent.change(screen.getByLabelText('AI request timeout'), {
-      target: { value: '180' },
-    })
-
-    await act(async () => {
-      fireEvent.click(within(networkSection).getByRole('button', { name: 'Save' }))
-    })
-
-    expect(useSettingsStore.getState().setNetwork).toHaveBeenCalledWith({
-      aiRequestTimeoutMs: 180_000,
-      proxy: {
-        mode: 'manual',
-        url: 'http://127.0.0.1:7890',
-      },
-    })
-  })
-
   it('saves WebSearch fallback provider settings', () => {
     render(<Settings />)
 
     fireEvent.click(screen.getByText('General'))
 
-    const webSearchSection = screen.getByRole('heading', { name: 'WebSearch' }).parentElement!
     fireEvent.click(screen.getByRole('button', { name: 'Tavily' }))
     fireEvent.change(screen.getByLabelText('Tavily API key'), {
       target: { value: 'tvly-test-key' },
     })
-    fireEvent.click(within(webSearchSection).getByRole('button', { name: 'Save' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 
     expect(useSettingsStore.getState().setWebSearch).toHaveBeenCalledWith({
       mode: 'tavily',
@@ -413,9 +381,9 @@ describe('Settings > General tab', () => {
     fireEvent.click(screen.getByText('H5 Access'))
 
     expect(screen.getByRole('heading', { name: 'H5 Access' })).toBeInTheDocument()
-    expect(screen.getByText('Access host / IP')).toBeInTheDocument()
-    fireEvent.change(screen.getByLabelText('Access host / IP'), {
-      target: { value: '192.168.1.11' },
+    expect(screen.getByText('Allowed origins')).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('Allowed origins'), {
+      target: { value: 'https://phone.example, https://tablet.example' },
     })
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Save H5 settings' }))
@@ -423,7 +391,8 @@ describe('Settings > General tab', () => {
 
     await vi.waitFor(() => {
       expect(useSettingsStore.getState().updateH5AccessSettings).toHaveBeenCalledWith({
-        publicBaseUrl: 'http://192.168.1.11:3456',
+        publicBaseUrl: 'http://192.168.1.10:3456',
+        allowedOrigins: ['https://phone.example', 'https://tablet.example'],
       })
     })
 
@@ -714,7 +683,7 @@ describe('Settings > About tab', () => {
     expect(screen.getByText('Added markdown support')).toBeInTheDocument()
   })
 
-  it('shows Gaster owner info and removes upstream social links', async () => {
+  it('shows Gaster owner info, removes upstream social links, and credits the original project', async () => {
     render(<Settings />)
 
     const logo = await screen.findByRole('img', { name: 'Gaster Code' })
@@ -725,10 +694,11 @@ describe('Settings > About tab', () => {
     expect(screen.getByRole('button', { name: /HereditaryDog GitHub/ })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Till3005 GitHub/ })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /jackkkkswwk GitHub/ })).toBeInTheDocument()
+    expect(screen.getByText('Original Project')).toBeInTheDocument()
+    expect(screen.getByText('NanmiCoder/cc-haha')).toBeInTheDocument()
 
     expect(screen.queryByText('程序员阿江-Relakkes')).not.toBeInTheDocument()
     expect(screen.queryByText('Social Media')).not.toBeInTheDocument()
-    expect(screen.queryByText('Original Project')).not.toBeInTheDocument()
     expect(screen.queryByText('Bilibili')).not.toBeInTheDocument()
     expect(screen.queryByText('Douyin')).not.toBeInTheDocument()
     expect(screen.queryByText('Xiaohongshu')).not.toBeInTheDocument()

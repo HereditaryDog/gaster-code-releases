@@ -2,12 +2,14 @@ import { create } from 'zustand'
 import { gmasterAuthApi, type GMasterAuthIntent, type GMasterAuthStatus } from '../api/gmasterAuth'
 
 const POLL_INTERVAL_MS = 2_000
+const AUTH_POLL_TIMEOUT_MS = 5 * 60_000
 
 type GMasterAuthState = {
   status: GMasterAuthStatus | null
   isPolling: boolean
   isLoading: boolean
   error: string | null
+  loginStartedAt: number | null
   fetchStatus: () => Promise<GMasterAuthStatus | null>
   login: (intent?: GMasterAuthIntent) => Promise<{ authorizeUrl: string }>
   logout: () => Promise<void>
@@ -24,6 +26,7 @@ export const useGMasterAuthStore = create<GMasterAuthState>((set, get) => {
     isPolling: false,
     isLoading: false,
     error: null,
+    loginStartedAt: null,
 
     fetchStatus: async () => {
       try {
@@ -37,7 +40,7 @@ export const useGMasterAuthStore = create<GMasterAuthState>((set, get) => {
     },
 
     login: async (intent = 'login') => {
-      set({ status: null, isLoading: true, error: null })
+      set({ status: null, isLoading: true, error: null, loginStartedAt: Date.now() })
       try {
         const res = await gmasterAuthApi.start(intent)
         set({ isLoading: false })
@@ -66,9 +69,19 @@ export const useGMasterAuthStore = create<GMasterAuthState>((set, get) => {
 
     startPolling: () => {
       if (pollTimer) return
-      set({ status: null, isPolling: true })
+      set((state) => ({
+        status: null,
+        isPolling: true,
+        loginStartedAt: state.loginStartedAt ?? Date.now(),
+      }))
       const scheduleNext = () => {
         pollTimer = setTimeout(async () => {
+          const startedAt = get().loginStartedAt ?? Date.now()
+          if (Date.now() - startedAt >= AUTH_POLL_TIMEOUT_MS) {
+            get().stopPolling()
+            set({ error: 'G-Master login timed out. Please try again.' })
+            return
+          }
           const status = await get().fetchStatus()
           if (!get().isPolling) return
           if (status?.loggedIn) {
@@ -90,7 +103,7 @@ export const useGMasterAuthStore = create<GMasterAuthState>((set, get) => {
         clearTimeout(pollTimer)
         pollTimer = null
       }
-      set({ isPolling: false })
+      set({ isPolling: false, loginStartedAt: null })
     },
   }
 })

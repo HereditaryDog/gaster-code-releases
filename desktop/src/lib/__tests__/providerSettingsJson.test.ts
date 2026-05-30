@@ -53,9 +53,10 @@ describe('provider settings JSON helpers', () => {
         ANTHROPIC_MODEL: 'old-model',
         CLAUDE_CODE_MODEL_CONTEXT_WINDOWS: '{"old":100000}',
         GASTER_CODE_SEND_DISABLED_THINKING: '1',
+        CC_HAHA_SEND_DISABLED_THINKING: '1',
         USER_DEFINED: 'keep-me',
       },
-      ['GASTER_CODE_SEND_DISABLED_THINKING'],
+      ['GASTER_CODE_SEND_DISABLED_THINKING', 'CC_HAHA_SEND_DISABLED_THINKING'],
     )
 
     expect(cleaned).toEqual({ USER_DEFINED: 'keep-me' })

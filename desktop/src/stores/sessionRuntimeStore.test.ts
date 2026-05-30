@@ -8,7 +8,7 @@ describe('sessionRuntimeStore', () => {
 
   it('migrates legacy runtime selections to the Gaster Code storage key', async () => {
     window.localStorage.setItem(
-      'gaster-code-legacy-session-runtime',
+      'cc-haha-session-runtime',
       JSON.stringify({
         'session-1': { providerId: null, modelId: 'claude-sonnet-4-6' },
       }),
@@ -20,7 +20,7 @@ describe('sessionRuntimeStore', () => {
       'session-1': { providerId: null, modelId: 'claude-sonnet-4-6' },
     })
     expect(window.localStorage.getItem('gaster-code-session-runtime')).toContain('claude-sonnet-4-6')
-    expect(window.localStorage.getItem('gaster-code-legacy-session-runtime')).toBeNull()
+    expect(window.localStorage.getItem('cc-haha-session-runtime')).toBeNull()
   })
 
   it('writes runtime selections to the Gaster Code storage key', async () => {
@@ -32,6 +32,6 @@ describe('sessionRuntimeStore', () => {
     })
 
     expect(window.localStorage.getItem('gaster-code-session-runtime')).toContain('model-1')
-    expect(window.localStorage.getItem('gaster-code-legacy-session-runtime')).toBeNull()
+    expect(window.localStorage.getItem('cc-haha-session-runtime')).toBeNull()
   })
 })

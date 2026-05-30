@@ -1,8 +1,6 @@
 name: Release Desktop
 
 on:
-  push:
-    tags: ['v*.*.*']
   workflow_dispatch:
     inputs:
       draft:
@@ -55,7 +53,7 @@ jobs:
                 asset_name_pattern: "Gaster-Code_[version]_macos_arm64_[bundle][ext]"
               },
               {
-                platform: "macos-15-intel",
+                platform: "macos-latest",
                 rust_target: "x86_64-apple-darwin",
                 tauri_args: "--target x86_64-apple-darwin",
                 label: "macOS-x64",
@@ -98,7 +96,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Read version
         id: version
@@ -160,7 +158,7 @@ jobs:
 
       # ── Node.js (for tauri-action compatibility) ─────────────
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v4
         with:
           node-version: 20
 
@@ -196,6 +194,22 @@ jobs:
           TAURI_ENV_TARGET_TRIPLE: ${{ matrix.rust_target }}
         run: bun run build:sidecars
 
+      - name: Export Tauri signing key
+        shell: bash
+        env:
+          RAW_TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          if [ -z "${RAW_TAURI_SIGNING_PRIVATE_KEY:-}" ]; then
+            echo "::error::Missing TAURI_SIGNING_PRIVATE_KEY secret"
+            exit 1
+          fi
+
+          {
+            echo 'TAURI_SIGNING_PRIVATE_KEY<<__TAURI_SIGNING_PRIVATE_KEY__'
+            printf '%s\n' "$RAW_TAURI_SIGNING_PRIVATE_KEY"
+            echo '__TAURI_SIGNING_PRIVATE_KEY__'
+          } >> "$GITHUB_ENV"
+
       # ── Build Tauri app ──────────────────────────────────────
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
@@ -203,7 +217,6 @@ jobs:
           BUN_INSTALL_CACHE_DIR: ${{ runner.temp }}/bun-install-cache
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_ENV_TARGET_TRIPLE: ${{ matrix.rust_target }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           projectPath: desktop
@@ -223,15 +236,15 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.draft == false)
     permissions:
-      contents: write
+      contents: read
     env:
       PRIVATE_RELEASE_REPOSITORY: ${{ github.repository }}
       PUBLIC_RELEASE_REPOSITORY: HereditaryDog/gaster-code-releases
-      GH_TOKEN: ${{ secrets.PUBLIC_RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
+      GH_TOKEN: ${{ secrets.PUBLIC_RELEASE_TOKEN }}
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Read version
         id: version
@@ -272,25 +285,21 @@ jobs:
             exit 1
           fi
 
-          if [ "$PRIVATE_RELEASE_REPOSITORY" != "$PUBLIC_RELEASE_REPOSITORY" ]; then
-            PRIVATE_ASSET_BASE="https://github.com/${PRIVATE_RELEASE_REPOSITORY}/releases/download/${TAG}/"
-            PUBLIC_ASSET_BASE="https://github.com/${PUBLIC_RELEASE_REPOSITORY}/releases/download/${TAG}/"
+          PRIVATE_ASSET_BASE="https://github.com/${PRIVATE_RELEASE_REPOSITORY}/releases/download/${TAG}/"
+          PUBLIC_ASSET_BASE="https://github.com/${PUBLIC_RELEASE_REPOSITORY}/releases/download/${TAG}/"
 
-            jq \
-              --arg private "$PRIVATE_ASSET_BASE" \
-              --arg public "$PUBLIC_ASSET_BASE" \
-              '.platforms |= with_entries(.value.url |= if startswith($private) then $public + (.[($private | length):]) else . end)' \
-              public-release-assets/latest.json > public-release-assets/latest.public.json
-            mv public-release-assets/latest.public.json public-release-assets/latest.json
+          jq \
+            --arg private "$PRIVATE_ASSET_BASE" \
+            --arg public "$PUBLIC_ASSET_BASE" \
+            '.platforms |= with_entries(.value.url |= if startswith($private) then $public + (.[($private | length):]) else . end)' \
+            public-release-assets/latest.json > public-release-assets/latest.public.json
+          mv public-release-assets/latest.public.json public-release-assets/latest.json
 
-            jq -e \
-              --arg private "$PRIVATE_ASSET_BASE" \
-              --arg public "$PUBLIC_ASSET_BASE" \
-              '.platforms | to_entries | all(.value.url | (startswith($public) and (startswith($private) | not)))' \
-              public-release-assets/latest.json >/dev/null
-          else
-            echo "Private and public release repositories match; keeping updater manifest URLs unchanged."
-          fi
+          jq -e \
+            --arg private "$PRIVATE_ASSET_BASE" \
+            --arg public "$PUBLIC_ASSET_BASE" \
+            '.platforms | to_entries | all(.value.url | (startswith($public) and (startswith($private) | not)))' \
+            public-release-assets/latest.json >/dev/null
 
       - name: Publish assets to public release repository
         shell: bash

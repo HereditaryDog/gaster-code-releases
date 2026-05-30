@@ -21,6 +21,7 @@ describe('gmasterAuthStore', () => {
       isLoading: false,
       isPolling: false,
       error: null,
+      loginStartedAt: null,
     })
   })
 
@@ -40,6 +41,7 @@ describe('gmasterAuthStore', () => {
     const result = await useGMasterAuthStore.getState().login()
     expect(result.authorizeUrl).toBe('https://gmapi.example.test/login')
     expect(useGMasterAuthStore.getState().isLoading).toBe(false)
+    expect(useGMasterAuthStore.getState().loginStartedAt).toBeTypeOf('number')
   })
 
   it('logout clears status', async () => {
@@ -131,9 +133,23 @@ describe('gmasterAuthStore', () => {
     expect(useGMasterAuthStore.getState().status).toEqual({ loggedIn: false })
     expect(useGMasterAuthStore.getState().isLoading).toBe(false)
     expect(useGMasterAuthStore.getState().isPolling).toBe(false)
+    expect(useGMasterAuthStore.getState().loginStartedAt).toBeNull()
     expect(vi.getTimerCount()).toBe(0)
 
     await vi.advanceTimersByTimeAsync(2_000)
     expect(gmasterAuthApi.status).not.toHaveBeenCalled()
+  })
+
+  it('stops polling when browser auth times out', async () => {
+    vi.useFakeTimers()
+    vi.mocked(gmasterAuthApi.status).mockResolvedValue({ loggedIn: false })
+    useGMasterAuthStore.setState({ loginStartedAt: Date.now() - 5 * 60_000 })
+
+    useGMasterAuthStore.getState().startPolling()
+    await vi.advanceTimersByTimeAsync(2_000)
+
+    expect(gmasterAuthApi.status).not.toHaveBeenCalled()
+    expect(useGMasterAuthStore.getState().isPolling).toBe(false)
+    expect(useGMasterAuthStore.getState().error).toBe('G-Master login timed out. Please try again.')
   })
 })

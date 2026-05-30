@@ -4,7 +4,7 @@ import '@testing-library/jest-dom'
 import { ProjectContextChip } from './ProjectContextChip'
 
 describe('ProjectContextChip', () => {
-  it('shows only the source project label and worktree marker for isolated worktrees', () => {
+  it('keeps the source project label and adds worktree identity', () => {
     render(
       <ProjectContextChip
         workDir="/workspace/OpenCutSkill/.claude/worktrees/desktop-main-54a09f85"
@@ -17,9 +17,9 @@ describe('ProjectContextChip', () => {
     )
 
     expect(screen.getByText('OpenCutSkill')).toBeInTheDocument()
+    expect(screen.getByText('main')).toBeInTheDocument()
     expect(screen.getByText('worktree')).toBeInTheDocument()
-    expect(screen.queryByText('main')).not.toBeInTheDocument()
-    expect(screen.queryByText('desktop-main-54a09f85')).not.toBeInTheDocument()
+    expect(screen.getByText('desktop-main-54a09f85')).toBeInTheDocument()
   })
 
   it('does not show worktree details for a normal checkout', () => {

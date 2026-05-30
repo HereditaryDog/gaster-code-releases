@@ -6,7 +6,7 @@ import {
   getMcpStdioEnvironment,
   resetMcpStdioEnvironmentCacheForTests,
 } from './mcpStdioEnvironment.js'
-import { GASTER_ENV } from './gasterEnv.js'
+import { GASTER_ENV, LEGACY_GASTER_ENV } from './gasterEnv.js'
 
 let tmpDir: string
 let originalEnv: {
@@ -15,6 +15,7 @@ let originalEnv: {
   SHELL?: string
   ZDOTDIR?: string
   GASTER_CODE_DISABLE_TERMINAL_SHELL_ENV?: string
+  CC_HAHA_DISABLE_TERMINAL_SHELL_ENV?: string
 }
 
 async function writeExecutable(filePath: string, content: string) {
@@ -54,8 +55,11 @@ describe('MCP stdio environment', () => {
       ZDOTDIR: process.env.ZDOTDIR,
       GASTER_CODE_DISABLE_TERMINAL_SHELL_ENV:
         process.env[GASTER_ENV.TERMINAL_SHELL_ENV_DISABLED],
+      CC_HAHA_DISABLE_TERMINAL_SHELL_ENV:
+        process.env[LEGACY_GASTER_ENV.TERMINAL_SHELL_ENV_DISABLED],
     }
     delete process.env[GASTER_ENV.TERMINAL_SHELL_ENV_DISABLED]
+    delete process.env[LEGACY_GASTER_ENV.TERMINAL_SHELL_ENV_DISABLED]
     resetMcpStdioEnvironmentCacheForTests()
   })
 

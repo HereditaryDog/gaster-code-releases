@@ -4,7 +4,7 @@ import * as os from 'node:os'
 import * as path from 'node:path'
 import { ConversationService } from '../services/conversationService.js'
 import { ProviderService } from '../services/providerService.js'
-import { GASTER_ENV } from '../../utils/gasterEnv.js'
+import { GASTER_ENV, LEGACY_GASTER_ENV } from '../../utils/gasterEnv.js'
 import { sanitizePath } from '../../utils/path.js'
 import { resetTerminalShellEnvironmentCacheForTests } from '../../utils/terminalShellEnvironment.js'
 
@@ -24,6 +24,7 @@ describe('ConversationService', () => {
   let originalShell: string | undefined
   let originalZdotdir: string | undefined
   let originalDisableTerminalShellEnv: string | undefined
+  let originalLegacyDisableTerminalShellEnv: string | undefined
 
   beforeEach(async () => {
     tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'gaster-code-conversation-service-'))
@@ -41,6 +42,7 @@ describe('ConversationService', () => {
     originalShell = process.env.SHELL
     originalZdotdir = process.env.ZDOTDIR
     originalDisableTerminalShellEnv = process.env[GASTER_ENV.TERMINAL_SHELL_ENV_DISABLED]
+    originalLegacyDisableTerminalShellEnv = process.env[LEGACY_GASTER_ENV.TERMINAL_SHELL_ENV_DISABLED]
 
     process.env.CLAUDE_CONFIG_DIR = tmpDir
     process.env.ANTHROPIC_API_KEY = 'stale-parent-api-key'
@@ -54,6 +56,7 @@ describe('ConversationService', () => {
     delete process.env.CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST
     delete process.env.CLAUDE_CODE_DIAGNOSTICS_FILE
     process.env[GASTER_ENV.TERMINAL_SHELL_ENV_DISABLED] = '1'
+    delete process.env[LEGACY_GASTER_ENV.TERMINAL_SHELL_ENV_DISABLED]
     resetTerminalShellEnvironmentCacheForTests()
   })
 
@@ -99,6 +102,9 @@ describe('ConversationService', () => {
 
     if (originalDisableTerminalShellEnv === undefined) delete process.env[GASTER_ENV.TERMINAL_SHELL_ENV_DISABLED]
     else process.env[GASTER_ENV.TERMINAL_SHELL_ENV_DISABLED] = originalDisableTerminalShellEnv
+
+    if (originalLegacyDisableTerminalShellEnv === undefined) delete process.env[LEGACY_GASTER_ENV.TERMINAL_SHELL_ENV_DISABLED]
+    else process.env[LEGACY_GASTER_ENV.TERMINAL_SHELL_ENV_DISABLED] = originalLegacyDisableTerminalShellEnv
 
     resetTerminalShellEnvironmentCacheForTests()
     await fs.rm(tmpDir, { recursive: true, force: true })
@@ -213,10 +219,10 @@ describe('ConversationService', () => {
       'utf-8',
     )
 
-    const { gasterOAuthService } = await import('../services/gasterOAuthService.js')
-    await gasterOAuthService.saveTokens({
-      accessToken: 'gaster-fresh-token',
-      refreshToken: 'gaster-refresh-xxx',
+    const { hahaOAuthService } = await import('../services/hahaOAuthService.js')
+    await hahaOAuthService.saveTokens({
+      accessToken: 'haha-fresh-token',
+      refreshToken: 'haha-refresh-xxx',
       expiresAt: Date.now() + 30 * 60_000,
       scopes: ['user:inference'],
       subscriptionType: 'max',
@@ -226,7 +232,7 @@ describe('ConversationService', () => {
     const env = (await service.buildChildEnv('/tmp')) as Record<string, string>
 
     expect(env.CLAUDE_CODE_ENTRYPOINT).toBe('claude-desktop')
-    expect(env.CLAUDE_CODE_OAUTH_TOKEN).toBe('gaster-fresh-token')
+    expect(env.CLAUDE_CODE_OAUTH_TOKEN).toBe('haha-fresh-token')
   })
 
   test('buildChildEnv does NOT inject CLAUDE_CODE_OAUTH_TOKEN when not official mode', async () => {
@@ -238,9 +244,9 @@ describe('ConversationService', () => {
       'utf-8',
     )
 
-    const { gasterOAuthService } = await import('../services/gasterOAuthService.js')
-    await gasterOAuthService.saveTokens({
-      accessToken: 'gaster-token-should-not-be-used',
+    const { hahaOAuthService } = await import('../services/hahaOAuthService.js')
+    await hahaOAuthService.saveTokens({
+      accessToken: 'haha-token-should-not-be-used',
       refreshToken: null,
       expiresAt: null,
       scopes: [],
@@ -399,6 +405,7 @@ describe('ConversationService', () => {
     expect(env.ANTHROPIC_API_KEY).toBe('')
     expect(env.ANTHROPIC_MODEL).toBe('deepseek-v4-pro')
     expect(env.GASTER_CODE_SEND_DISABLED_THINKING).toBe('1')
+    expect(env.CC_HAHA_SEND_DISABLED_THINKING).toBeUndefined()
   })
 
   test('buildChildEnv can force official auth even when a custom default provider exists', async () => {
@@ -410,8 +417,8 @@ describe('ConversationService', () => {
       'utf-8',
     )
 
-    const { gasterOAuthService } = await import('../services/gasterOAuthService.js')
-    await gasterOAuthService.saveTokens({
+    const { hahaOAuthService } = await import('../services/hahaOAuthService.js')
+    await hahaOAuthService.saveTokens({
       accessToken: 'forced-official-token',
       refreshToken: 'forced-official-refresh',
       expiresAt: Date.now() + 30 * 60_000,
@@ -456,6 +463,7 @@ describe('ConversationService', () => {
       'com.gaster-code.desktop',
     )
     expect(env.GASTER_CODE_DESKTOP_SERVER_URL).toBe('http://127.0.0.1:3456')
+    expect(env.CC_HAHA_DESKTOP_SERVER_URL).toBeUndefined()
     expect(env.CLAUDE_CODE_ENABLE_SDK_FILE_CHECKPOINTING).toBe('1')
   })
 
@@ -496,6 +504,8 @@ describe('ConversationService', () => {
 
     expect(env.GASTER_CODE_DESKTOP_AWAIT_MCP).toBe('1')
     expect(env.GASTER_CODE_DESKTOP_AWAIT_MCP_TIMEOUT_MS).toBe('5000')
+    expect(env.CC_HAHA_DESKTOP_AWAIT_MCP).toBeUndefined()
+    expect(env.CC_HAHA_DESKTOP_AWAIT_MCP_TIMEOUT_MS).toBeUndefined()
   })
 
   test('buildSessionCliArgs forwards the selected runtime model and effort to the CLI process', () => {

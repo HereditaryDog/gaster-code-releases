@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState, type ComponentType, type CSSProperties } from 'react'
-import { Highlight, type PrismTheme } from 'prism-react-renderer'
+import { useState, useRef, useEffect } from 'react'
+import { ShikiHighlighter, createJavaScriptRegexEngine } from 'react-shiki'
+import 'react-shiki/css'
 import { CopyButton } from '../shared/CopyButton'
 
 type Props = {
@@ -9,30 +10,11 @@ type Props = {
   showLineNumbers?: boolean
 }
 
-const warmPrismTheme: PrismTheme = {
-  plain: {
-    color: 'var(--color-code-fg)',
-    backgroundColor: 'transparent',
-  },
-  styles: [
-    { types: ['comment', 'prolog', 'doctype', 'cdata'], style: { color: 'var(--color-code-comment)', fontStyle: 'italic' as const } },
-    { types: ['string', 'attr-value', 'template-string'], style: { color: 'var(--color-code-string)' } },
-    { types: ['keyword', 'selector', 'important', 'atrule'], style: { color: 'var(--color-code-keyword)' } },
-    { types: ['function'], style: { color: 'var(--color-code-function)' } },
-    { types: ['tag'], style: { color: 'var(--color-code-keyword)' } },
-    { types: ['number', 'boolean'], style: { color: 'var(--color-code-number)' } },
-    { types: ['operator'], style: { color: 'var(--color-code-fg)' } },
-    { types: ['punctuation'], style: { color: 'var(--color-code-punctuation)' } },
-    { types: ['variable', 'parameter'], style: { color: 'var(--color-code-fg)' } },
-    { types: ['property', 'attr-name'], style: { color: 'var(--color-code-property)' } },
-    { types: ['builtin', 'class-name', 'constant', 'symbol'], style: { color: 'var(--color-code-type)' } },
-    { types: ['regex'], style: { color: 'var(--color-primary-container)' } },
-    { types: ['inserted'], style: { color: 'var(--color-code-inserted)' } },
-    { types: ['deleted'], style: { color: 'var(--color-code-deleted)' } },
-  ],
-}
-
-const warmShikiTheme = {
+/**
+ * Custom warm-toned TextMate theme — uses VS Code-quality tokenization
+ * while harmonizing with the app's cream/terra-cotta design system.
+ */
+const warmCodeTheme = {
   name: 'warm-code',
   type: 'dark' as const,
   fg: 'var(--color-code-fg)',
@@ -65,135 +47,26 @@ const warmShikiTheme = {
 
 const CODE_AREA_PADDING = '0.5rem 12px'
 const CODE_LINE_HEIGHT = 1.3
+const shikiEngine = createJavaScriptRegexEngine({ forgiving: true })
 
-type ShikiHighlighterProps = {
-  language: string
-  theme: typeof warmShikiTheme
-  engine: unknown
-  showLineNumbers: boolean
-  showLanguage: boolean
-  addDefaultStyles: boolean
-  style: CSSProperties
-  children: string
-}
-
-type ReactShikiModule = {
-  ShikiHighlighter: ComponentType<any>
-  createJavaScriptRegexEngine: (options: { forgiving: boolean }) => unknown
-}
-
-type ShikiRuntime = {
-  Highlighter: ComponentType<ShikiHighlighterProps>
-  engine: unknown
-}
-
-let shikiRuntimePromise: Promise<ShikiRuntime | null> | null = null
-
-function canUseShikiRuntime(): boolean {
-  if (import.meta.env.MODE === 'test') return false
-  if (typeof window === 'undefined') return false
-
-  try {
-    new RegExp('(?<name>a)')
-    new RegExp('(?<=a)b')
-  } catch {
-    return false
-  }
-
-  const ua = window.navigator.userAgent
-  const chromiumLike = /\b(Chrome|Chromium|CriOS|Edg|OPR|Firefox)\b/.test(ua)
-  const safariVersion = /\bVersion\/(\d+)(?:\.\d+)?\b.*\bSafari\//.exec(ua)
-  if (!chromiumLike && safariVersion && Number(safariVersion[1]) <= 15) {
-    return false
-  }
-
-  return true
-}
-
-function loadShikiRuntime(): Promise<ShikiRuntime | null> {
-  if (!canUseShikiRuntime()) return Promise.resolve(null)
-  shikiRuntimePromise ??= import('react-shiki')
-    .then((mod) => {
-      const shiki = mod as unknown as ReactShikiModule
-      return {
-        Highlighter: shiki.ShikiHighlighter as ComponentType<ShikiHighlighterProps>,
-        engine: shiki.createJavaScriptRegexEngine({ forgiving: true }),
-      }
-    })
-    .catch(() => null)
-  return shikiRuntimePromise
-}
-
-function PrismCodeContent({ code, language, showLineNumbers }: { code: string; language?: string; showLineNumbers: boolean }) {
-  return (
-    <Highlight
-      theme={warmPrismTheme}
-      code={code}
-      language={language || 'text'}
-    >
-      {({ tokens, getLineProps, getTokenProps }) => (
-        <pre
-          data-code-viewer-content=""
-          data-highlight-engine="prism"
-          style={{
-            margin: 0,
-            padding: CODE_AREA_PADDING,
-            fontFamily: 'var(--font-mono)',
-            fontSize: '12px',
-            lineHeight: String(CODE_LINE_HEIGHT),
-            whiteSpace: 'pre',
-            wordBreak: 'normal',
-            color: 'var(--color-code-fg)',
-          }}
-        >
-          {tokens.map((line, index) => (
-            <span
-              key={index}
-              {...getLineProps({ line })}
-              data-line-number={showLineNumbers ? index + 1 : undefined}
-            >
-              {showLineNumbers && (
-                <span className="mr-3 inline-block min-w-[2.5ch] select-none text-right text-[var(--color-text-tertiary)]">
-                  {index + 1}
-                </span>
-              )}
-              {line.map((token, key) => (
-                <span key={key} {...getTokenProps({ token })} />
-              ))}
-            </span>
-          ))}
-        </pre>
-      )}
-    </Highlight>
-  )
-}
-
+/**
+ * Wraps ShikiHighlighter with a plain-text fallback so the code area
+ * is never empty while the async WASM / language-grammar load is in-flight,
+ * or if highlighting fails entirely.
+ */
 function CodeArea({ code, language, showLineNumbers }: { code: string; language?: string; showLineNumbers: boolean }) {
   const containerRef = useRef<HTMLDivElement>(null)
-  const [runtime, setRuntime] = useState<ShikiRuntime | null>(null)
   const [loaded, setLoaded] = useState(false)
 
   useEffect(() => {
-    let cancelled = false
-    setLoaded(false)
-    loadShikiRuntime().then((nextRuntime) => {
-      if (!cancelled) setRuntime(nextRuntime)
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
-  useEffect(() => {
-    setLoaded(false)
-  }, [code, language])
-
-  useEffect(() => {
-    if (!runtime) return
+    // ShikiHighlighter renders `null` until the async highlight completes.
+    // Watch for real content appearing via MutationObserver so we can hide
+    // the plain-text fallback as soon as highlighted output is in the DOM.
     const el = containerRef.current
     if (!el) return
     const check = () => {
       const shikiContainer = el.querySelector('[data-testid="shiki-container"]')
+      // shiki renders a <code> element inside its container once highlighting is done
       if (shikiContainer?.querySelector('code')) {
         setLoaded(true)
       }
@@ -202,9 +75,7 @@ function CodeArea({ code, language, showLineNumbers }: { code: string; language?
     const observer = new MutationObserver(check)
     observer.observe(el, { childList: true, subtree: true })
     return () => observer.disconnect()
-  }, [runtime, code, language])
-
-  const ShikiHighlighter = runtime?.Highlighter
+  }, [code, language])
 
   return (
     <div
@@ -212,48 +83,54 @@ function CodeArea({ code, language, showLineNumbers }: { code: string; language?
       data-has-line-numbers={showLineNumbers ? 'true' : 'false'}
       className="code-viewer-area relative max-h-[420px] overflow-auto bg-[var(--color-code-bg)]"
     >
-      {(!ShikiHighlighter || !loaded) && (
-        <PrismCodeContent
-          code={code}
-          language={language}
-          showLineNumbers={showLineNumbers}
-        />
-      )}
-      {ShikiHighlighter && (
-        <div
-          data-code-viewer-content=""
-          data-highlight-engine="shiki"
-          style={
-            loaded
-              ? { padding: CODE_AREA_PADDING }
-              : {
-                  position: 'absolute',
-                  inset: 0,
-                  opacity: 0,
-                  pointerEvents: 'none',
-                  padding: CODE_AREA_PADDING,
-                }
-          }
+      {/* Plain-text fallback shown until Shiki finishes highlighting */}
+      {!loaded && (
+        <pre
+          style={{
+            margin: 0,
+            padding: CODE_AREA_PADDING,
+            fontFamily: 'var(--font-mono)',
+            fontSize: '12px',
+            lineHeight: String(CODE_LINE_HEIGHT),
+            whiteSpace: 'pre-wrap',
+            wordBreak: 'break-word',
+            color: 'var(--color-code-fg)',
+          }}
         >
-          <ShikiHighlighter
-            language={language || 'text'}
-            theme={warmShikiTheme}
-            engine={runtime.engine}
-            showLineNumbers={showLineNumbers}
-            showLanguage={false}
-            addDefaultStyles={false}
-            style={{
-              margin: 0,
-              fontFamily: 'var(--font-mono)',
-              fontSize: '12px',
-              lineHeight: String(CODE_LINE_HEIGHT),
-              whiteSpace: 'pre',
-            }}
-          >
-            {code}
-          </ShikiHighlighter>
-        </div>
+          {code}
+        </pre>
       )}
+      <div
+        data-code-viewer-content=""
+        style={
+          loaded
+            ? { padding: CODE_AREA_PADDING }
+            : {
+                position: 'absolute',
+                inset: 0,
+                opacity: 0,
+                pointerEvents: 'none',
+                padding: CODE_AREA_PADDING,
+              }
+        }
+      >
+        <ShikiHighlighter
+          language={language || 'text'}
+          theme={warmCodeTheme}
+          engine={shikiEngine}
+          showLineNumbers={showLineNumbers}
+          showLanguage={false}
+          addDefaultStyles={false}
+          style={{
+            margin: 0,
+            fontFamily: 'var(--font-mono)',
+            fontSize: '12px',
+            lineHeight: String(CODE_LINE_HEIGHT),
+          }}
+        >
+          {code}
+        </ShikiHighlighter>
+      </div>
     </div>
   )
 }

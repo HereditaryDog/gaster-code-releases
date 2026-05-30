@@ -1,6 +1,6 @@
 import { api } from './client'
 
-const IMAGE_GENERATION_TIMEOUT_MS = 330_000
+const IMAGE_GENERATION_TIMEOUT_MS = 930_000
 const PROMPT_ENHANCEMENT_TIMEOUT_MS = 90_000
 
 export type ImageSize =

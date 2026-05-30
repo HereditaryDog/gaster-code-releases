@@ -75,15 +75,6 @@ export type ServerMessage =
   | { type: 'message_complete'; usage: TokenUsage }
   | { type: 'thinking'; text: string }
   | { type: 'status'; state: ChatState; verb?: string; elapsed?: number; tokens?: number }
-  | {
-      type: 'api_retry'
-      attempt: number
-      maxRetries: number
-      retryDelayMs: number
-      errorStatus: number | null
-      errorType?: string
-      errorMessage?: string
-    }
   | { type: 'error'; message: string; code: string; retryable?: boolean }
   | { type: 'system_notification'; subtype: string; message?: string; data?: unknown }
   | { type: 'pong' }
@@ -100,17 +91,7 @@ export type TokenUsage = {
   cache_creation_tokens?: number
 }
 
-export type ChatState = 'idle' | 'thinking' | 'compacting' | 'tool_executing' | 'streaming' | 'permission_pending'
-
-export type ApiRetryState = {
-  attempt: number
-  maxRetries: number
-  retryDelayMs: number
-  errorStatus: number | null
-  errorType?: string
-  errorMessage?: string
-  receivedAt: number
-}
+export type ChatState = 'idle' | 'thinking' | 'tool_executing' | 'streaming' | 'permission_pending'
 
 export type TeamMemberStatus = {
   agentId: string
@@ -231,34 +212,13 @@ export type TaskSummaryItem = {
 }
 
 export type UIMessage =
-  | { id: string; type: 'user_text'; content: string; modelContent?: string; transcriptMessageId?: string; timestamp: number; attachments?: UIAttachment[]; pending?: boolean }
-  | { id: string; type: 'assistant_text'; content: string; transcriptMessageId?: string; timestamp: number; model?: string }
+  | { id: string; type: 'user_text'; content: string; modelContent?: string; timestamp: number; attachments?: UIAttachment[]; pending?: boolean }
+  | { id: string; type: 'assistant_text'; content: string; timestamp: number; model?: string }
   | { id: string; type: 'thinking'; content: string; timestamp: number }
-  | {
-      id: string
-      type: 'tool_use'
-      toolName: string
-      toolUseId: string
-      input: unknown
-      timestamp: number
-      parentToolUseId?: string
-      isPending?: boolean
-      partialInput?: string
-    }
+  | { id: string; type: 'tool_use'; toolName: string; toolUseId: string; input: unknown; timestamp: number; parentToolUseId?: string }
   | { id: string; type: 'tool_result'; toolUseId: string; content: unknown; isError: boolean; timestamp: number; parentToolUseId?: string }
   | { id: string; type: 'background_task'; task: BackgroundAgentTask; timestamp: number }
   | { id: string; type: 'system'; content: string; timestamp: number }
-  | {
-      id: string
-      type: 'compact_summary'
-      title: string
-      phase?: 'compacting' | 'complete'
-      summary?: string
-      trigger?: 'manual' | 'auto'
-      preTokens?: number
-      messagesSummarized?: number
-      timestamp: number
-    }
   | {
       id: string
       type: 'goal_event'

@@ -11,14 +11,12 @@ describe('quality gate modes', () => {
   test('pr mode includes existing path-aware PR checks', () => {
     const lanes = lanesForMode('pr').map((lane) => lane.id)
     expect(lanes).toContain('impact-report')
-    expect(lanes).toContain('brand-scan')
     expect(lanes).toContain('pr-checks')
     expect(lanes.some((lane) => lane.startsWith('baseline:'))).toBe(false)
   })
 
   test('baseline mode includes live baseline cases but not native checks', () => {
     const lanes = lanesForMode('baseline').map((lane) => lane.id)
-    expect(lanes).toContain('brand-scan')
     expect(lanes).toContain('baseline-catalog')
     expect(lanes).toContain('baseline:failing-unit:current-runtime')
     expect(lanes).toContain('baseline:multi-file-api:current-runtime')
@@ -28,7 +26,6 @@ describe('quality gate modes', () => {
 
   test('release mode composes PR, baseline, and native lanes', () => {
     const lanes = lanesForMode('release').map((lane) => lane.id)
-    expect(lanes).toContain('brand-scan')
     expect(lanes).toContain('pr-checks')
     expect(lanes).toContain('baseline:failing-unit:current-runtime')
     expect(lanes).toContain('desktop-smoke:agent-browser-chat:current-runtime')

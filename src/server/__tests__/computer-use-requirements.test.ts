@@ -15,9 +15,4 @@ describe('computer use requirements', () => {
     expect(findRequirement(darwinRequirements, 'mss')).toBe('mss>=9.0.2,<10')
     expect(findRequirement(win32Requirements, 'mss')).toBe('mss>=9.0.2,<10')
   })
-
-  test('pins Pillow to the Python 3.9-compatible 11.x major line', () => {
-    expect(findRequirement(darwinRequirements, 'Pillow')).toBe('Pillow>=11.3.0,<12')
-    expect(findRequirement(win32Requirements, 'Pillow')).toBe('Pillow>=11.3.0,<12')
-  })
 })

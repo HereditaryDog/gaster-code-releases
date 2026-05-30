@@ -85,14 +85,6 @@ export type SessionRewindResponse = {
   }
 }
 
-export type SessionBranchResponse = {
-  sessionId: string
-  title: string
-  workDir?: string | null
-  sourceSessionId: string
-  targetMessageId: string
-}
-
 export type RecentProject = {
   projectPath: string
   realPath: string
@@ -332,13 +324,6 @@ export const sessionsApi = {
 
   rename(sessionId: string, title: string) {
     return api.patch<{ ok: true }>(`/api/sessions/${sessionId}`, { title })
-  },
-
-  branch(sessionId: string, targetMessageId: string, title?: string) {
-    return api.post<SessionBranchResponse>(`/api/sessions/${sessionId}/branch`, {
-      targetMessageId,
-      ...(title ? { title } : {}),
-    })
   },
 
   getRecentProjects(limit?: number) {

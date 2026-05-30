@@ -49,11 +49,8 @@ const sessionSlashCommands = new Map<string, SessionSlashCommand[]>()
 
 /**
  * Timers for delayed session cleanup after client disconnect.
- * Regular renderer disconnects keep the CLI alive briefly, while sessions
- * waiting on a permission prompt get a longer grace period.
+ * If a client reconnects within 5 minutes, the timer is cancelled.
  */
-const CLIENT_DISCONNECT_CLEANUP_MS = 30_000
-const PENDING_PERMISSION_DISCONNECT_CLEANUP_MS = 30 * 60_000
 const sessionCleanupTimers = new Map<string, ReturnType<typeof setTimeout>>()
 
 /**
@@ -122,16 +119,8 @@ export type WebSocketData = {
   serverHost: string
 }
 
-// Active WebSocket clients, grouped by session. Desktop, H5, and IM adapters can
-// legitimately watch the same running session at the same time.
-const activeSessions = new Map<string, Set<ServerWebSocket<WebSocketData>>>()
-const clientOutputCallbacks = new Map<
-  ServerWebSocket<WebSocketData>,
-  {
-    sessionId: string
-    callback: (cliMsg: any) => void
-  }
->()
+// Active WebSocket sessions
+const activeSessions = new Map<string, ServerWebSocket<WebSocketData>>()
 
 export const handleWebSocket = {
   open(ws: ServerWebSocket<WebSocketData>) {
@@ -158,16 +147,15 @@ export const handleWebSocket = {
       sessionCleanupTimers.delete(sessionId)
     }
 
-    addActiveClient(sessionId, ws)
+    activeSessions.set(sessionId, ws)
     if (prewarmedSessions.has(sessionId)) {
       bindPrewarmMetadataCapture(sessionId)
     } else {
-      bindClientSessionOutput(sessionId, ws)
+      rebindSessionOutput(sessionId, ws)
     }
 
     const msg: ServerMessage = { type: 'connected', sessionId }
     ws.send(JSON.stringify(msg))
-    replayPendingPermissionRequests(ws, sessionId)
   },
 
   message(ws: ServerWebSocket<WebSocketData>, rawMessage: string | Buffer) {
@@ -242,29 +230,20 @@ export const handleWebSocket = {
     }
 
     console.log(`[WS] Client disconnected from session: ${sessionId} (${code}: ${reason})`)
-    if (!removeActiveClient(sessionId, ws)) {
-      console.log(`[WS] Ignoring stale client disconnect for session: ${sessionId}`)
-      return
-    }
-    removeClientOutputCallback(ws)
-
-    if (hasActiveClients(sessionId)) {
-      return
-    }
-
     computerUseApprovalService.cancelSession(sessionId)
+    activeSessions.delete(sessionId)
+    conversationService.clearOutputCallbacks(sessionId)
 
-    // Schedule delayed cleanup. Sessions waiting on user input need a longer
-    // grace period so transient renderer disconnects do not abort the prompt.
-    const cleanupDelayMs = getDisconnectCleanupDelayMs(sessionId)
+    // Schedule delayed cleanup: if the client doesn't reconnect within 30 seconds,
+    // stop the CLI subprocess to avoid leaking resources.
     const cleanupTimer = setTimeout(() => {
       sessionCleanupTimers.delete(sessionId)
-      if (!hasActiveClients(sessionId)) {
-        console.log(`[WS] Session ${sessionId} not reconnected after ${cleanupDelayMs}ms, stopping CLI subprocess`)
+      if (!activeSessions.has(sessionId)) {
+        console.log(`[WS] Session ${sessionId} not reconnected after 30s, stopping CLI subprocess`)
         conversationService.stopSession(sessionId)
         cleanupSessionRuntimeState(sessionId)
       }
-    }, cleanupDelayMs)
+    }, 30_000)
     sessionCleanupTimers.set(sessionId, cleanupTimer)
   },
 
@@ -364,7 +343,7 @@ async function handleUserMessage(
   // any pre-turn SDK chatter as fresh chat history.
   let userMessageSent = false
 
-  bindAllClientSessionOutputs(sessionId, {
+  rebindSessionOutput(sessionId, ws, {
     shouldForward: (cliMsg) => userMessageSent || (cliMsg.type === 'result' && cliMsg.is_error),
   })
 
@@ -1411,28 +1390,6 @@ function sendError(ws: ServerWebSocket<WebSocketData>, message: string, code: st
   sendMessage(ws, { type: 'error', message, code })
 }
 
-function getDisconnectCleanupDelayMs(sessionId: string): number {
-  return conversationService.getPendingPermissionRequests(sessionId).length > 0
-    ? PENDING_PERMISSION_DISCONNECT_CLEANUP_MS
-    : CLIENT_DISCONNECT_CLEANUP_MS
-}
-
-function replayPendingPermissionRequests(
-  ws: ServerWebSocket<WebSocketData>,
-  sessionId: string,
-): void {
-  for (const request of conversationService.getPendingPermissionRequests(sessionId)) {
-    sendMessage(ws, {
-      type: 'permission_request',
-      requestId: request.requestId,
-      toolName: request.toolName,
-      ...(request.toolUseId ? { toolUseId: request.toolUseId } : {}),
-      input: request.input,
-      ...(request.description ? { description: request.description } : {}),
-    })
-  }
-}
-
 function getDesktopSlashCommand(content: string): ReturnType<typeof parseSlashCommand> {
   const parsed = parseSlashCommand(content.trim())
   if (!parsed || parsed.isMcp) return null
@@ -1486,56 +1443,7 @@ function getCompactBoundaryMessage(cliMsg: any): string {
   return 'Context compacted'
 }
 
-function addActiveClient(
-  sessionId: string,
-  ws: ServerWebSocket<WebSocketData>,
-): void {
-  let clients = activeSessions.get(sessionId)
-  if (!clients) {
-    clients = new Set()
-    activeSessions.set(sessionId, clients)
-  }
-  clients.add(ws)
-}
-
-function removeActiveClient(
-  sessionId: string,
-  ws: ServerWebSocket<WebSocketData>,
-): boolean {
-  const clients = activeSessions.get(sessionId)
-  if (!clients?.has(ws)) return false
-  clients.delete(ws)
-  if (clients.size === 0) {
-    activeSessions.delete(sessionId)
-  }
-  return true
-}
-
-function hasActiveClients(sessionId: string): boolean {
-  return (activeSessions.get(sessionId)?.size ?? 0) > 0
-}
-
-function removeClientOutputCallback(ws: ServerWebSocket<WebSocketData>): void {
-  const entry = clientOutputCallbacks.get(ws)
-  if (!entry) return
-  conversationService.removeOutputCallback(entry.sessionId, entry.callback)
-  clientOutputCallbacks.delete(ws)
-}
-
-function bindAllClientSessionOutputs(
-  sessionId: string,
-  options?: {
-    shouldForward?: (cliMsg: any) => boolean
-  },
-) {
-  const clients = activeSessions.get(sessionId)
-  if (!clients) return
-  for (const ws of clients) {
-    bindClientSessionOutput(sessionId, ws, options)
-  }
-}
-
-function bindClientSessionOutput(
+function rebindSessionOutput(
   sessionId: string,
   ws: ServerWebSocket<WebSocketData>,
   options?: {
@@ -1544,9 +1452,8 @@ function bindClientSessionOutput(
 ) {
   if (!conversationService.hasSession(sessionId)) return
 
-  removeClientOutputCallback(ws)
-
-  const callback = (cliMsg: any) => {
+  conversationService.clearOutputCallbacks(sessionId)
+  conversationService.onOutput(sessionId, (cliMsg) => {
     if (options?.shouldForward && !options.shouldForward(cliMsg)) {
       return
     }
@@ -1559,10 +1466,7 @@ function bindClientSessionOutput(
     if (cliMsg.type === 'result') {
       triggerTitleGeneration(ws, sessionId)
     }
-  }
-
-  clientOutputCallbacks.set(ws, { sessionId, callback })
-  conversationService.onOutput(sessionId, callback)
+  })
 }
 
 type RuntimeSettings = {
@@ -1789,12 +1693,9 @@ async function waitForRuntimeTransitionBeforeUserTurn(
  * Send a message to a specific session's WebSocket (for use by services)
  */
 export function sendToSession(sessionId: string, message: ServerMessage): boolean {
-  const clients = activeSessions.get(sessionId)
-  if (!clients || clients.size === 0) return false
-  const payload = JSON.stringify(message)
-  for (const ws of clients) {
-    ws.send(payload)
-  }
+  const ws = activeSessions.get(sessionId)
+  if (!ws) return false
+  ws.send(JSON.stringify(message))
   return true
 }
 
@@ -1857,14 +1758,11 @@ export function closeSessionConnection(sessionId: string, reason = 'session clos
   conversationService.clearOutputCallbacks(sessionId)
   cleanupSessionRuntimeState(sessionId)
 
-  const clients = activeSessions.get(sessionId)
-  if (!clients || clients.size === 0) return false
+  const ws = activeSessions.get(sessionId)
+  if (!ws) return false
 
   activeSessions.delete(sessionId)
-  for (const ws of clients) {
-    clientOutputCallbacks.delete(ws)
-    ws.close(1000, reason)
-  }
+  ws.close(1000, reason)
   return true
 }
 
@@ -1876,7 +1774,6 @@ export function __resetWebSocketHandlerStateForTests(): void {
   for (const timer of sessionCleanupTimers.values()) clearTimeout(timer)
   for (const timer of prewarmIdleTimers.values()) clearTimeout(timer)
   activeSessions.clear()
-  clientOutputCallbacks.clear()
   sessionCleanupTimers.clear()
   prewarmIdleTimers.clear()
   sessionStopRequested.clear()

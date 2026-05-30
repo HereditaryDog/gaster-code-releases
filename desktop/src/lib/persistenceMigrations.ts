@@ -8,7 +8,7 @@ import {
 
 export const CURRENT_DESKTOP_PERSISTENCE_SCHEMA_VERSION = 1
 export const DESKTOP_PERSISTENCE_VERSION_KEY = 'gaster-code.persistence.schemaVersion'
-const LEGACY_DESKTOP_PERSISTENCE_VERSION_KEYS = ['gaster-code-legacy.persistence.schemaVersion']
+const LEGACY_DESKTOP_PERSISTENCE_VERSION_KEYS = ['cc-haha.persistence.schemaVersion']
 
 type DesktopMigrationReport = {
   migratedKeys: string[]
@@ -17,17 +17,17 @@ type DesktopMigrationReport = {
 type StorageLike = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>
 
 const TAB_STORAGE_KEY = 'gaster-code-open-tabs'
-const LEGACY_TAB_STORAGE_KEYS = ['gaster-code-legacy-open-tabs']
+const LEGACY_TAB_STORAGE_KEYS = ['cc-haha-open-tabs']
 const SESSION_RUNTIME_STORAGE_KEY = 'gaster-code-session-runtime'
-const LEGACY_SESSION_RUNTIME_STORAGE_KEYS = ['gaster-code-legacy-session-runtime']
+const LEGACY_SESSION_RUNTIME_STORAGE_KEYS = ['cc-haha-session-runtime']
 const THEME_STORAGE_KEY = 'gaster-code-theme'
-const LEGACY_THEME_STORAGE_KEYS = ['gaster-code-legacy-theme']
+const LEGACY_THEME_STORAGE_KEYS = ['cc-haha-theme']
 const LOCALE_STORAGE_KEY = 'gaster-code-locale'
-const LEGACY_LOCALE_STORAGE_KEYS = ['gaster-code-legacy-locale']
+const LEGACY_LOCALE_STORAGE_KEYS = ['cc-haha-locale']
 const DISMISSED_UPDATE_VERSION_KEY = 'gaster-code-dismissed-update-version'
-const LEGACY_DISMISSED_UPDATE_VERSION_KEYS = ['gaster-code-legacy-dismissed-update-version']
+const LEGACY_DISMISSED_UPDATE_VERSION_KEYS = ['cc-haha-dismissed-update-version']
 const NOTIFIED_RUNS_STORAGE_KEY = 'gaster-code.notifiedDesktopTaskRuns.v1'
-const LEGACY_NOTIFIED_RUNS_STORAGE_KEYS = ['gaster-code-legacy.notifiedDesktopTaskRuns.v1']
+const LEGACY_NOTIFIED_RUNS_STORAGE_KEYS = ['cc-haha.notifiedDesktopTaskRuns.v1']
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value)
