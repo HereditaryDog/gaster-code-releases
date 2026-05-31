@@ -6,11 +6,11 @@
 
 <div align="center">
 
-[![GitHub Stars](https://img.shields.io/github/stars/HereditaryDog/gaster-code?style=social)](https://github.com/HereditaryDog/gaster-code/stargazers)
-[![GitHub Forks](https://img.shields.io/github/forks/HereditaryDog/gaster-code?style=social)](https://github.com/HereditaryDog/gaster-code/network/members)
-[![GitHub Issues](https://img.shields.io/github/issues/HereditaryDog/gaster-code)](https://github.com/HereditaryDog/gaster-code/issues)
-[![GitHub Pull Requests](https://img.shields.io/github/issues-pr/HereditaryDog/gaster-code)](https://github.com/HereditaryDog/gaster-code/pulls)
-[![License](https://img.shields.io/github/license/HereditaryDog/gaster-code)](https://github.com/HereditaryDog/gaster-code/blob/main/LICENSE)
+[![GitHub Stars](https://img.shields.io/github/stars/HereditaryDog/gaster-code-releases?style=social)](https://github.com/HereditaryDog/gaster-code-releases/stargazers)
+[![GitHub Forks](https://img.shields.io/github/forks/HereditaryDog/gaster-code-releases?style=social)](https://github.com/HereditaryDog/gaster-code-releases/network/members)
+[![GitHub Issues](https://img.shields.io/github/issues/HereditaryDog/gaster-code-releases)](https://github.com/HereditaryDog/gaster-code-releases/issues)
+[![GitHub Pull Requests](https://img.shields.io/github/issues-pr/HereditaryDog/gaster-code-releases)](https://github.com/HereditaryDog/gaster-code-releases/pulls)
+[![License](https://img.shields.io/badge/license-research%20only-red)](LICENSE)
 [![Current Version](https://img.shields.io/badge/version-V%201.0.8-blue)](release-notes/v1.0.8.md)
 [![中文](https://img.shields.io/badge/中文-Available-green)](README.md)
 [![English](https://img.shields.io/badge/English-Current-blue)](README.en.md)
