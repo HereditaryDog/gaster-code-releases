@@ -1,5 +1,6 @@
 import { api, getBaseUrl } from './client'
 import type { SavedProvider } from '../types/provider'
+import { GASTER_CODE_VERSION } from '../version'
 
 export type GMasterUser = {
   id: number
@@ -122,7 +123,7 @@ export const gmasterAuthApi = {
   start(intent: GMasterAuthIntent = 'login') {
     return api.post<{ authorizeUrl: string; state: string }>('/api/gmaster-auth/start', {
       serverPort: currentServerPort(),
-      clientVersion: import.meta.env?.VITE_APP_VERSION || '0.1.3',
+      clientVersion: GASTER_CODE_VERSION,
       intent,
     })
   },
