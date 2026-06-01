@@ -297,6 +297,96 @@ describe('images API', () => {
     expect(body.message).not.toContain('shorter prompt')
   })
 
+  test('POST /api/images/generate retries interrupted async job polling before succeeding', async () => {
+    await setupGMasterProvider()
+    let pollAttempts = 0
+    globalThis.fetch = (async (url, init) => {
+      if (init?.body && String(url).endsWith('/v1/images/generations/async')) {
+        return Response.json({
+          id: 'job_image_retry',
+          job_id: 'job_image_retry',
+          object: 'image.generation.job',
+          status: 'queued',
+          poll_url: '/v1/images/jobs/job_image_retry',
+        }, { status: 202 })
+      }
+
+      pollAttempts += 1
+      if (pollAttempts === 1) {
+        throw new TypeError('Load failed')
+      }
+
+      return Response.json({
+        id: 'job_image_retry',
+        job_id: 'job_image_retry',
+        object: 'image.generation.job',
+        status: 'succeeded',
+        result: {
+          created: 1760000000,
+          data: [{ b64_json: 'iVBORw0KGgo=' }],
+        },
+      })
+    }) as typeof fetch
+
+    const { req, url } = buildReq('POST', '/api/images/generate', {
+      prompt: 'a neon cat poster',
+      size: '1024x1024',
+    })
+
+    const res = await handleApiRequest(req, url)
+    const body = await res.json() as { image: { src: string } }
+
+    expect(res.status).toBe(200)
+    expect(body.image.src).toBe('data:image/png;base64,iVBORw0KGgo=')
+    expect(pollAttempts).toBe(2)
+  })
+
+  test('POST /api/images/generate retries async job 524 polling responses before succeeding', async () => {
+    await setupGMasterProvider()
+    let pollAttempts = 0
+    globalThis.fetch = (async (url, init) => {
+      if (init?.body && String(url).endsWith('/v1/images/generations/async')) {
+        return Response.json({
+          id: 'job_image_524_retry',
+          job_id: 'job_image_524_retry',
+          object: 'image.generation.job',
+          status: 'queued',
+          poll_url: '/v1/images/jobs/job_image_524_retry',
+        }, { status: 202 })
+      }
+
+      pollAttempts += 1
+      if (pollAttempts === 1) {
+        return Response.json({
+          error: { message: 'gpt-image-2 image generation timed out upstream' },
+        }, { status: 524 })
+      }
+
+      return Response.json({
+        id: 'job_image_524_retry',
+        job_id: 'job_image_524_retry',
+        object: 'image.generation.job',
+        status: 'succeeded',
+        result: {
+          created: 1760000000,
+          data: [{ b64_json: 'iVBORw0KGgo=' }],
+        },
+      })
+    }) as typeof fetch
+
+    const { req, url } = buildReq('POST', '/api/images/generate', {
+      prompt: 'a neon cat poster',
+      size: '1024x1024',
+    })
+
+    const res = await handleApiRequest(req, url)
+    const body = await res.json() as { image: { src: string } }
+
+    expect(res.status).toBe(200)
+    expect(body.image.src).toBe('data:image/png;base64,iVBORw0KGgo=')
+    expect(pollAttempts).toBe(2)
+  })
+
   test('POST /api/images/generate classifies async job 524 failures as image channel timeouts', async () => {
     await setupGMasterProvider()
     globalThis.fetch = (async (url, init) => {

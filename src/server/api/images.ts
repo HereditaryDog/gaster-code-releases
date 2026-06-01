@@ -18,6 +18,8 @@ const IMAGE_GENERATION_ASYNC_REQUEST_TIMEOUT_MS = 60_000
 const IMAGE_GENERATION_POLL_REQUEST_TIMEOUT_MS = 60_000
 const IMAGE_GENERATION_JOB_TIMEOUT_MS = 900_000
 const IMAGE_GENERATION_POLL_INTERVAL_MS = 2_000
+const IMAGE_GENERATION_POLL_TRANSIENT_RETRY_LIMIT = 3
+const IMAGE_GENERATION_POLL_TRANSIENT_RETRY_DELAY_MS = 2_000
 const PROMPT_ENHANCEMENT_TIMEOUT_MS = 90_000
 const IMAGE_HISTORY_LIMIT = 20
 const IMAGE_SIZE_VALUES = [
@@ -720,6 +722,7 @@ async function waitForImageGenerationJob(
 ): Promise<ImageGenerationResponse> {
   let job = initialJob
   const deadline = Date.now() + IMAGE_GENERATION_JOB_TIMEOUT_MS
+  let transientPollFailures = 0
 
   for (;;) {
     const immediateResult = getCompletedImageGenerationJobResult(job)
@@ -740,11 +743,27 @@ async function waitForImageGenerationJob(
       )
     }
 
-    const pollResponse = await fetchImageGenerationJob(baseUrl, provider, pollUrl)
+    let pollResponse: Response
+    try {
+      pollResponse = await fetchImageGenerationJob(baseUrl, provider, pollUrl)
+    } catch (error) {
+      if (shouldRetryImageGenerationPoll(error, transientPollFailures, deadline)) {
+        transientPollFailures += 1
+        await sleep(Math.min(IMAGE_GENERATION_POLL_TRANSIENT_RETRY_DELAY_MS, Math.max(0, deadline - Date.now())))
+        continue
+      }
+      throw error
+    }
     const pollBody = await readJsonResponse(pollResponse)
     if (!pollResponse.ok) {
+      if (shouldRetryImageGenerationPollResponse(pollResponse.status, pollBody, transientPollFailures, deadline)) {
+        transientPollFailures += 1
+        await sleep(Math.min(IMAGE_GENERATION_POLL_TRANSIENT_RETRY_DELAY_MS, Math.max(0, deadline - Date.now())))
+        continue
+      }
       throwImageGenerationFailure(pollResponse.status, pollBody)
     }
+    transientPollFailures = 0
     const nextJob = asImageGenerationJobResponse(pollBody)
     if (!nextJob) {
       throw ApiError.internal('Image generation poll response was not recognized')
@@ -755,6 +774,29 @@ async function waitForImageGenerationJob(
       await sleep(Math.min(IMAGE_GENERATION_POLL_INTERVAL_MS, Math.max(0, deadline - Date.now())))
     }
   }
+}
+
+function shouldRetryImageGenerationPoll(
+  error: unknown,
+  transientPollFailures: number,
+  deadline: number,
+): boolean {
+  if (Date.now() >= deadline) return false
+  if (transientPollFailures >= IMAGE_GENERATION_POLL_TRANSIENT_RETRY_LIMIT) return false
+  if (!(error instanceof ApiError)) return false
+  return error.code === 'IMAGE_GENERATION_UPSTREAM_REQUEST_FAILED' || error.code === 'IMAGE_GENERATION_TIMEOUT'
+}
+
+function shouldRetryImageGenerationPollResponse(
+  status: number,
+  responseBody: unknown,
+  transientPollFailures: number,
+  deadline: number,
+): boolean {
+  if (Date.now() >= deadline) return false
+  if (transientPollFailures >= IMAGE_GENERATION_POLL_TRANSIENT_RETRY_LIMIT) return false
+  const message = getErrorMessageFromBody(responseBody as ImageGenerationResponse | ErrorResponseBody | null) ?? ''
+  return isImageUpstreamTimeout(status, message)
 }
 
 async function fetchImageGenerationJob(
