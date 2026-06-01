@@ -148,7 +148,7 @@ describe('gmaster auth local API', () => {
   afterEach(teardown)
 
   test('POST /api/gmaster-auth/start returns authorizeUrl', async () => {
-    const { req, url, segments } = buildReq('POST', '/api/gmaster-auth/start', { serverPort: 3456, clientVersion: '0.1.3' })
+    const { req, url, segments } = buildReq('POST', '/api/gmaster-auth/start', { serverPort: 3456, clientVersion: '1.0.8' })
     const res = await handleGMasterAuthApi(req, url, segments)
     expect(res.status).toBe(200)
     const body = await res.json() as { authorizeUrl: string; state: string }
@@ -158,7 +158,7 @@ describe('gmaster auth local API', () => {
   })
 
   test('POST /api/gmaster-auth/start forwards register intent', async () => {
-    const { req, url, segments } = buildReq('POST', '/api/gmaster-auth/start', { serverPort: 3456, clientVersion: '0.1.3', intent: 'register' })
+    const { req, url, segments } = buildReq('POST', '/api/gmaster-auth/start', { serverPort: 3456, clientVersion: '1.0.8', intent: 'register' })
     const res = await handleGMasterAuthApi(req, url, segments)
     expect(res.status).toBe(200)
     expect(authStartBodies[0]).toMatchObject({ intent: 'register' })
@@ -241,7 +241,7 @@ describe('gmaster auth local API', () => {
   })
 
   test('callback exchanges code and returns success HTML', async () => {
-    const start = buildReq('POST', '/api/gmaster-auth/start', { serverPort: 3456, clientVersion: '0.1.3' })
+    const start = buildReq('POST', '/api/gmaster-auth/start', { serverPort: 3456, clientVersion: '1.0.8' })
     const startRes = await handleGMasterAuthApi(start.req, start.url, start.segments)
     const { state } = await startRes.json() as { state: string }
     const callbackUrl = new URL(`http://127.0.0.1:3456/api/gmaster-auth/callback?code=abc&state=${state}`)
@@ -263,7 +263,7 @@ describe('gmaster auth local API', () => {
       models: { main: 'gpt-5.4', haiku: 'gpt-5.4-mini', sonnet: 'gpt-5.4', opus: 'gpt-5.4' },
     })
 
-    const start = buildReq('POST', '/api/gmaster-auth/start', { serverPort: 3456, clientVersion: '0.1.3' })
+    const start = buildReq('POST', '/api/gmaster-auth/start', { serverPort: 3456, clientVersion: '1.0.8' })
     const startRes = await handleGMasterAuthApi(start.req, start.url, start.segments)
     const { state } = await startRes.json() as { state: string }
     const callbackUrl = new URL(`http://127.0.0.1:3456/api/gmaster-auth/callback?code=abc&state=${state}`)
@@ -313,7 +313,7 @@ describe('gmaster auth local API', () => {
 
   test('extra path segments return 404 for exact routes', async () => {
     const cases = [
-      buildReq('POST', '/api/gmaster-auth/start/extra', { serverPort: 3456, clientVersion: '0.1.3' }),
+      buildReq('POST', '/api/gmaster-auth/start/extra', { serverPort: 3456, clientVersion: '1.0.8' }),
       buildReq('GET', '/api/gmaster-auth/status/extra'),
       buildReq('GET', '/api/gmaster-auth/me/extra'),
       buildReq('GET', '/api/gmaster-auth/callback/extra'),

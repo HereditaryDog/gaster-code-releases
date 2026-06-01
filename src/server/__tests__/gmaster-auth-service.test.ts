@@ -135,7 +135,7 @@ describe('GMasterAuthService', () => {
   afterEach(teardown)
 
   test('startSession posts PKCE challenge and stores pending state', async () => {
-    const session = await service.startSession({ serverPort: 54321, clientVersion: '0.1.3' })
+    const session = await service.startSession({ serverPort: 54321, clientVersion: '1.0.8' })
     expect(session.authorizeUrl).toContain('/gaster-code/desktop-login')
     expect(session.state).toMatch(/^[A-Za-z0-9_-]{43}$/)
     const body = JSON.parse(String(fetchCalls[0]?.init?.body))
@@ -144,7 +144,7 @@ describe('GMasterAuthService', () => {
     expect(body.code_challenge_method).toBe('S256')
     expect(body.redirect_uri).toBe('http://127.0.0.1:54321/api/gmaster-auth/callback')
     expect(body.client_name).toBe('Gaster Code')
-    expect(body.client_version).toBe('0.1.3')
+    expect(body.client_version).toBe('1.0.8')
     expect(body.intent).toBe('login')
     const tokens = await service.completeSession('one-time-code', session.state)
     expect(tokens.accessToken).toBe('desktop-access')
@@ -165,7 +165,7 @@ describe('GMasterAuthService', () => {
   })
 
   test('startSession forwards register intent to G-Master auth start', async () => {
-    await service.startSession({ serverPort: 54321, clientVersion: '0.1.3', intent: 'register' })
+    await service.startSession({ serverPort: 54321, clientVersion: '1.0.8', intent: 'register' })
 
     const body = JSON.parse(String(fetchCalls[0]?.init?.body))
     expect(body.intent).toBe('register')
@@ -173,16 +173,16 @@ describe('GMasterAuthService', () => {
 
   test('startSession rejects javascript authorize URL', async () => {
     authStartAuthorizeUrl = 'javascript:alert(1)'
-    await expect(service.startSession({ serverPort: 54321, clientVersion: '0.1.3' })).rejects.toThrow('Invalid G-Master authorize URL')
+    await expect(service.startSession({ serverPort: 54321, clientVersion: '1.0.8' })).rejects.toThrow('Invalid G-Master authorize URL')
   })
 
   test('startSession rejects wrong-origin authorize URL', async () => {
     authStartAuthorizeUrl = 'https://evil.example.test/gaster-code/desktop-login?state=abc'
-    await expect(service.startSession({ serverPort: 54321, clientVersion: '0.1.3' })).rejects.toThrow('Invalid G-Master authorize URL')
+    await expect(service.startSession({ serverPort: 54321, clientVersion: '1.0.8' })).rejects.toThrow('Invalid G-Master authorize URL')
   })
 
   test('completeSession exchanges code and writes token file with 0600 permissions', async () => {
-    const session = await service.startSession({ serverPort: 54321, clientVersion: '0.1.3' })
+    const session = await service.startSession({ serverPort: 54321, clientVersion: '1.0.8' })
     const tokens = await service.completeSession('one-time-code', session.state)
     expect(tokens.accessToken).toBe('desktop-access')
     const tokenCall = fetchCalls.find((call) => call.url.endsWith('/api/gaster-code/auth/token'))
@@ -198,7 +198,7 @@ describe('GMasterAuthService', () => {
   })
 
   test('completeSession resumes pending auth state after server restart', async () => {
-    const session = await service.startSession({ serverPort: 54321, clientVersion: '0.1.3' })
+    const session = await service.startSession({ serverPort: 54321, clientVersion: '1.0.8' })
     const restartedService = new GMasterAuthService()
     restartedService.setFetchFn(async (url, init) => {
       fetchCalls.push({ url: String(url), init })
@@ -230,7 +230,7 @@ describe('GMasterAuthService', () => {
     let currentNow = 1_770_000_000_000
     Date.now = () => currentNow
     try {
-      const session = await service.startSession({ serverPort: 54321, clientVersion: '0.1.3' })
+      const session = await service.startSession({ serverPort: 54321, clientVersion: '1.0.8' })
       currentNow += 10 * 60 * 1000
 
       const tokens = await service.completeSession('one-time-code', session.state)
@@ -242,7 +242,7 @@ describe('GMasterAuthService', () => {
   })
 
   test('completeSession rejects mismatched state', async () => {
-    await service.startSession({ serverPort: 54321, clientVersion: '0.1.3' })
+    await service.startSession({ serverPort: 54321, clientVersion: '1.0.8' })
     await expect(service.completeSession('one-time-code', 'wrong-state')).rejects.toThrow('G-Master auth session not found or expired')
   })
 
