@@ -149,6 +149,30 @@ describe('EmptySession', () => {
     useUIStore.setState(initialUiState, true)
   })
 
+  it('renders the empty desktop composer as the compact chat composer', () => {
+    const { container } = render(<EmptySession />)
+
+    const panel = screen.getByTestId('empty-session-composer-panel')
+    expect(panel).toHaveClass('chat-composer-shell')
+    expect(panel).toHaveClass('chat-composer-shell--blended')
+    expect(panel).toHaveClass('chat-composer-shell--compact')
+    expect(panel).toHaveClass('rounded-xl')
+    expect(panel).not.toHaveClass('rounded-t-xl')
+    expect(panel).not.toHaveClass('rounded-b-none')
+
+    const input = screen.getByRole('textbox')
+    expect(input).toHaveAttribute('rows', '1')
+    expect(input).toHaveAttribute('placeholder', 'Ask Gaster Code to edit, debug or explain...')
+    expect(input).toHaveClass('chat-composer-textarea--compact')
+    expect(input).toHaveClass('pb-10')
+
+    expect(container.querySelector('.chat-composer-toolbar')).toHaveClass('chat-composer-toolbar--compact')
+    const repositoryRow = screen.getByTestId('empty-session-repository-launch-row')
+    expect(repositoryRow).toHaveClass('chat-input-project-context-row--attached')
+    expect(panel).not.toContainElement(repositoryRow)
+    expect(screen.getByTestId('repository-launch-controls')).toHaveClass('repository-launch-controls--chips')
+  })
+
   it('creates a session with the selected project and branch when submitted', async () => {
     render(<EmptySession />)
 
@@ -335,7 +359,7 @@ describe('EmptySession', () => {
     })
   })
 
-  it('keeps the repository launch context on one row and truncates long branch names', async () => {
+  it('keeps the attached repository launch context compact and truncates long branch names', async () => {
     const longBranch = 'feature/super-long-branch-name-for-repository-launch-controls-e2e'
     mocks.getRepositoryContext.mockResolvedValueOnce(okRepositoryContext({
       currentBranch: longBranch,
@@ -364,9 +388,10 @@ describe('EmptySession', () => {
 
     const branchButton = await screen.findByRole('button', { name: new RegExp(`Select branch: ${longBranch}`) })
     const branchClasses = branchButton.className.split(/\s+/)
-    expect(branchButton.parentElement?.className).toContain('flex-nowrap')
-    expect(branchButton.parentElement?.className).not.toContain('flex-wrap')
-    expect(branchClasses).toContain('max-w-[260px]')
+    expect(branchButton.parentElement?.className).toContain('flex-wrap')
+    expect(branchButton.parentElement?.className).toContain('overflow-visible')
+    expect(branchButton.parentElement?.className).not.toContain('overflow-hidden')
+    expect(branchClasses).toContain('max-w-[220px]')
     expect(branchClasses).not.toContain('max-w-full')
     expect(branchButton.querySelector('span')?.className).toContain('truncate')
   })

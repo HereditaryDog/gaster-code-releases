@@ -27,8 +27,8 @@ vi.mock('../../api/sessions', () => ({
 }))
 
 vi.mock('./DirectoryPicker', () => ({
-  DirectoryPicker: ({ value }: { value: string }) => (
-    <button type="button">Project {value}</button>
+  DirectoryPicker: ({ value, variant }: { value: string; variant?: string }) => (
+    <button type="button" data-variant={variant}>Project {value}</button>
   ),
 }))
 
@@ -162,5 +162,25 @@ describe('RepositoryLaunchControls', () => {
     await waitFor(() => {
       expect(onBranchChange).toHaveBeenCalledWith('feature/h5')
     })
+  })
+
+  it('renders chip mode as a lightweight attached row', async () => {
+    renderControls({ variant: 'chips' })
+
+    const root = screen.getByTestId('repository-launch-controls')
+    const rail = root.firstElementChild
+    const projectTrigger = await screen.findByRole('button', { name: 'Project /repo' })
+    const branchTrigger = await screen.findByRole('button', { name: 'Select branch: main' })
+
+    expect(root).toHaveClass('repository-launch-controls--chips')
+    expect(root).toHaveClass('gap-0')
+    expect(rail).toHaveClass('flex-wrap')
+    expect(rail).toHaveClass('overflow-visible')
+    expect(rail).toHaveClass('border-t-0')
+    expect(rail).toHaveClass('bg-transparent')
+    expect(projectTrigger).toHaveAttribute('data-variant', 'chip')
+    expect(branchTrigger).toHaveClass('h-8')
+    expect(branchTrigger).toHaveClass('rounded-full')
+    expect(branchTrigger).toHaveClass('max-w-[220px]')
   })
 })

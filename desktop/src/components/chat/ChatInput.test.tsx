@@ -438,6 +438,45 @@ describe('ChatInput file mentions', () => {
     await waitFor(() => expect(mocks.getGitInfo).toHaveBeenCalled())
   })
 
+  it('uses the compact chrome-style composer for a new hero session', async () => {
+    useSessionStore.setState({
+      sessions: [{
+        id: sessionId,
+        title: 'Project',
+        createdAt: '2026-05-01T00:00:00.000Z',
+        modifiedAt: '2026-05-01T00:00:00.000Z',
+        messageCount: 0,
+        projectPath: '/repo',
+        workDir: '/repo',
+        workDirExists: true,
+      }],
+      activeSessionId: sessionId,
+    })
+    useChatStore.setState({
+      sessions: {
+        [sessionId]: {
+          ...useChatStore.getState().sessions[sessionId]!,
+          messages: [],
+        },
+      },
+    })
+
+    const { container } = render(<ChatInput variant="hero" />)
+
+    expect(screen.getByTestId('chat-input-shell')).toHaveClass('chat-input-shell--hero-compact')
+    expect(screen.getByTestId('chat-input-panel')).toHaveClass('chat-composer-shell--compact')
+    expect(screen.getByRole('textbox')).toHaveAttribute('rows', '1')
+    expect(screen.getByRole('textbox')).toHaveAttribute('placeholder', 'Ask Gaster Code to edit, debug or explain...')
+    expect(screen.getByRole('textbox')).toHaveClass('chat-composer-textarea--compact')
+    expect(screen.getByRole('textbox')).toHaveClass('pb-10')
+    expect(container.querySelector('.chat-composer-toolbar')).toHaveClass('chat-composer-toolbar--compact')
+    const projectContextRow = screen.getByTestId('chat-input-project-context-row')
+    expect(projectContextRow).toHaveClass('chat-input-project-context-row--attached')
+    expect(screen.getByTestId('chat-input-panel')).not.toContainElement(projectContextRow)
+    expect(screen.getByTestId('repository-launch-controls')).toHaveClass('repository-launch-controls--chips')
+    await waitFor(() => expect(mocks.getGitInfo).toHaveBeenCalled())
+  })
+
   it('hides local composer glow controls in dev by default', async () => {
     render(<ChatInput compact />)
 

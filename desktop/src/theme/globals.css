@@ -919,6 +919,32 @@ button, input, textarea, select, a, [role="button"] {
   box-shadow: var(--shadow-chat-composer);
 }
 
+.chat-input-shell--hero-compact {
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--color-surface) 0%, transparent) 0%,
+      color-mix(in srgb, var(--color-chat-composer-fade) 44%, transparent) 48%,
+      var(--color-surface) 100%
+    );
+}
+
+.chat-input-project-context-row--attached {
+  position: relative;
+  z-index: 1;
+  margin-top: -2px;
+  padding-top: 2px;
+}
+
+.chat-input-project-context-row--attached .repository-launch-controls--chips {
+  transform: translateY(-2px);
+}
+
+.repository-launch-controls--chips {
+  padding-left: 2px;
+  padding-right: 2px;
+}
+
 .project-context-chip {
   position: relative;
   isolation: isolate;

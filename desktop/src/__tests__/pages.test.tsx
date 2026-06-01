@@ -135,7 +135,7 @@ describe('Content-only pages render without errors', () => {
     const { container } = render(<EmptySession />)
     expect(container.querySelector('textarea')).toBeInTheDocument()
     expect(container.innerHTML).toContain('New session')
-    expect(container.innerHTML).toContain('Ask anything')
+    expect(container.innerHTML).toContain('Ask Gaster Code to edit, debug or explain')
   })
 
   it('EmptySession shows draft context usage before a session is created', async () => {
@@ -199,8 +199,9 @@ describe('Content-only pages render without errors', () => {
     // ChatInput has a textarea
     const textarea = container.querySelector('textarea')
     expect(textarea).toBeInTheDocument()
-    expect(textarea).toHaveAttribute('placeholder', 'Ask anything...')
-    expect(textarea).toHaveAttribute('rows', '2')
+    expect(textarea).toHaveAttribute('placeholder', 'Ask Gaster Code to edit, debug or explain...')
+    expect(textarea).toHaveAttribute('rows', '1')
+    expect(textarea).toHaveClass('chat-composer-textarea--compact')
     expect(container.innerHTML).not.toContain('Preview')
     // Cleanup
     useTabStore.setState({ tabs: [], activeTabId: null })

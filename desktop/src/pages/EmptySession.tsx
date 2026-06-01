@@ -549,11 +549,13 @@ export function EmptySession() {
           : 'bottom-4 px-8'
       }`}
       >
-        <div className={`flex w-full flex-col ${isMobileComposer ? 'max-w-none' : 'max-w-3xl'}`}>
+        <div className={`flex w-full flex-col ${isMobileComposer ? 'max-w-none' : 'max-w-[860px]'}`}>
           <div
             data-testid="empty-session-composer-panel"
-            className={`glass-panel relative flex flex-col gap-3 ${
-              isMobileComposer ? 'rounded-2xl p-3 shadow-[0_-12px_36px_rgba(54,35,28,0.12)]' : 'rounded-t-xl rounded-b-none p-4'
+            className={`chat-composer-shell glass-panel relative flex flex-col transition-[background-color,border-color,box-shadow] ${
+              isMobileComposer
+                ? 'gap-3 rounded-2xl p-3 shadow-[0_-12px_36px_rgba(54,35,28,0.12)]'
+                : 'chat-composer-shell--blended chat-composer-shell--compact rounded-xl px-3 py-3'
             }`}
             onDragOver={(event) => event.preventDefault()}
             onDrop={handleDrop}
@@ -653,17 +655,19 @@ export function EmptySession() {
                 onChange={(event) => handleInputChange(event.target.value, event.target.selectionStart ?? event.target.value.length)}
                 onKeyDown={handleKeyDown}
                 onPaste={handlePaste}
-                className={`flex-1 resize-none border-none bg-transparent leading-relaxed text-[var(--color-text-primary)] outline-none placeholder:text-[var(--color-text-tertiary)] ${
-                  isMobileComposer ? 'max-h-[132px] min-h-[72px] py-1.5 text-base' : 'py-2'
+                className={`w-full resize-none border-none bg-transparent leading-relaxed text-[var(--color-text-primary)] outline-none placeholder:text-[var(--color-text-tertiary)] ${
+                  isMobileComposer ? 'max-h-[132px] min-h-[72px] py-1.5 text-base' : 'chat-composer-textarea--compact py-1.5 pb-10 text-sm'
                 }`}
                 style={{ fontFamily: 'var(--font-body)' }}
-                placeholder={t('empty.placeholder')}
-                rows={2}
+                placeholder={isMobileComposer ? t('empty.placeholder') : t('chat.placeholder')}
+                rows={isMobileComposer ? 2 : 1}
               />
             </div>
 
-            <div className={`border-t border-[var(--color-border-separator)] pt-3 ${
-              isMobileComposer ? 'flex flex-wrap items-center gap-2' : 'flex items-center justify-between'
+            <div className={`border-t border-[var(--color-border-separator)] ${
+              isMobileComposer
+                ? 'flex flex-wrap items-center gap-2 pt-3'
+                : 'chat-composer-toolbar chat-composer-toolbar--compact absolute bottom-0 left-0 right-0 flex items-center justify-between px-3 py-2'
             }`}>
               <div className="flex shrink-0 items-center gap-2">
                 <div ref={plusMenuRef} className="relative">
@@ -731,16 +735,22 @@ export function EmptySession() {
             </div>
           </div>
 
-          <RepositoryLaunchControls
-            workDir={workDir}
-            onWorkDirChange={handleWorkDirChange}
-            branch={selectedBranch}
-            onBranchChange={setSelectedBranch}
-            useWorktree={useWorktree}
-            onUseWorktreeChange={setUseWorktree}
-            onLaunchReadyChange={setRepositoryLaunchReady}
-            disabled={isSubmitting}
-          />
+          <div
+            data-testid="empty-session-repository-launch-row"
+            className={isMobileComposer ? '' : 'chat-input-project-context-row--attached flex min-w-0 px-1'}
+          >
+            <RepositoryLaunchControls
+              workDir={workDir}
+              onWorkDirChange={handleWorkDirChange}
+              branch={selectedBranch}
+              onBranchChange={setSelectedBranch}
+              useWorktree={useWorktree}
+              onUseWorktreeChange={setUseWorktree}
+              onLaunchReadyChange={setRepositoryLaunchReady}
+              disabled={isSubmitting}
+              variant={isMobileComposer ? 'workbar' : 'chips'}
+            />
+          </div>
         </div>
       </div>
 

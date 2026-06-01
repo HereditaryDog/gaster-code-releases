@@ -861,7 +861,7 @@ export function ChatInput({ variant = 'default', compact = false }: ChatInputPro
 
   const composerPlaceholder =
     isHeroComposer
-      ? t('empty.placeholder')
+      ? isMobileComposer ? t('empty.placeholder') : t('chat.placeholder')
       : isWorkspaceMissing
         ? t('chat.placeholderMissing')
         : isMemberSession
@@ -871,13 +871,54 @@ export function ChatInput({ variant = 'default', compact = false }: ChatInputPro
   const addFilesLabel = isHeroComposer ? t('empty.addFiles') : t('chat.addFiles')
   const slashCommandsLabel = isHeroComposer ? t('empty.slashCommands') : t('chat.slashCommands')
   const isDefaultDesktopComposer = !isHeroComposer && !compact && !isMobileComposer
+  const useChromeComposer = (isHeroComposer || isDefaultDesktopComposer) && !isMobileComposer
+  const useInlineLaunchControls = useChromeComposer && showLaunchControls
+  const renderProjectContextRow = (className: string) => (
+    <div
+      data-testid="chat-input-project-context-row"
+      className={className}
+    >
+      {messageCount > 0 ? (
+        useCompactControls ? (
+          <ProjectContextChip
+            workDir={resolvedWorkDir}
+            repoName={gitInfo?.repoName || null}
+            branch={gitInfo?.branch || null}
+            sourceWorkDir={gitInfo?.worktree?.sourceWorkDir || null}
+            isWorktree={!!gitInfo?.worktree?.enabled}
+            worktreeSlug={gitInfo?.worktree?.slug || null}
+            worktreePath={gitInfo?.worktree?.path || gitInfo?.worktree?.plannedPath || null}
+            compact={useCompactControls}
+          />
+        ) : (
+          <DirectoryPicker
+            value={resolvedWorkDir || ''}
+            onChange={handleExistingSessionWorkDirChange}
+            isGitProject={!!gitInfo?.branch}
+          />
+        )
+      ) : (
+        <RepositoryLaunchControls
+          workDir={activeLaunchWorkDir}
+          onWorkDirChange={handleLaunchWorkDirChange}
+          branch={launchBranch}
+          onBranchChange={setLaunchBranch}
+          useWorktree={launchUseWorktree}
+          onUseWorktreeChange={setLaunchUseWorktree}
+          onLaunchReadyChange={setLaunchReady}
+          disabled={isActive || launchTransitioning}
+          variant={useInlineLaunchControls ? 'chips' : 'workbar'}
+        />
+      )}
+    </div>
+  )
 
   return (
     <div
       data-testid="chat-input-shell"
       className={
         isHeroComposer
-          ? `bg-[var(--color-surface)] ${isMobileComposer ? 'px-4 pb-3' : 'px-8 pb-4'}`
+          ? `bg-[var(--color-surface)] ${isMobileComposer ? 'px-4 pb-3' : 'chat-input-shell--hero-compact px-8 pb-5'}`
           : compact
             ? `border-t border-[var(--color-border)]/70 bg-[var(--color-surface)] ${isMobileComposer ? 'px-3 pb-[calc(env(safe-area-inset-bottom)+10px)] pt-2' : 'px-3 py-3'}`
             : `chat-input-shell--blended ${isMobileComposer ? 'bg-[var(--color-surface)] px-3 pb-[calc(env(safe-area-inset-bottom)+10px)] pt-2' : 'chat-input-shell--compact px-4 pb-3 pt-2'}`
@@ -885,8 +926,8 @@ export function ChatInput({ variant = 'default', compact = false }: ChatInputPro
     >
       <div
         className={
-          isHeroComposer
-            ? 'mx-auto flex w-full max-w-3xl flex-col'
+            isHeroComposer
+              ? 'mx-auto flex w-full max-w-[860px] flex-col'
             : compact
               ? 'mx-auto max-w-full'
               : `${isMobileComposer ? 'mx-0 max-w-none' : 'mx-auto max-w-[860px]'}`
@@ -896,9 +937,9 @@ export function ChatInput({ variant = 'default', compact = false }: ChatInputPro
           ref={panelRef}
           data-testid="chat-input-panel"
           style={showComposerGlowPanel ? getComposerGlowStyle(composerGlowControls) : undefined}
-          className={`chat-composer-shell ${isDefaultDesktopComposer ? 'chat-composer-shell--blended chat-composer-shell--compact' : ''} ${isComposerGlowActive ? 'chat-composer-shell--active' : ''} ${
+          className={`chat-composer-shell ${useChromeComposer ? 'chat-composer-shell--blended chat-composer-shell--compact' : ''} ${isComposerGlowActive ? 'chat-composer-shell--active' : ''} ${
             isHeroComposer
-              ? 'glass-panel relative flex flex-col gap-3 rounded-t-xl rounded-b-none p-4 transition-[background-color,border-color,box-shadow]'
+              ? 'glass-panel relative flex flex-col rounded-xl px-3 py-3 transition-[background-color,border-color,box-shadow]'
               : compact
                 ? `glass-panel relative p-3 transition-[background-color,border-color,box-shadow] ${isMobileComposer ? 'rounded-2xl shadow-[0_-12px_36px_rgba(54,35,28,0.12)]' : 'rounded-xl'}`
                 : `glass-panel relative transition-[background-color,border-color,box-shadow] ${isMobileComposer ? 'rounded-2xl p-3 shadow-[0_-12px_36px_rgba(54,35,28,0.12)]' : 'rounded-xl px-3 py-3'}`
@@ -1033,21 +1074,19 @@ export function ChatInput({ variant = 'default', compact = false }: ChatInputPro
           )}
 
           {isHeroComposer ? (
-            <div className="flex items-start gap-3">
-              <textarea
-                ref={textareaRef}
-                value={input}
-                onChange={handleInputChange}
-                onKeyDown={handleKeyDown}
-                onCompositionStart={() => { composingRef.current = true }}
-                onCompositionEnd={() => { composingRef.current = false }}
-                onPaste={handlePaste}
-                placeholder={composerPlaceholder}
-                disabled={isWorkspaceMissing}
-                rows={2}
-                className="flex-1 resize-none border-none bg-transparent py-2 leading-relaxed text-[var(--color-text-primary)] outline-none placeholder:text-[var(--color-text-tertiary)] disabled:opacity-50"
-              />
-            </div>
+            <textarea
+              ref={textareaRef}
+              value={input}
+              onChange={handleInputChange}
+              onKeyDown={handleKeyDown}
+              onCompositionStart={() => { composingRef.current = true }}
+              onCompositionEnd={() => { composingRef.current = false }}
+              onPaste={handlePaste}
+              placeholder={composerPlaceholder}
+              disabled={isWorkspaceMissing}
+              rows={1}
+              className="chat-composer-textarea--compact w-full resize-none border-none bg-transparent py-1.5 pb-10 text-sm leading-relaxed text-[var(--color-text-primary)] outline-none placeholder:text-[var(--color-text-tertiary)] disabled:opacity-50"
+            />
           ) : (
             <textarea
               ref={textareaRef}
@@ -1067,7 +1106,7 @@ export function ChatInput({ variant = 'default', compact = false }: ChatInputPro
           )}
 
           <div className={isHeroComposer
-            ? 'flex items-center justify-between border-t border-[var(--color-border-separator)] pt-3'
+            ? 'chat-composer-toolbar chat-composer-toolbar--compact absolute bottom-0 left-0 right-0 flex items-center justify-between border-t border-[var(--color-border-separator)] px-3 py-2'
             : `chat-composer-toolbar absolute bottom-0 left-0 right-0 flex items-center justify-between border-t border-[var(--color-border-separator)] ${
               useCompactControls ? 'gap-2 px-2.5 py-2' : 'chat-composer-toolbar--compact px-3 py-2'
             }`}>
@@ -1218,39 +1257,7 @@ export function ChatInput({ variant = 'default', compact = false }: ChatInputPro
         <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleFileSelect} />
 
         {!isMemberSession && (
-          <div className={useCompactControls ? 'mt-2 flex min-w-0 px-1' : 'mt-3 px-1'}>
-            {messageCount > 0 ? (
-              useCompactControls ? (
-                <ProjectContextChip
-                  workDir={resolvedWorkDir}
-                  repoName={gitInfo?.repoName || null}
-                  branch={gitInfo?.branch || null}
-                  sourceWorkDir={gitInfo?.worktree?.sourceWorkDir || null}
-                  isWorktree={!!gitInfo?.worktree?.enabled}
-                  worktreeSlug={gitInfo?.worktree?.slug || null}
-                  worktreePath={gitInfo?.worktree?.path || gitInfo?.worktree?.plannedPath || null}
-                  compact={useCompactControls}
-                />
-              ) : (
-                <DirectoryPicker
-                  value={resolvedWorkDir || ''}
-                  onChange={handleExistingSessionWorkDirChange}
-                  isGitProject={!!gitInfo?.branch}
-                />
-              )
-            ) : (
-              <RepositoryLaunchControls
-                workDir={activeLaunchWorkDir}
-                onWorkDirChange={handleLaunchWorkDirChange}
-                branch={launchBranch}
-                onBranchChange={setLaunchBranch}
-                useWorktree={launchUseWorktree}
-                onUseWorktreeChange={setLaunchUseWorktree}
-                onLaunchReadyChange={setLaunchReady}
-                disabled={isActive || launchTransitioning}
-              />
-            )}
-          </div>
+          renderProjectContextRow(useInlineLaunchControls ? 'chat-input-project-context-row--attached flex min-w-0 px-1' : useCompactControls ? 'mt-2 flex min-w-0 px-1' : 'mt-3 px-1')
         )}
       </div>
     </div>
