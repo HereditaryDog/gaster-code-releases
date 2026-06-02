@@ -87,9 +87,16 @@ export function Drawing() {
         image: result.image,
         createdAt,
       }
+      const visibleHistoryItem = {
+        ...historyItem,
+        image: {
+          ...historyItem.image,
+          ...result.image,
+        },
+      }
       setHistory((items) => [
-        historyItem,
-        ...items.filter((item) => item.id !== historyItem.id),
+        visibleHistoryItem,
+        ...items.filter((item) => item.id !== visibleHistoryItem.id),
       ].slice(0, HISTORY_LIMIT))
     } catch (err) {
       const message = err instanceof Error ? err.message : ''
