@@ -64,6 +64,45 @@ describe('Drawing', () => {
     expect(screen.getByText('A cinematic neon cat poster')).toBeInTheDocument()
   })
 
+  it('keeps the visible generated data URL when selecting the new thumbnail', async () => {
+    vi.mocked(imagesApi.generate).mockResolvedValue({
+      image: {
+        src: 'data:image/png;base64,abc123',
+        dataUrl: 'data:image/png;base64,abc123',
+        mimeType: 'image/png',
+        model: 'gpt-image-2',
+        revisedPrompt: null,
+      },
+      historyItem: {
+        id: 'img-1',
+        prompt: 'neon cat poster',
+        size: '1024x1024',
+        image: {
+          src: 'http://127.0.0.1:3456/api/images/history/img-1/file',
+          mimeType: 'image/png',
+          model: 'gpt-image-2',
+          revisedPrompt: null,
+        },
+        createdAt: 1_760_000_000_000,
+      },
+    })
+
+    render(<Drawing />)
+
+    fireEvent.change(screen.getByRole('textbox', { name: /Prompt/ }), {
+      target: { value: 'neon cat poster' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Generate' }))
+
+    const preview = await screen.findByAltText('neon cat poster')
+    expect(preview).toHaveAttribute('src', 'data:image/png;base64,abc123')
+
+    const thumbnails = await screen.findAllByRole('button', { name: 'Generated image history item' })
+    fireEvent.click(thumbnails[0]!)
+
+    expect(screen.getByAltText('neon cat poster')).toHaveAttribute('src', 'data:image/png;base64,abc123')
+  })
+
   it('restores the latest generated image from drawing history after remounting', async () => {
     const historyItem = {
       id: 'img-1',
