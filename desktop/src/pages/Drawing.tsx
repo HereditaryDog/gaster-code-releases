@@ -266,14 +266,12 @@ export function Drawing() {
           <button
             type="submit"
             disabled={!trimmedPrompt || isGenerating}
-            className={`drawing-generate-button mt-1 flex h-11 flex-none items-center justify-center gap-2 rounded-[var(--radius-md)] bg-[#1f2228] text-sm font-semibold text-white shadow-[0_18px_38px_rgba(23,23,23,0.18)] transition-colors hover:bg-[#2d323a] disabled:cursor-not-allowed disabled:opacity-50 ${isGenerating ? 'drawing-generate-button--loading' : ''}`}
+            className="mt-1 flex h-11 flex-none items-center justify-center gap-2 rounded-[var(--radius-md)] bg-[#1f2228] text-sm font-semibold text-white shadow-[0_18px_38px_rgba(23,23,23,0.18)] transition-colors hover:bg-[#2d323a] disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <span aria-hidden="true" className={`drawing-generate-button__icon material-symbols-outlined text-[18px] ${isGenerating ? 'animate-spin' : ''}`}>
+            <span aria-hidden="true" className={`material-symbols-outlined text-[18px] ${isGenerating ? 'animate-spin' : ''}`}>
               {isGenerating ? 'progress_activity' : 'draw'}
             </span>
-            <span className="drawing-generate-button__label">
-              {isGenerating ? t('drawing.generating') : t('drawing.generate')}
-            </span>
+            {isGenerating ? t('drawing.generating') : t('drawing.generate')}
           </button>
         </form>
 

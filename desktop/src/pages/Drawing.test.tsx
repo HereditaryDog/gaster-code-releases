@@ -103,22 +103,6 @@ describe('Drawing', () => {
     expect(screen.getByAltText('neon cat poster')).toHaveAttribute('src', 'data:image/png;base64,abc123')
   })
 
-  it('uses the animated loading treatment while generation is running', () => {
-    vi.mocked(imagesApi.generate).mockImplementation(() => new Promise(() => {}))
-
-    render(<Drawing />)
-
-    fireEvent.change(screen.getByRole('textbox', { name: /Prompt/ }), {
-      target: { value: 'neon cat poster' },
-    })
-    fireEvent.click(screen.getByRole('button', { name: 'Generate' }))
-
-    const button = screen.getByRole('button', { name: 'Generating' })
-    expect(button).toHaveClass('drawing-generate-button--loading')
-    expect(button.querySelector('.drawing-generate-button__icon')).toBeInTheDocument()
-    expect(button.querySelector('.drawing-generate-button__label')).toHaveTextContent('Generating')
-  })
-
   it('restores the latest generated image from drawing history after remounting', async () => {
     const historyItem = {
       id: 'img-1',
