@@ -75,6 +75,7 @@ export function Drawing() {
   async function generateImage(nextPrompt: string, nextSize: GenerateImageInput['size']) {
     setIsGenerating(true)
     setError(null)
+    setImage(null)
     try {
       const result = await imagesApi.generate({ prompt: nextPrompt, size: nextSize })
       setImage(result.image)
@@ -225,10 +226,14 @@ export function Drawing() {
               type="button"
               onClick={handleOptimizePrompt}
               disabled={!trimmedPrompt || isEnhancingPrompt}
-              className="flex h-12 w-full items-center justify-center gap-2 rounded-[var(--radius-md)] border border-[var(--color-model-option-selected-border)] bg-[var(--color-model-option-selected-bg)] text-sm font-semibold text-[var(--color-brand)] transition-colors hover:bg-[var(--color-surface-hover)] disabled:cursor-not-allowed disabled:opacity-50"
+              className={`drawing-generate-button flex h-12 w-full items-center justify-center gap-2 rounded-[var(--radius-md)] border border-[var(--color-model-option-selected-border)] bg-[var(--color-model-option-selected-bg)] text-sm font-semibold text-[var(--color-brand)] transition-colors hover:bg-[var(--color-surface-hover)] disabled:cursor-not-allowed disabled:opacity-50 ${isEnhancingPrompt ? 'drawing-generate-button--loading' : ''}`}
             >
-              <span aria-hidden="true" className="material-symbols-outlined text-[18px]">{isEnhancingPrompt ? 'progress_activity' : 'auto_fix_high'}</span>
-              {isEnhancingPrompt ? t('drawing.enhancingPrompt') : t('drawing.optimizePrompt')}
+              <span aria-hidden="true" className={`drawing-generate-button__icon material-symbols-outlined text-[18px] ${isEnhancingPrompt ? 'animate-spin' : ''}`}>
+                {isEnhancingPrompt ? 'progress_activity' : 'auto_fix_high'}
+              </span>
+              <span className="drawing-generate-button__label">
+                {isEnhancingPrompt ? t('drawing.enhancingPrompt') : t('drawing.optimizePrompt')}
+              </span>
             </button>
             <p className="mt-3 text-center text-xs text-[var(--color-text-tertiary)]">{t('drawing.optimizeHint')}</p>
           </section>
@@ -266,12 +271,14 @@ export function Drawing() {
           <button
             type="submit"
             disabled={!trimmedPrompt || isGenerating}
-            className="mt-1 flex h-11 flex-none items-center justify-center gap-2 rounded-[var(--radius-md)] bg-[#1f2228] text-sm font-semibold text-white shadow-[0_18px_38px_rgba(23,23,23,0.18)] transition-colors hover:bg-[#2d323a] disabled:cursor-not-allowed disabled:opacity-50"
+            className={`drawing-generate-button mt-1 flex h-11 flex-none items-center justify-center gap-2 rounded-[var(--radius-md)] bg-[#1f2228] text-sm font-semibold text-white shadow-[0_18px_38px_rgba(23,23,23,0.18)] transition-colors hover:bg-[#2d323a] disabled:cursor-not-allowed disabled:opacity-50 ${isGenerating ? 'drawing-generate-button--loading' : ''}`}
           >
-            <span aria-hidden="true" className={`material-symbols-outlined text-[18px] ${isGenerating ? 'animate-spin' : ''}`}>
+            <span aria-hidden="true" className={`drawing-generate-button__icon material-symbols-outlined text-[18px] ${isGenerating ? 'animate-spin' : ''}`}>
               {isGenerating ? 'progress_activity' : 'draw'}
             </span>
-            {isGenerating ? t('drawing.generating') : t('drawing.generate')}
+            <span className="drawing-generate-button__label">
+              {isGenerating ? t('drawing.generating') : t('drawing.generate')}
+            </span>
           </button>
         </form>
 

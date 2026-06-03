@@ -317,6 +317,109 @@
   background: color-mix(in srgb, var(--color-outline) 38%, transparent);
 }
 
+.drawing-generate-button {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+}
+
+.drawing-generate-button > * {
+  position: relative;
+  z-index: 1;
+}
+
+.drawing-generate-button--loading {
+  opacity: 1 !important;
+  color: var(--color-brand);
+  background:
+    linear-gradient(
+      90deg,
+      color-mix(in srgb, #1f2228 88%, var(--color-model-option-selected-bg)) 0%,
+      color-mix(in srgb, #1f2228 68%, var(--color-model-option-selected-bg)) 50%,
+      color-mix(in srgb, #1f2228 88%, var(--color-model-option-selected-bg)) 100%
+    );
+  box-shadow:
+    inset 0 0 0 1px var(--color-model-option-selected-border),
+    0 18px 38px rgba(23, 23, 23, 0.18),
+    0 0 22px color-mix(in srgb, var(--color-brand) 18%, transparent);
+}
+
+.drawing-generate-button--loading::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  z-index: 0;
+  background: linear-gradient(
+    105deg,
+    transparent 0%,
+    transparent 30%,
+    color-mix(in srgb, var(--color-brand) 10%, transparent) 40%,
+    color-mix(in srgb, var(--color-brand) 42%, transparent) 50%,
+    color-mix(in srgb, var(--color-brand) 14%, transparent) 60%,
+    transparent 72%,
+    transparent 100%
+  );
+  transform: translateX(-115%);
+  animation: drawing-generate-theme-sheen 1.45s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+  will-change: transform;
+}
+
+.drawing-generate-button--loading .drawing-generate-button__icon,
+.drawing-generate-button--loading .drawing-generate-button__label {
+  background: linear-gradient(
+    90deg,
+    var(--color-brand) 0%,
+    color-mix(in srgb, var(--color-brand) 68%, white) 44%,
+    var(--color-brand) 72%,
+    color-mix(in srgb, var(--color-brand) 82%, white) 100%
+  );
+  background-size: 220% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  will-change: background-position;
+}
+
+.drawing-generate-button--loading .drawing-generate-button__icon {
+  animation:
+    drawing-generate-theme-spin 1s linear infinite,
+    drawing-generate-theme-text 1.45s ease-in-out infinite;
+  will-change: transform, background-position;
+}
+
+.drawing-generate-button--loading .drawing-generate-button__label {
+  animation: drawing-generate-theme-text 1.45s ease-in-out infinite;
+}
+
+@keyframes drawing-generate-theme-sheen {
+  to {
+    transform: translateX(115%);
+  }
+}
+
+@keyframes drawing-generate-theme-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes drawing-generate-theme-text {
+  0% {
+    background-position: 120% 50%;
+  }
+  100% {
+    background-position: -120% 50%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .drawing-generate-button--loading::before,
+  .drawing-generate-button--loading .drawing-generate-button__icon,
+  .drawing-generate-button--loading .drawing-generate-button__label {
+    animation: none;
+  }
+}
+
 /* ─── Tailwind Theme Override (matches prototype design system) ─── */
 @theme {
   --color-primary: #2563EB;

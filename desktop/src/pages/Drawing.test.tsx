@@ -3,9 +3,10 @@ import '@testing-library/jest-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { Drawing } from './Drawing'
-import { imagesApi } from '../api/images'
+import { imagesApi, type ImageHistoryItem } from '../api/images'
 import { ApiError } from '../api/client'
 import { useSettingsStore } from '../stores/settingsStore'
+import themeCss from '../theme/globals.css?raw'
 
 vi.mock('../api/images', () => ({
   imagesApi: {
@@ -101,6 +102,48 @@ describe('Drawing', () => {
     fireEvent.click(thumbnails[0]!)
 
     expect(screen.getByAltText('neon cat poster')).toHaveAttribute('src', 'data:image/png;base64,abc123')
+  })
+
+  it('uses the theme-colored loading treatment while generation is running', () => {
+    vi.mocked(imagesApi.generate).mockImplementation(() => new Promise(() => {}))
+
+    render(<Drawing />)
+
+    fireEvent.change(screen.getByRole('textbox', { name: /Prompt/ }), {
+      target: { value: 'neon cat poster' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Generate' }))
+
+    const button = screen.getByRole('button', { name: 'Generating' })
+    expect(button).toHaveClass('drawing-generate-button--loading')
+    expect(button.querySelector('.drawing-generate-button__icon')).toBeInTheDocument()
+    expect(button.querySelector('.drawing-generate-button__label')).toHaveTextContent('Generating')
+  })
+
+  it('uses the theme-colored loading treatment while prompt enhancement is running', () => {
+    vi.mocked(imagesApi.enhancePrompt).mockImplementation(() => new Promise(() => {}))
+
+    render(<Drawing />)
+
+    fireEvent.change(screen.getByRole('textbox', { name: /Prompt/ }), {
+      target: { value: 'neon cat poster' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Enhance prompt' }))
+
+    const button = screen.getByRole('button', { name: 'Enhancing...' })
+    expect(button).toHaveClass('drawing-generate-button--loading')
+    expect(button.querySelector('.drawing-generate-button__icon')).toBeInTheDocument()
+    expect(button.querySelector('.drawing-generate-button__label')).toHaveTextContent('Enhancing...')
+  })
+
+  it('keeps the loading icon spin separate from the label sheen animation', () => {
+    expect(themeCss).toContain('@keyframes drawing-generate-theme-spin')
+    expect(themeCss).toMatch(
+      /\.drawing-generate-button--loading \.drawing-generate-button__icon\s*\{[^}]*drawing-generate-theme-spin[^}]*drawing-generate-theme-text/s,
+    )
+    expect(themeCss).toMatch(
+      /\.drawing-generate-button--loading \.drawing-generate-button__label\s*\{[^}]*drawing-generate-theme-text/s,
+    )
   })
 
   it('restores the latest generated image from drawing history after remounting', async () => {
@@ -221,6 +264,46 @@ describe('Drawing', () => {
 
     expect(await screen.findByText(/http 524/i)).toBeInTheDocument()
     expect(screen.getByText(/image channel timed out/i)).toBeInTheDocument()
+  })
+
+  it('does not show the previous image as the preview after a failed new generation', async () => {
+    vi.mocked((imagesApi as typeof imagesApi & {
+      listHistory: () => Promise<{ history: ImageHistoryItem[] }>
+    }).listHistory).mockResolvedValue({
+      history: [{
+        id: 'img-1',
+        prompt: 'old successful prompt',
+        size: '1024x1024',
+        image: {
+          src: 'http://127.0.0.1:3456/api/images/history/img-1/file',
+          mimeType: 'image/png',
+          model: 'gpt-image-2',
+          revisedPrompt: 'Old revised prompt',
+        },
+        createdAt: 1_760_000_000_000,
+      }],
+    })
+    vi.mocked(imagesApi.generate).mockRejectedValue(new ApiError(504, {
+      error: 'IMAGE_GENERATION_UPSTREAM_TIMEOUT',
+      message: 'Image generation failed with HTTP 524',
+    }))
+
+    render(<Drawing />)
+
+    expect(await screen.findByAltText('old successful prompt')).toHaveAttribute(
+      'src',
+      'http://127.0.0.1:3456/api/images/history/img-1/file',
+    )
+
+    fireEvent.change(screen.getByRole('textbox', { name: /Prompt/ }), {
+      target: { value: 'new prompt that times out' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Generate' }))
+
+    expect(await screen.findByText(/http 524/i)).toBeInTheDocument()
+    expect(screen.queryByAltText('new prompt that times out')).not.toBeInTheDocument()
+    expect(screen.queryByText('Old revised prompt')).not.toBeInTheDocument()
+    expect(screen.getByText('No image yet')).toBeInTheDocument()
   })
 
   it('shows a drawing-specific upstream service message', async () => {
