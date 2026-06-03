@@ -13,11 +13,14 @@ describe('theme tokens', () => {
     expect(themeCss).not.toMatch(/rgba\(143,\s*72,\s*47|rgba\(239,\s*160,\s*131|rgba\(255,\s*219,\s*208/i)
   })
 
-  it('keeps the sidebar opaque in the desktop shell', () => {
+  it('renders the sidebar as a bounded translucent glass surface', () => {
     const sidebarShellRule = themeCss.match(/\.sidebar-shell\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? ''
     const contentAreaRule = themeCss.match(/\.app-shell-content\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? ''
     const sidebarGlassRule = themeCss.match(/\.sidebar-panel--glass\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? ''
+    const whiteSidebarGlassRule = themeCss.match(/\[data-theme="white"\]\s*\.sidebar-panel--glass\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? ''
     const darkSidebarGlassRule = themeCss.match(/\[data-theme="dark"\]\s*\.sidebar-panel--glass\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? ''
+    const sidebarGlassHighlightRule = themeCss.match(/\.sidebar-panel--glass::before\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? ''
+    const sidebarGlassChildRule = themeCss.match(/\.sidebar-panel--glass\s*>\s*\*\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? ''
     const sidebarScrollRule = themeCss.match(/\.sidebar-scroll-area\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? ''
 
     expect(sidebarShellRule).toContain('background: var(--color-surface-sidebar);')
@@ -26,12 +29,32 @@ describe('theme tokens', () => {
     expect(contentAreaRule).toContain('contain: paint;')
     expect(contentAreaRule).toContain('isolation: isolate;')
     expect(sidebarScrollRule).toContain('contain: paint;')
-    expect(sidebarGlassRule).not.toContain('backdrop-filter')
-    expect(darkSidebarGlassRule).not.toContain('backdrop-filter')
-    expect(sidebarGlassRule).not.toContain('transparent')
-    expect(darkSidebarGlassRule).not.toContain('transparent')
-    expect(sidebarGlassRule).toContain('background: var(--color-surface-sidebar);')
-    expect(darkSidebarGlassRule).toContain('background: var(--color-surface-sidebar);')
+    expect(themeCss).toContain('--color-sidebar-glass-bg: rgba(255, 255, 255, 0.74);')
+    expect(themeCss).toContain('--color-sidebar-glass-bg: rgba(20, 22, 27, 0.72);')
+    expect(themeCss).toContain('--color-sidebar-glass-border: rgba(255, 255, 255, 0.105);')
+    expect(themeCss).toContain('--color-sidebar-search-bg: rgba(255, 255, 255, 0.038);')
+    expect(themeCss).toContain('--color-sidebar-item-active: rgba(255, 255, 255, 0.105);')
+    expect(themeCss).toContain('--sidebar-panel-bg-image: none;')
+    expect(sidebarGlassRule).toContain('linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.016) 42%, rgba(255, 255, 255, 0))')
+    expect(sidebarGlassRule).toContain('var(--color-sidebar-glass-bg);')
+    expect(sidebarGlassRule).toContain('border-radius: 24px;')
+    expect(sidebarGlassRule).not.toContain('border-radius: 0 24px 24px 0;')
+    expect(sidebarGlassRule).toContain('border-right-color: var(--color-sidebar-glass-border);')
+    expect(sidebarGlassRule).toContain('backdrop-filter: blur(22px) saturate(1.28);')
+    expect(sidebarGlassRule).toContain('-webkit-backdrop-filter: blur(22px) saturate(1.28);')
+    expect(sidebarGlassRule).toContain('0 26px 68px rgba(0, 0, 0, 0.46)')
+    expect(sidebarGlassRule).toContain('inset 0 1px 0 rgba(255, 255, 255, 0.13)')
+    expect(sidebarGlassRule).toContain('isolation: isolate;')
+    expect(sidebarGlassRule).toContain('overflow: hidden;')
+    expect(sidebarGlassHighlightRule).toContain('linear-gradient(180deg, rgba(255, 255, 255, 0.065), transparent 30%)')
+    expect(sidebarGlassHighlightRule).not.toContain('radial-gradient')
+    expect(sidebarGlassHighlightRule).toContain('pointer-events: none;')
+    expect(sidebarGlassChildRule).toContain('z-index: 1;')
+    expect(whiteSidebarGlassRule).toContain('border-right-color: transparent;')
+    expect(whiteSidebarGlassRule).toContain('0 18px 44px rgba(15, 23, 42, 0.07)')
+    expect(whiteSidebarGlassRule).toContain('inset -1px 0 0 rgba(255, 255, 255, 0.92)')
+    expect(whiteSidebarGlassRule).not.toContain('0 26px 68px rgba(0, 0, 0, 0.46)')
+    expect(darkSidebarGlassRule).toContain('border-right-color: var(--color-sidebar-glass-border);')
   })
 
   it('keeps sidebar live markers inside a small WebView paint area', () => {
@@ -49,9 +72,29 @@ describe('theme tokens', () => {
 
   it('keeps active composer glow bounded to the content pane', () => {
     const composerRule = themeCss.match(/\.chat-composer-shell\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? ''
+    const floatingComposerRule = themeCss.match(/\.chat-composer-shell\.chat-composer-shell--floating\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? ''
+    const floatingTextareaRule = themeCss.match(/\.chat-composer-shell--floating\s+\.chat-composer-textarea--compact\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? ''
+    const floatingToolbarRule = themeCss.match(/\.chat-composer-shell--floating\s+\.chat-composer-toolbar\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? ''
+    const floatingSendRule = themeCss.match(/\.chat-composer-shell--floating\s+\.chat-composer-send-button\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? ''
     const activeComposerRule = themeCss.match(/\.chat-composer-shell--active\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? ''
 
     expect(composerRule).toContain('isolation: isolate;')
+    expect(themeCss).toContain('--color-chat-composer-shell: rgba(23, 24, 27, 0.76);')
+    expect(themeCss).toContain('--color-chat-composer-shell-border: rgba(255, 255, 255, 0.105);')
+    expect(themeCss).toContain('--shadow-chat-composer: 0 24px 68px rgba(0, 0, 0, 0.42), 0 7px 22px rgba(0, 0, 0, 0.3);')
+    expect(floatingComposerRule).toContain('border-radius: 999px;')
+    expect(floatingComposerRule).toContain('min-height: 56px;')
+    expect(floatingComposerRule).toContain('backdrop-filter: blur(24px) saturate(1.22);')
+    expect(floatingComposerRule).toContain('-webkit-backdrop-filter: blur(24px) saturate(1.22);')
+    expect(floatingComposerRule).toContain('inset 0 1px 0 rgba(255, 255, 255, 0.12)')
+    expect(floatingTextareaRule).toContain('height: 36px;')
+    expect(floatingTextareaRule).toContain('padding-left: clamp(92px, 11vw, 112px);')
+    expect(floatingToolbarRule).toContain('height: 36px;')
+    expect(floatingToolbarRule).toContain('border-top: 0;')
+    expect(floatingSendRule).toContain('width: 36px;')
+    expect(floatingSendRule).toContain('height: 36px;')
+    expect(floatingSendRule).toContain('border-radius: 999px;')
+    expect(floatingSendRule).toContain('background:')
     expect(activeComposerRule).toContain('box-shadow:')
     expect(activeComposerRule).toContain('var(--composer-glow-border-mix, 86%)')
     expect(activeComposerRule).toContain('var(--composer-glow-ring-mix, 50%)')

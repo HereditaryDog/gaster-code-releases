@@ -27,8 +27,13 @@ vi.mock('../../api/sessions', () => ({
 }))
 
 vi.mock('./DirectoryPicker', () => ({
-  DirectoryPicker: ({ value }: { value: string }) => (
-    <button type="button">Project {value}</button>
+  DirectoryPicker: ({ value, variant }: { value: string; variant?: 'chip' | 'workbar' }) => (
+    <button
+      type="button"
+      className={variant === 'chip' ? 'project-context-chip project-context-chip--frosted' : undefined}
+    >
+      Project {value}
+    </button>
   ),
 }))
 
@@ -120,6 +125,19 @@ describe('RepositoryLaunchControls', () => {
     expect(listbox).toBeInTheDocument()
     expect(screen.queryByRole('dialog', { name: 'Select branch' })).not.toBeInTheDocument()
     expect(listbox.parentElement?.className).toContain('w-[390px]')
+  })
+
+  it('uses a transparent floating row when embedded below the compact composer', async () => {
+    const { container } = renderControls({ variant: 'floating' })
+
+    const projectButton = await screen.findByRole('button', { name: 'Project /repo' })
+    const row = projectButton.parentElement
+
+    expect(row).toHaveClass('repository-launch-controls__row--floating')
+    expect(row?.className).not.toContain('rounded-b-xl')
+    expect(row?.className).not.toContain('bg-[var(--color-surface-container-low)]')
+    expect(row?.className).not.toContain('border-t')
+    expect(container.querySelector('.project-context-chip--frosted')).toBeInTheDocument()
   })
 
   it('uses the full-width mobile bottom sheet in H5 mobile browser mode', async () => {

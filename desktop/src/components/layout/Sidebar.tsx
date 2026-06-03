@@ -29,6 +29,7 @@ type SidebarProps = {
 export function Sidebar({ isMobile = false, onRequestClose }: SidebarProps) {
   const t = useTranslation()
   const sessions = useSessionStore((s) => s.sessions)
+  const activeSessionId = useSessionStore((s) => s.activeSessionId)
   const selectedProjects = useSessionStore((s) => s.selectedProjects)
   const isLoading = useSessionStore((s) => s.isLoading)
   const error = useSessionStore((s) => s.error)
@@ -95,11 +96,12 @@ export function Sidebar({ isMobile = false, onRequestClose }: SidebarProps) {
 
   const timeGroups = useMemo(() => groupByTime(filteredSessions), [filteredSessions])
   const activeProjectPath = useMemo(() => {
-    const activeSession = activeTabId
-      ? sessions.find((session) => session.id === activeTabId)
-      : null
+    const activeSession = sessions.find((session) => session.id === activeTabId)
+      ?? sessions.find((session) => session.id === activeSessionId)
+      ?? sessions.find((session) => session.workDir || session.projectPath)
+      ?? null
     return activeSession?.workDir || activeSession?.projectPath || null
-  }, [activeTabId, sessions])
+  }, [activeSessionId, activeTabId, sessions])
   const showInitialLoading = isLoading && sessions.length === 0
   const filteredSessionIds = useMemo(() => filteredSessions.map((session) => session.id), [filteredSessions])
   const selectedCount = selectedSessionIds.size
@@ -597,9 +599,9 @@ export function Sidebar({ isMobile = false, onRequestClose }: SidebarProps) {
                               className={`
                                 group w-full rounded-[12px] border px-3 ${isMobile ? 'py-3' : 'py-2.5'} text-left text-sm transition-[background,border-color,box-shadow,filter,color] duration-200
                                 ${selectedSessionIds.has(session.id)
-                                  ? 'sidebar-session-row--selected border-[var(--color-sidebar-item-active-border)] bg-[var(--color-sidebar-item-active)] text-[var(--color-text-primary)] shadow-[inset_0_1px_0_rgba(255,255,255,0.72),0_3px_10px_rgba(143,72,47,0.07)] hover:brightness-[0.995]'
+                                  ? 'sidebar-session-row--selected border-[var(--color-sidebar-item-active-border)] bg-[var(--color-sidebar-item-active)] text-[var(--color-text-primary)] shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_6px_16px_rgba(0,0,0,0.08)] hover:brightness-[0.995]'
                                   : isActiveSession
-                                  ? 'sidebar-session-row--active border-transparent bg-[var(--color-sidebar-item-active)] text-[var(--color-text-primary)]'
+                                  ? 'sidebar-session-row--active border-[var(--color-sidebar-item-active-border)] bg-[var(--color-sidebar-item-active)] text-[var(--color-text-primary)] shadow-[inset_0_1px_0_rgba(255,255,255,0.09),inset_0_-1px_0_rgba(0,0,0,0.18)]'
                                   : 'sidebar-session-row--idle border-transparent text-[var(--color-text-secondary)] hover:bg-[var(--color-sidebar-item-hover)]'
                                 }
                               `}

@@ -496,7 +496,7 @@ export function ActiveSession() {
           <TeamStatusBar />
 
           <ChatInput
-            variant={isEmpty && !isMemberSession && !showWorkspacePanel ? 'hero' : 'default'}
+            variant="default"
             compact={showWorkspacePanel}
           />
 

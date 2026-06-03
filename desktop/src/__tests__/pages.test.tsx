@@ -138,6 +138,24 @@ describe('Content-only pages render without errors', () => {
     expect(container.innerHTML).toContain('Ask anything')
   })
 
+  it('EmptySession uses the floating desktop composer treatment', () => {
+    render(<EmptySession />)
+
+    expect(screen.getByTestId('empty-session-composer-panel')).toHaveClass(
+      'chat-composer-shell',
+      'chat-composer-shell--blended',
+      'chat-composer-shell--compact',
+      'chat-composer-shell--floating',
+    )
+    expect(screen.getByRole('textbox')).toHaveClass('chat-composer-textarea--compact')
+    expect(screen.getByTestId('empty-session-composer-toolbar')).toHaveClass(
+      'chat-composer-toolbar',
+      'chat-composer-toolbar--compact',
+      'chat-composer-toolbar--floating',
+    )
+    expect(screen.getByRole('button', { name: 'Run' })).toHaveClass('chat-composer-send-button')
+  })
+
   it('EmptySession shows draft context usage before a session is created', async () => {
     render(<EmptySession />)
 
@@ -199,8 +217,12 @@ describe('Content-only pages render without errors', () => {
     // ChatInput has a textarea
     const textarea = container.querySelector('textarea')
     expect(textarea).toBeInTheDocument()
-    expect(textarea).toHaveAttribute('placeholder', 'Ask anything...')
-    expect(textarea).toHaveAttribute('rows', '2')
+    expect(textarea).toHaveAttribute('placeholder', 'Ask Gaster Code to edit, debug or explain...')
+    expect(textarea).toHaveAttribute('rows', '1')
+    expect(screen.getByTestId('chat-input-panel')).toHaveClass(
+      'chat-composer-shell--compact',
+      'chat-composer-shell--floating',
+    )
     expect(container.innerHTML).not.toContain('Preview')
     // Cleanup
     useTabStore.setState({ tabs: [], activeTabId: null })

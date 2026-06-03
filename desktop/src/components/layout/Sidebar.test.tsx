@@ -6,6 +6,12 @@ vi.mock('./ProjectFilter', () => ({
   ProjectFilter: () => <div data-testid="project-filter" />,
 }))
 
+vi.mock('./OpenProjectMenu', () => ({
+  OpenProjectMenu: ({ path }: { path: string | null | undefined }) => (
+    path ? <button type="button" data-testid="sidebar-open-project-menu">Open {path}</button> : null
+  ),
+}))
+
 vi.mock('../../i18n', () => ({
   useTranslation: () => (key: string, params?: Record<string, string | number>) => {
     const translations: Record<string, string> = {
@@ -58,7 +64,7 @@ vi.mock('../../i18n', () => ({
 import { Sidebar } from './Sidebar'
 import { useChatStore, type PerSessionState } from '../../stores/chatStore'
 import { useSessionStore } from '../../stores/sessionStore'
-import { useTabStore } from '../../stores/tabStore'
+import { DRAWING_TAB_ID, useTabStore } from '../../stores/tabStore'
 import { SIDEBAR_DEFAULT_WIDTH, SIDEBAR_MIN_WIDTH, useUIStore } from '../../stores/uiStore'
 import type { SessionListItem } from '../../types/session'
 
@@ -388,6 +394,21 @@ describe('Sidebar', () => {
     expect(screen.getByTestId('sidebar-project-filter-section')).toHaveClass('relative', 'z-20')
   })
 
+  it('keeps the project open button visible on non-session tabs', () => {
+    useSessionStore.setState({
+      activeSessionId: null,
+      sessions: [buildSession({ id: 'session-1', workDir: '/workspace/project' })],
+    })
+    useTabStore.setState({
+      activeTabId: DRAWING_TAB_ID,
+      tabs: [{ sessionId: DRAWING_TAB_ID, title: 'Drawing', type: 'drawing', status: 'idle' }],
+    })
+
+    render(<Sidebar />)
+
+    expect(screen.getByTestId('sidebar-open-project-menu')).toHaveTextContent('Open /workspace/project')
+  })
+
   it('keeps the session list section in a constrained flex column for scrolling', () => {
     render(<Sidebar />)
 
@@ -631,6 +652,9 @@ describe('Sidebar', () => {
     const backgroundButton = screen.getByRole('button', { name: /Background Live Session/ })
 
     expect(selectedButton.className).toContain('bg-[var(--color-sidebar-item-active)]')
+    expect(selectedButton.className).not.toContain('rgba(0,0,0,0.12)')
+    expect(selectedButton.className).toContain('shadow-[inset_0_1px_0_rgba(255,255,255,0.09),inset_0_-1px_0_rgba(0,0,0,0.18)]')
+    expect(selectedButton.className).not.toContain('rgba(143,72,47')
     expect(backgroundButton.className).toContain('hover:bg-[var(--color-sidebar-item-hover)]')
     expect(within(selectedButton).getByTestId('session-status-marker')).toHaveAttribute('data-state', 'thinking')
     expect(within(backgroundButton).getByTestId('session-status-marker')).toHaveAttribute('data-state', 'streaming')

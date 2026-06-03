@@ -112,6 +112,7 @@ export function EmptySession() {
     : undefined
   const draftModelLabel = draftRuntimeSelection?.modelId ?? currentModel?.name ?? currentModel?.id
   const isMobileComposer = useMobileViewport() && !isTauriRuntime()
+  const useFloatingComposer = !isMobileComposer && attachments.length === 0
 
   useEffect(() => {
     textareaRef.current?.focus()
@@ -552,8 +553,10 @@ export function EmptySession() {
         <div className={`flex w-full flex-col ${isMobileComposer ? 'max-w-none' : 'max-w-3xl'}`}>
           <div
             data-testid="empty-session-composer-panel"
-            className={`glass-panel relative flex flex-col gap-3 ${
-              isMobileComposer ? 'rounded-2xl p-3 shadow-[0_-12px_36px_rgba(54,35,28,0.12)]' : 'rounded-t-xl rounded-b-none p-4'
+            className={`chat-composer-shell ${!isMobileComposer ? `chat-composer-shell--blended chat-composer-shell--compact ${useFloatingComposer ? 'chat-composer-shell--floating' : ''}` : ''} glass-panel relative transition-[background-color,border-color,box-shadow] ${
+              useFloatingComposer
+                ? 'rounded-xl px-3 py-3'
+                : `flex flex-col gap-3 ${isMobileComposer ? 'rounded-2xl p-3 shadow-[0_-12px_36px_rgba(54,35,28,0.12)]' : 'rounded-t-xl rounded-b-none p-4'}`
             }`}
             onDragOver={(event) => event.preventDefault()}
             onDrop={handleDrop}
@@ -653,24 +656,28 @@ export function EmptySession() {
                 onChange={(event) => handleInputChange(event.target.value, event.target.selectionStart ?? event.target.value.length)}
                 onKeyDown={handleKeyDown}
                 onPaste={handlePaste}
-                className={`flex-1 resize-none border-none bg-transparent leading-relaxed text-[var(--color-text-primary)] outline-none placeholder:text-[var(--color-text-tertiary)] ${
+                className={`flex-1 resize-none border-none bg-transparent leading-relaxed text-[var(--color-text-primary)] outline-none placeholder:text-[var(--color-text-tertiary)] ${useFloatingComposer ? 'chat-composer-textarea--compact' : ''} ${
                   isMobileComposer ? 'max-h-[132px] min-h-[72px] py-1.5 text-base' : 'py-2'
                 }`}
                 style={{ fontFamily: 'var(--font-body)' }}
                 placeholder={t('empty.placeholder')}
-                rows={2}
+                rows={useFloatingComposer ? 1 : 2}
               />
             </div>
 
-            <div className={`border-t border-[var(--color-border-separator)] pt-3 ${
-              isMobileComposer ? 'flex flex-wrap items-center gap-2' : 'flex items-center justify-between'
+            <div
+              data-testid="empty-session-composer-toolbar"
+              className={`chat-composer-toolbar ${
+              useFloatingComposer
+                ? 'chat-composer-toolbar--compact chat-composer-toolbar--floating absolute bottom-0 left-0 right-0 flex items-center justify-between border-t border-[var(--color-border-separator)] px-3 py-2'
+                : `border-t border-[var(--color-border-separator)] pt-3 ${isMobileComposer ? 'flex flex-wrap items-center gap-2' : 'flex items-center justify-between'}`
             }`}>
               <div className="flex shrink-0 items-center gap-2">
                 <div ref={plusMenuRef} className="relative">
                   <button
                     onClick={() => setPlusMenuOpen((prev) => !prev)}
                     aria-label="Open composer tools"
-                    className={`text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] ${
+                    className={`chat-composer-icon-button text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] ${
                       isMobileComposer ? 'inline-flex h-11 w-11 items-center justify-center rounded-xl' : 'rounded-lg p-1.5'
                     }`}
                   >
@@ -720,7 +727,7 @@ export function EmptySession() {
                   disabled={!canSubmit}
                   aria-label={t('common.run')}
                   title={isMobileComposer ? t('common.run') : undefined}
-                  className={`flex shrink-0 items-center justify-center gap-1 rounded-lg bg-[image:var(--gradient-btn-primary)] text-xs font-semibold text-[var(--color-btn-primary-fg)] shadow-[var(--shadow-button-primary)] transition-all hover:brightness-105 disabled:opacity-30 ${
+                  className={`chat-composer-send-button flex shrink-0 items-center justify-center gap-1 rounded-lg bg-[image:var(--gradient-btn-primary)] text-xs font-semibold text-[var(--color-btn-primary-fg)] shadow-[var(--shadow-button-primary)] transition-all hover:brightness-105 disabled:opacity-30 ${
                     isMobileComposer ? 'h-11 w-11 rounded-xl px-0 py-0' : 'w-[112px] px-3 py-1.5'
                   }`}
                 >
@@ -740,6 +747,7 @@ export function EmptySession() {
             onUseWorktreeChange={setUseWorktree}
             onLaunchReadyChange={setRepositoryLaunchReady}
             disabled={isSubmitting}
+            variant={useFloatingComposer ? 'floating' : 'default'}
           />
         </div>
       </div>

@@ -433,9 +433,73 @@ describe('ChatInput file mentions', () => {
 
     expect(screen.getByTestId('chat-input-shell')).toHaveClass('chat-input-shell--compact')
     expect(screen.getByTestId('chat-input-panel')).toHaveClass('chat-composer-shell--compact')
+    expect(screen.getByTestId('chat-input-panel')).toHaveClass('chat-composer-shell--floating')
     expect(screen.getByRole('textbox')).toHaveClass('chat-composer-textarea--compact')
     expect(container.querySelector('.chat-composer-toolbar')).toHaveClass('chat-composer-toolbar--compact')
+    expect(container.querySelector('.chat-composer-toolbar')).toHaveClass('chat-composer-toolbar--floating')
+    expect(screen.getByRole('button', { name: 'Run' })).toHaveClass('chat-composer-send-button')
+    expect(screen.getByRole('button', { name: 'Run' })).not.toHaveTextContent('Run')
     await waitFor(() => expect(mocks.getGitInfo).toHaveBeenCalled())
+  })
+
+  it('uses transparent floating project controls for a new desktop session', async () => {
+    useSessionStore.setState({
+      sessions: [{
+        id: sessionId,
+        title: 'Project',
+        createdAt: '2026-05-01T00:00:00.000Z',
+        modifiedAt: '2026-05-01T00:00:00.000Z',
+        messageCount: 0,
+        projectPath: '/repo',
+        workDir: '/repo',
+        workDirExists: true,
+      }],
+      activeSessionId: sessionId,
+    })
+    useChatStore.setState({
+      sessions: {
+        [sessionId]: {
+          ...useChatStore.getState().sessions[sessionId]!,
+          messages: [],
+        },
+      },
+    })
+
+    render(<ChatInput />)
+
+    const row = await screen.findByTestId('repository-launch-controls-row')
+    expect(row).toHaveClass('repository-launch-controls__row--floating')
+    expect(row.className).not.toContain('rounded-b-xl')
+    expect(row.className).not.toContain('bg-[var(--color-surface-container-low)]')
+    expect(row.className).not.toContain('border-t')
+  })
+
+  it('uses the full composer panel when a desktop draft has image attachments', async () => {
+    useChatStore.setState({
+      sessions: {
+        [sessionId]: {
+          ...useChatStore.getState().sessions[sessionId]!,
+          composerDraft: {
+            input: '',
+            attachments: [{
+              id: 'photo-attachment',
+              type: 'image',
+              name: 'me.png',
+              previewUrl: 'data:image/png;base64,iVBORw0KGgo=',
+            }],
+          },
+        },
+      },
+    })
+
+    const { container } = render(<ChatInput />)
+
+    const preview = await screen.findByAltText('me.png')
+    expect(screen.getByTestId('chat-input-panel')).not.toHaveClass('chat-composer-shell--floating')
+    expect(container.querySelector('.chat-composer-toolbar')).not.toHaveClass('chat-composer-toolbar--floating')
+    expect(preview).toHaveClass('h-16')
+    expect(preview).toHaveClass('w-16')
+    expect(preview).toHaveClass('object-cover')
   })
 
   it('hides local composer glow controls in dev by default', async () => {
