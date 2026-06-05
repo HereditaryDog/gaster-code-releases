@@ -4,7 +4,7 @@ layout: home
 hero:
   name: Gaster Code
   text: 本地可运行的 AI 编码助手
-  tagline: 桌面端包含可信 H5 访问、会话批量整理、Git 感知文件引用和第三方 Skills / Agents 可见性修复
+  tagline: Electron 桌面端包含可信 H5 访问、G-Master API 账号中心、GPT Image 2 绘图和跨平台 Workbench
   image:
     src: /images/logo-horizontal.png
     alt: Gaster Code
@@ -46,6 +46,6 @@ features:
     link: /features/computer-use
   - icon: "\U0001F5A5"
     title: 桌面端
-    details: 基于 Tauri 2 + React 的图形化客户端，多标签、多会话、工作区文件面板、H5 访问、批量整理和 GPT Image 2 绘图
+    details: 基于 Electron + React 的图形化客户端，多标签、多会话、工作区文件面板、H5 访问、批量整理和 GPT Image 2 绘图
     link: /desktop/
 ---
