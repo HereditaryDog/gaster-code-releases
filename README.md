@@ -11,7 +11,7 @@
 [![GitHub Issues](https://img.shields.io/badge/issues-public%20repo-blue?logo=github)](https://github.com/HereditaryDog/gaster-code-releases/issues)
 [![GitHub Pull Requests](https://img.shields.io/badge/pull%20requests-welcome-brightgreen?logo=github)](https://github.com/HereditaryDog/gaster-code-releases/pulls)
 [![License](https://img.shields.io/badge/license-research%20only-red)](LICENSE)
-[![Current Version](https://img.shields.io/badge/version-V%201.1.0-blue)](release-notes/v1.1.0.md)
+[![Current Version](https://img.shields.io/badge/version-V%201.1.1-blue)](release-notes/v1.1.1.md)
 [![中文](https://img.shields.io/badge/中文-当前-blue)](README.md)
 [![English](https://img.shields.io/badge/English-Available-green)](README.en.md)
 
@@ -19,7 +19,7 @@
 
 Gaster Code 是一个面向本地开发场景的 AI 编码助手，提供命令行/TUI、图形化桌面端、多会话工作区、MCP 集成、自动化任务和远程适配能力，适合在真实代码仓库里完成修改、调试、审查和日常开发协作。
 
-> 当前稳定版本：**V 1.1.0**。这个版本将桌面端运行时从 Tauri 2 迁移到 Electron，统一 macOS、Windows 和 Linux 的 Chromium 渲染、内置浏览器、Workbench、终端、通知、托盘、菜单和窗口行为，同时保留 G-Master API 账号中心、充值订阅和 GPT Image 2 异步绘图能力。
+> 当前稳定版本：**V 1.1.1**。这个版本修复 Electron 正式安装包在 `file://` 打包环境下可能无法加载前端资源并显示“Gaster Code 启动失败”的问题，同时保留 V 1.1.0 的 Electron runtime、G-Master API 账号中心、充值订阅和 GPT Image 2 异步绘图能力。
 
 <p align="center">
   <a href="#功能">功能</a> ·
@@ -148,7 +148,7 @@ http://127.0.0.1:2024
 
 ## 打包与发布
 
-当前桌面版本：`V 1.1.0`。
+当前桌面版本：`V 1.1.1`。
 
 ### Windows
 
@@ -172,13 +172,13 @@ powershell -ExecutionPolicy Bypass -File .\scripts\build-windows-x64.ps1
 
 | 平台 | 安装包 |
 |------|--------|
-| macOS Apple Silicon | `Gaster-Code-1.1.0-mac-arm64.dmg` |
-| macOS Intel | `Gaster-Code-1.1.0-mac-x64.dmg` |
-| Windows x64 | `Gaster-Code-1.1.0-win-x64.exe` |
-| Linux x64 AppImage | `Gaster-Code-1.1.0-linux-x86_64.AppImage` |
-| Linux x64 deb | `Gaster-Code-1.1.0-linux-amd64.deb` |
-| Linux ARM64 AppImage | `Gaster-Code-1.1.0-linux-arm64.AppImage` |
-| Linux ARM64 deb | `Gaster-Code-1.1.0-linux-arm64.deb` |
+| macOS Apple Silicon | `Gaster-Code-1.1.1-mac-arm64.dmg` |
+| macOS Intel | `Gaster-Code-1.1.1-mac-x64.dmg` |
+| Windows x64 | `Gaster-Code-1.1.1-win-x64.exe` |
+| Linux x64 AppImage | `Gaster-Code-1.1.1-linux-x86_64.AppImage` |
+| Linux x64 deb | `Gaster-Code-1.1.1-linux-amd64.deb` |
+| Linux ARM64 AppImage | `Gaster-Code-1.1.1-linux-arm64.AppImage` |
+| Linux ARM64 deb | `Gaster-Code-1.1.1-linux-arm64.deb` |
 
 ### macOS
 
@@ -216,7 +216,7 @@ sudo xattr -cr /Applications/Gaster\ Code.app
 .github/workflows/release-desktop.yml
 ```
 
-它会根据 tag 版本构建 macOS ARM64、macOS x64、Windows x64、Linux x64 和 Linux ARM64 桌面产物，主仓库保持私有，最终安装包、blockmap 和标准 `latest*.yml` updater metadata 会同步到公开的 `HereditaryDog/gaster-code-releases` release-only 仓库，供桌面端 updater 访问。当前版本发布说明见 [release-notes/v1.1.0.md](release-notes/v1.1.0.md)。
+它会根据 tag 版本构建 macOS ARM64、macOS x64、Windows x64、Linux x64 和 Linux ARM64 桌面产物，主仓库保持私有，最终安装包、blockmap 和标准 `latest*.yml` updater metadata 会同步到公开的 `HereditaryDog/gaster-code-releases` release-only 仓库，供桌面端 updater 访问。当前版本发布说明见 [release-notes/v1.1.1.md](release-notes/v1.1.1.md)。
 
 ---
 

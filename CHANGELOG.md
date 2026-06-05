@@ -3,6 +3,13 @@
 本文件汇总公开版本线的主要变化。每个正式发布版本的完整说明保存在
 [`release-notes/`](release-notes/) 目录中。
 
+## V 1.1.1
+
+- 修复 Electron 正式安装包在 `file://` 打包环境下使用 `/assets/...` 绝对资源路径，导致 React 未挂载并显示“Gaster Code 启动失败”的问题。
+- 桌面端生产构建改为输出 `./assets/...` 相对资源路径，适配 `app.asar/dist/index.html` 加载方式。
+- package-smoke 增加 renderer 资源路径检查，避免类似启动失败再次进入公开安装包。
+- 完整说明：[release-notes/v1.1.1.md](release-notes/v1.1.1.md)
+
 ## V 1.1.0
 
 - 桌面端运行时从 Tauri 2 迁移到 Electron，统一 macOS、Windows 和 Linux 的 Chromium 渲染与桌面系统能力。

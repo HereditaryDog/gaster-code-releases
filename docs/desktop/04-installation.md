@@ -1,8 +1,8 @@
 # 安装指南
 
-当前稳定版本：**V 1.1.0**。
+当前稳定版本：**V 1.1.1**。
 
-V 1.1.0 将桌面端运行时从 Tauri 2 迁移到 Electron，1.0.x 用户请手动下载并覆盖安装一次。覆盖安装不会删除本地配置、G-Master 登录状态、会话记录或自定义服务商配置。安装本版本之后，后续更新会通过公开 release-only 仓库中的标准 `latest*.yml` updater metadata 获取。
+V 1.1.1 修复 Electron 正式安装包在 `file://` 打包环境下可能无法加载前端资源并显示“Gaster Code 启动失败”的问题。1.0.x Tauri 用户和已经安装 V 1.1.0 的用户都可以直接下载并覆盖安装。覆盖安装不会删除本地配置、G-Master 登录状态、会话记录或自定义服务商配置。安装本版本之后，后续更新会通过公开 release-only 仓库中的标准 `latest*.yml` updater metadata 获取。
 
 ## 下载
 
@@ -10,13 +10,13 @@ V 1.1.0 将桌面端运行时从 Tauri 2 迁移到 Electron，1.0.x 用户请手
 
 | 平台 | 文件 |
 |------|------|
-| macOS (Apple Silicon) | `Gaster-Code-1.1.0-mac-arm64.dmg` |
-| macOS (Intel) | `Gaster-Code-1.1.0-mac-x64.dmg` |
-| Windows x64 | `Gaster-Code-1.1.0-win-x64.exe` |
-| Linux x64 AppImage | `Gaster-Code-1.1.0-linux-x86_64.AppImage` |
-| Linux x64 deb | `Gaster-Code-1.1.0-linux-amd64.deb` |
-| Linux ARM64 AppImage | `Gaster-Code-1.1.0-linux-arm64.AppImage` |
-| Linux ARM64 deb | `Gaster-Code-1.1.0-linux-arm64.deb` |
+| macOS (Apple Silicon) | `Gaster-Code-1.1.1-mac-arm64.dmg` |
+| macOS (Intel) | `Gaster-Code-1.1.1-mac-x64.dmg` |
+| Windows x64 | `Gaster-Code-1.1.1-win-x64.exe` |
+| Linux x64 AppImage | `Gaster-Code-1.1.1-linux-x86_64.AppImage` |
+| Linux x64 deb | `Gaster-Code-1.1.1-linux-amd64.deb` |
+| Linux ARM64 AppImage | `Gaster-Code-1.1.1-linux-arm64.AppImage` |
+| Linux ARM64 deb | `Gaster-Code-1.1.1-linux-arm64.deb` |
 
 > 不确定 Mac 架构？点击左上角 Apple 菜单 → 关于本机，芯片为 Apple M 开头选 Apple Silicon，Intel 选 x64。
 
@@ -48,11 +48,11 @@ sudo xattr -cr /Applications/Gaster\ Code.app
 ## Linux 安装
 
 - AppImage：下载后添加执行权限，再双击或从终端启动。
-- deb：在 Debian/Ubuntu 系发行版中使用系统安装器或 `apt install ./Gaster-Code-1.1.0-linux-amd64.deb` 安装。
+- deb：在 Debian/Ubuntu 系发行版中使用系统安装器或 `apt install ./Gaster-Code-1.1.1-linux-amd64.deb` 安装。
 
 ```bash
-chmod +x Gaster-Code-1.1.0-linux-x86_64.AppImage
-./Gaster-Code-1.1.0-linux-x86_64.AppImage
+chmod +x Gaster-Code-1.1.1-linux-x86_64.AppImage
+./Gaster-Code-1.1.1-linux-x86_64.AppImage
 ```
 
 ## 首次启动
@@ -90,6 +90,6 @@ bun run dev --host 127.0.0.1 --port 2024
 
 不需要。V 1.1.0 开始桌面端使用 Electron 内置 Chromium，Windows 不再依赖系统 WebView2 运行时。
 
-**Q: 从 1.0.x 升级到 1.1.0 会清空本地数据吗？**
+**Q: 从 1.0.x 或 1.1.0 升级到 1.1.1 会清空本地数据吗？**
 
 不会。覆盖安装不会删除本地配置、G-Master 登录状态、会话记录、自定义服务商配置或本地项目文件。
