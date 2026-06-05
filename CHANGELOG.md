@@ -3,6 +3,15 @@
 本文件汇总公开版本线的主要变化。每个正式发布版本的完整说明保存在
 [`release-notes/`](release-notes/) 目录中。
 
+## V 1.1.0
+
+- 桌面端运行时从 Tauri 2 迁移到 Electron，统一 macOS、Windows 和 Linux 的 Chromium 渲染与桌面系统能力。
+- 内置浏览器、Workbench、终端、通知、托盘、菜单、窗口状态和 sidecar 进程管理迁移到 Electron host。
+- 保留 G-Master API 账号中心、官方默认服务商、充值订阅、GPT Image 2 异步绘图、精选能力和 Gaster 品牌。
+- 发布链路切换到 Electron Builder、electron-updater metadata 和 package-smoke。
+- `1.0.x` Tauri 用户需要手动下载安装一次 `1.1.0`。
+- 完整说明：[release-notes/v1.1.0.md](release-notes/v1.1.0.md)
+
 ## V 1.0.9
 
 - 修复 G-Master OAuth 授权页和登录管理页一直显示客户端版本 `0.1.3` 的问题，桌面端授权启动现在直接使用打包版本号。

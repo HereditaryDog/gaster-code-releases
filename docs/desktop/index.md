@@ -14,7 +14,7 @@
 
 ### [架构设计](./02-architecture.md)
 
-面向开发者的技术架构：三层架构（Tauri → Server → CLI）、WebSocket 协议、HTTP API、状态管理、协议代理、适配器桥接、目录结构。
+面向开发者的技术架构：三层架构（Electron → Server → CLI）、WebSocket 协议、HTTP API、状态管理、协议代理、适配器桥接、目录结构。
 
 ### [功能详解](./03-features.md)
 
@@ -27,6 +27,18 @@
 ### [H5 访问](./06-h5-access.md)
 
 通过局域网或自有反向代理在手机浏览器访问 Gaster Code，并配置 Token、允许来源和安全边界。
+
+### [Electron 迁移研究](./07-electron-migration-research.md)
+
+V 1.1.0 从 Tauri 2 迁移到 Electron 的背景、原则和发布结论。
+
+### [Electron 迁移任务清单](./08-electron-migration-tasks.md)
+
+迁移工程边界、已完成任务和后续维护注意事项。
+
+### [Electron 迁移验证清单](./09-electron-migration-validation-checklist.md)
+
+发布前验证桌面基础能力、Gaster 专属能力、安装包和公开 release 链路。
 
 ---
 
@@ -43,7 +55,8 @@
 1. 阅读 [架构设计](./02-architecture.md) 理解三层架构
 2. 关键源码位置：
    - `desktop/src/` — React 前端
-   - `desktop/src-tauri/` — Tauri Rust 后端
+   - `desktop/electron/` — Electron main/preload、窗口、菜单、托盘、终端、预览和 updater
+   - `desktop/src-tauri/` — 兼容保留的图标、资源和旧 Tauri 元数据
    - `desktop/sidecars/` — Sidecar 入口
    - `src/server/` — Express API 服务端
    - `adapters/` — 远程控制适配器
@@ -54,7 +67,7 @@
 
 | 概念 | 说明 |
 |------|------|
-| **Tauri** | 跨平台桌面框架，Rust 管理窗口和 Sidecar 进程 |
+| **Electron** | 跨平台桌面框架，Chromium 渲染并由 main process 管理窗口和原生能力 |
 | **Sidecar** | 随主进程启动的后台服务，运行 API 服务器 |
 | **Session** | 一次对话会话，绑定工作目录，通过 WebSocket 通信 |
 | **Tab** | 标签页，对应一个 Session 或特殊页面 |

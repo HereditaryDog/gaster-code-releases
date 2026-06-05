@@ -11,7 +11,7 @@
 [![GitHub Issues](https://img.shields.io/badge/issues-public%20repo-blue?logo=github)](https://github.com/HereditaryDog/gaster-code-releases/issues)
 [![GitHub Pull Requests](https://img.shields.io/badge/pull%20requests-welcome-brightgreen?logo=github)](https://github.com/HereditaryDog/gaster-code-releases/pulls)
 [![License](https://img.shields.io/badge/license-research%20only-red)](LICENSE)
-[![Current Version](https://img.shields.io/badge/version-V%201.0.9-blue)](release-notes/v1.0.9.md)
+[![Current Version](https://img.shields.io/badge/version-V%201.1.0-blue)](release-notes/v1.1.0.md)
 [![中文](https://img.shields.io/badge/中文-Available-green)](README.md)
 [![English](https://img.shields.io/badge/English-Current-blue)](README.en.md)
 
@@ -19,7 +19,7 @@
 
 Gaster Code is an AI coding assistant for local development workflows. It provides a CLI/TUI, a desktop app, multi-session workspaces, MCP integrations, task automation, and remote adapter capabilities for real software projects.
 
-> Current stable version: **V 1.0.9**. This release fixes stale client-version reporting on the G-Master OAuth and admin pages, and makes GPT Image 2 async drawing job polling recover from transient interruptions and 524 timeouts.
+> Current stable version: **V 1.1.0**. This release migrates the desktop runtime from Tauri 2 to Electron, unifying Chromium rendering, the embedded browser, Workbench, terminal, notifications, tray, menus, and window behavior across macOS, Windows, and Linux while preserving the G-Master API account center, billing, and GPT Image 2 async drawing flow.
 
 <p align="center">
   <a href="#features">Features</a> ·
@@ -34,7 +34,7 @@ Gaster Code is an AI coding assistant for local development workflows. It provid
 ## Features
 
 - CLI / TUI workflow for coding directly from the terminal
-- Tauri 2 + React desktop app with multi-tab, multi-session, workspace file panel, and multi-workspace support
+- Electron + React desktop app with multi-tab, multi-session, workspace file panel, and multi-workspace support
 - Codex-style dark interface with blue brand accents
 - G-Master API account center with desktop sign-up/sign-in, balance top-up, subscription management, and official provider sync
 - GPT Image 2 drawing through G-Master API async image jobs, preserving complex prompts as entered
@@ -148,7 +148,7 @@ http://127.0.0.1:2024
 
 ## Packaging And Release
 
-Current desktop version: `V 1.0.9`.
+Current desktop version: `V 1.1.0`.
 
 ### Windows
 
@@ -162,7 +162,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\build-windows-x64.ps1
 The repository also provides a GitHub Actions development build:
 
 - Workflow: `.github/workflows/build-desktop-dev.yml`
-- Windows artifact: MSI installer
+- Windows artifact: NSIS `.exe` installer
 
 ### Public Installers
 
@@ -172,10 +172,13 @@ Public installers:
 
 | Platform | Installer |
 |----------|-----------|
-| macOS Apple Silicon | `Gaster-Code_1.0.9_macos_arm64_dmg.dmg` |
-| macOS Intel | `Gaster-Code_1.0.9_macos_x64_dmg.dmg` |
-| Windows x64 | `Gaster-Code_1.0.9_windows_x64_nsis.exe` |
-| Linux x64 | `Gaster-Code_1.0.9_linux_x64_deb.deb` |
+| macOS Apple Silicon | `Gaster-Code-1.1.0-mac-arm64.dmg` |
+| macOS Intel | `Gaster-Code-1.1.0-mac-x64.dmg` |
+| Windows x64 | `Gaster-Code-1.1.0-win-x64.exe` |
+| Linux x64 AppImage | `Gaster-Code-1.1.0-linux-x86_64.AppImage` |
+| Linux x64 deb | `Gaster-Code-1.1.0-linux-amd64.deb` |
+| Linux ARM64 AppImage | `Gaster-Code-1.1.0-linux-arm64.AppImage` |
+| Linux ARM64 deb | `Gaster-Code-1.1.0-linux-arm64.deb` |
 
 ### macOS
 
@@ -213,7 +216,7 @@ Desktop releases run through:
 .github/workflows/release-desktop.yml
 ```
 
-The workflow builds macOS ARM64, macOS x64, Windows x64, and Linux x64 desktop artifacts from version tags. The source repository stays private, while installers and `latest.json` are mirrored to the public `HereditaryDog/gaster-code-releases` release-only repository for the desktop updater. Linux ARM64 can be enabled from manual release workflow dispatch. See [release-notes/v1.0.9.md](release-notes/v1.0.9.md) for the current release notes.
+The workflow builds macOS ARM64, macOS x64, Windows x64, Linux x64, and Linux ARM64 desktop artifacts from version tags. The source repository stays private, while installers, blockmaps, and standard `latest*.yml` updater metadata are mirrored to the public `HereditaryDog/gaster-code-releases` release-only repository for the desktop updater. See [release-notes/v1.1.0.md](release-notes/v1.1.0.md) for the current release notes.
 
 ---
 
@@ -233,7 +236,7 @@ The workflow builds macOS ARM64, macOS x64, Windows x64, and Linux x64 desktop a
 ## Repository Structure
 
 - `src/`: CLI, TUI, server, tools, and core logic
-- `desktop/`: desktop frontend and Tauri packaging project
+- `desktop/`: desktop frontend and Electron packaging project
 - `adapters/`: remote adapters
 - `docs/`: user docs and design notes
 - `scripts/`: release and helper scripts

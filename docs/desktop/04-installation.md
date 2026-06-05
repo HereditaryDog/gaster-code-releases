@@ -1,8 +1,8 @@
 # 安装指南
 
-当前稳定版本：**V 1.0.9**。这个版本修复 G-Master OAuth 授权页和管理页显示旧客户端版本的问题，并增强 GPT Image 2 异步绘图轮询的临时中断/524 超时恢复能力。
+当前稳定版本：**V 1.1.0**。
 
-> 本版本使用公开 release-only 仓库提供 updater 元数据和安装包下载。`0.2.1-gastercode.1` 及更早安装包仍内置私有主仓库 endpoint，无法自动发现本版本，需要手动下载安装一次；安装本版本之后，后续更新会从公开 release-only 仓库获取。
+V 1.1.0 将桌面端运行时从 Tauri 2 迁移到 Electron，1.0.x 用户请手动下载并覆盖安装一次。覆盖安装不会删除本地配置、G-Master 登录状态、会话记录或自定义服务商配置。安装本版本之后，后续更新会通过公开 release-only 仓库中的标准 `latest*.yml` updater metadata 获取。
 
 ## 下载
 
@@ -10,20 +10,21 @@
 
 | 平台 | 文件 |
 |------|------|
-| macOS (Apple Silicon) | `Gaster-Code_1.0.9_macos_arm64_dmg.dmg` |
-| macOS (Intel) | `Gaster-Code_1.0.9_macos_x64_dmg.dmg` |
-| Windows x64 | `Gaster-Code_1.0.9_windows_x64_nsis.exe` |
-| Linux x64 | `Gaster-Code_1.0.9_linux_x64_deb.deb` |
+| macOS (Apple Silicon) | `Gaster-Code-1.1.0-mac-arm64.dmg` |
+| macOS (Intel) | `Gaster-Code-1.1.0-mac-x64.dmg` |
+| Windows x64 | `Gaster-Code-1.1.0-win-x64.exe` |
+| Linux x64 AppImage | `Gaster-Code-1.1.0-linux-x86_64.AppImage` |
+| Linux x64 deb | `Gaster-Code-1.1.0-linux-amd64.deb` |
+| Linux ARM64 AppImage | `Gaster-Code-1.1.0-linux-arm64.AppImage` |
+| Linux ARM64 deb | `Gaster-Code-1.1.0-linux-arm64.deb` |
 
-> 发布策略：不拆平台代码分支。当前 tag 自动发布默认构建 macOS ARM64、macOS x64、Windows x64 和 Linux x64；Linux ARM64 可以在手动发布工作流中按需启用。
-
-> 不确定 Mac 架构？点击左上角  → 关于本机，芯片为 Apple M 开头选 aarch64，Intel 选 x64。
+> 不确定 Mac 架构？点击左上角 Apple 菜单 → 关于本机，芯片为 Apple M 开头选 Apple Silicon，Intel 选 x64。
 
 ## macOS 安装
 
 1. 双击 `.dmg` 文件，将 `Gaster Code.app` 拖入 `Applications` 文件夹
 2. 首次打开时，进入 `Applications`，右键点击 `Gaster Code.app` → 选择「打开」→ 在弹窗中点击「打开」，仅需操作一次
-3. 如果提示**"已损坏，无法打开"**，在终端执行：
+3. 如果提示**“已损坏，无法打开”**、**“此文件已损坏”**或**“无法验证开发者”**，在终端执行：
 
 ```bash
 xattr -cr /Applications/Gaster\ Code.app
@@ -44,6 +45,16 @@ sudo xattr -cr /Applications/Gaster\ Code.app
 
 > 应用暂未进行 Windows 代码签名，仅首次运行需要此操作。
 
+## Linux 安装
+
+- AppImage：下载后添加执行权限，再双击或从终端启动。
+- deb：在 Debian/Ubuntu 系发行版中使用系统安装器或 `apt install ./Gaster-Code-1.1.0-linux-amd64.deb` 安装。
+
+```bash
+chmod +x Gaster-Code-1.1.0-linux-x86_64.AppImage
+./Gaster-Code-1.1.0-linux-x86_64.AppImage
+```
+
 ## 首次启动
 
 打开 Gaster Code 后会看到欢迎页：
@@ -52,7 +63,7 @@ sudo xattr -cr /Applications/Gaster\ Code.app
 2. 选择 **注册 G-Master 账号**：跳转到 G-Master API 注册页，注册完成后继续桌面授权流程。
 3. 选择 **使用自定义模型服务商**：进入设置页，自行配置 Anthropic / OpenAI 兼容服务商。
 
-桌面端现在内置 G-Master API 账号中心，可在设置 → **个人设置** 查看余额、订阅状态、账单记录，并从桌面端发起充值或订阅。支付确认仍会打开 G-Master API 的安全收银台页面；桌面端不会保存支付密钥、银行卡信息或支付渠道密钥。
+桌面端内置 G-Master API 账号中心，可在设置 → **个人设置** 查看余额、订阅状态、账单记录，并从桌面端发起充值或订阅。支付确认仍会打开 G-Master API 的安全收银台页面；桌面端不会保存支付密钥、银行卡信息或支付渠道密钥。
 
 ## Web UI 模式
 
@@ -71,10 +82,14 @@ bun run dev --host 127.0.0.1 --port 2024
 
 ## 常见问题
 
-**Q: macOS 提示"来自身份不明的开发者"？**
+**Q: macOS 提示“来自身份不明的开发者”？**
 
 右键点击应用 → 选择「打开」→ 在弹窗中点击「打开」，仅需操作一次。
 
-**Q: Windows 提示缺少 WebView2？**
+**Q: Windows 是否还需要单独安装 WebView2？**
 
-从 [Microsoft 官方](https://developer.microsoft.com/en-us/microsoft-edge/webview2/) 下载安装 WebView2 运行时。
+不需要。V 1.1.0 开始桌面端使用 Electron 内置 Chromium，Windows 不再依赖系统 WebView2 运行时。
+
+**Q: 从 1.0.x 升级到 1.1.0 会清空本地数据吗？**
+
+不会。覆盖安装不会删除本地配置、G-Master 登录状态、会话记录、自定义服务商配置或本地项目文件。

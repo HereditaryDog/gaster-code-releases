@@ -4,7 +4,7 @@ layout: home
 hero:
   name: Gaster Code
   text: Locally Runnable AI Coding Assistant
-  tagline: Desktop workflow with trusted H5 access, batch session cleanup, Git-aware file mentions, and third-party Skills / Agents visibility fixes
+  tagline: Electron desktop workflow with trusted H5 access, G-Master API account center, GPT Image 2 drawing, and cross-platform Workbench
   image:
     src: /images/logo-horizontal.png
     alt: Gaster Code
@@ -43,6 +43,6 @@ features:
     link: /im/
   - icon: "\U0001F5A5"
     title: Desktop App
-    details: Tauri 2 + React desktop client with tabs, sessions, workspace file panel, H5 access, batch cleanup, desktop notifications, and G-Master API provider sync
+    details: Electron + React desktop client with tabs, sessions, workspace file panel, H5 access, batch cleanup, desktop notifications, and G-Master API provider sync
     link: /desktop/
 ---
