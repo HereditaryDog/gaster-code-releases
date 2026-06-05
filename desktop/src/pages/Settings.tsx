@@ -44,11 +44,13 @@ import { useUIStore, type SettingsTab } from '../stores/uiStore'
 import { ClaudeOfficialLogin } from '../components/settings/ClaudeOfficialLogin'
 import { useUpdateStore } from '../stores/updateStore'
 import { formatBytes } from '../lib/formatBytes'
-import { isTauriRuntime } from '../lib/desktopRuntime'
+import { getDesktopHost } from '../lib/desktopHost'
+import { isDesktopRuntime } from '../lib/desktopRuntime'
 import { useGMasterAuthStore } from '../stores/gmasterAuthStore'
 import { GMASTER_API_BASE_URL, GMASTER_DEFAULT_MODELS, GMASTER_MANAGED_PROVIDER_ID, getGMasterModelOptions, isGMasterOfficialProvider } from '../constants/gmasterProvider'
 import { OFFICIAL_MODELS } from '../constants/modelCatalog'
 import { GASTER_CODE_VERSION } from '../version'
+import { GASTER_CODE_APP_NAME, GASTER_CODE_LOGO_SRC } from '../constants/branding'
 import {
   getDesktopNotificationPermission,
   notifyDesktop,
@@ -849,13 +851,7 @@ function buildFallbackPreset(provider?: SavedProvider): ProviderPreset {
 }
 
 function openExternalUrl(url: string) {
-  if (!isTauriRuntime()) {
-    window.open(url, '_blank', 'noopener,noreferrer')
-    return
-  }
-
-  void import('@tauri-apps/plugin-shell')
-    .then((mod) => mod.open(url))
+  void getDesktopHost().shell.open(url)
     .catch(() => window.open(url, '_blank', 'noopener,noreferrer'))
 }
 
@@ -1793,7 +1789,7 @@ function GeneralSettings() {
   }, [])
 
   useEffect(() => {
-    if (!isTauriRuntime()) return
+    if (!isDesktopRuntime()) return
     void fetchAppMode()
   }, [fetchAppMode])
 
@@ -1914,8 +1910,7 @@ function GeneralSettings() {
   const openPortableDirPicker = async () => {
     setModeError(null)
     try {
-      const { open } = await import('@tauri-apps/plugin-dialog')
-      const selected = await open({
+      const selected = await getDesktopHost().dialogs.open({
         directory: true,
         multiple: false,
         title: t('settings.general.storageChooseDirTitle'),
@@ -1960,10 +1955,9 @@ function GeneralSettings() {
     setModeError(null)
     try {
       await setAppModeAction(pendingMode, pendingPortableDir)
-      const { invoke } = await import('@tauri-apps/api/core')
-      await invoke('prepare_for_app_mode_restart')
-      const { relaunch } = await import('@tauri-apps/plugin-process')
-      await relaunch()
+      const host = getDesktopHost()
+      await host.appMode.prepareRestart()
+      await host.appMode.restart()
     } catch (error) {
       setModeError(
         error instanceof Error
@@ -2200,7 +2194,7 @@ function GeneralSettings() {
         </div>
       </div>
 
-      {isTauriRuntime() && (
+      {isDesktopRuntime() && (
         <div className="mt-8 border-t border-[var(--color-border)] pt-8">
           <h2 className="text-base font-semibold text-[var(--color-text-primary)] mb-1">{t('settings.general.storageTitle')}</h2>
           <p className="text-sm text-[var(--color-text-tertiary)] mb-3">{t('settings.general.storageDescription')}</p>
@@ -3387,8 +3381,8 @@ function PluginSettings() {
 
 // ─── About Settings ──────────────────────────────────────
 
-const APP_NAME = 'Gaster Code'
-const APP_LOGO_PATH = '/app-icon.svg'
+const APP_NAME = GASTER_CODE_APP_NAME
+const APP_LOGO_PATH = GASTER_CODE_LOGO_SRC
 const GITHUB_REPO = 'https://github.com/HereditaryDog/gaster-code'
 const GITHUB_ISSUES = `${GITHUB_REPO}/issues`
 const GITHUB_RELEASES = `${GITHUB_REPO}/releases`
@@ -3433,8 +3427,7 @@ function AboutSettings() {
   useEffect(() => {
     let cancelled = false
 
-    import('@tauri-apps/api/app')
-      .then((mod) => mod.getVersion())
+    getDesktopHost().app.getVersion()
       .then((value) => {
         if (!cancelled) setVersion(value)
       })
@@ -3457,7 +3450,7 @@ function AboutSettings() {
   }, [updateProxy])
 
   const openUrl = (url: string) => {
-    import('@tauri-apps/plugin-shell').then((mod) => mod.open(url)).catch(() => window.open(url, '_blank'))
+    getDesktopHost().shell.open(url).catch(() => window.open(url, '_blank'))
   }
 
   const checkedAtText =

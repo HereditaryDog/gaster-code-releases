@@ -12,11 +12,6 @@ export function ThinkingBlock({ content, isActive = false }: { content: string; 
     }
   }, [content, expanded, isActive])
 
-  // Preview: take first meaningful line, not first 140 chars
-  const lines = content.split('\n').filter((l) => l.trim())
-  const firstLine = lines[0]?.replace(/\s+/g, ' ').trim() || ''
-  const preview = firstLine.length > 80 ? firstLine.slice(0, 80) + '...' : firstLine
-
   return (
     <div className="mb-1">
       <style>{thinkingStyles}</style>
@@ -31,12 +26,6 @@ export function ThinkingBlock({ content, isActive = false }: { content: string; 
           {t('thinking.label')}
           {isActive && <span className="thinking-dots" />}
         </span>
-        {!expanded && preview && (
-          <span className="min-w-0 flex-1 truncate font-[var(--font-mono)] text-[11px] text-[var(--color-text-tertiary)]">
-            {preview}
-            {isActive && <span className="thinking-inline-cursor" />}
-          </span>
-        )}
       </button>
       {expanded && (
         <div
@@ -69,15 +58,6 @@ const thinkingStyles = `
   background: var(--color-text-tertiary);
   vertical-align: middle;
   margin-left: 1px;
-  animation: thinking-cursor-blink 1s step-end infinite;
-}
-.thinking-inline-cursor {
-  display: inline-block;
-  width: 1px;
-  height: 0.95em;
-  margin-left: 3px;
-  vertical-align: text-bottom;
-  background: var(--color-text-tertiary);
   animation: thinking-cursor-blink 1s step-end infinite;
 }
 .thinking-dots::after {

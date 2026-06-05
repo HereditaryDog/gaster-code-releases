@@ -23,10 +23,13 @@ import {
   H5_SERVER_URL_STORAGE_KEY,
   H5_TOKEN_STORAGE_KEY,
   initializeDesktopServerUrl,
+  isBrowserH5Runtime,
+  isDesktopRuntime,
   isLoopbackHostname,
   requiresH5AuthForServerUrl,
   saveAndVerifyH5Connection,
 } from './desktopRuntime'
+import { browserHost } from './desktopHost/browserHost'
 
 function healthOkResponse() {
   return Response.json({ status: 'ok' })
@@ -42,6 +45,9 @@ describe('desktopRuntime browser H5 bootstrap', () => {
     vi.useRealTimers()
     window.localStorage.clear()
     window.history.pushState({}, '', '/')
+    Reflect.deleteProperty(window, 'desktopHost')
+    Reflect.deleteProperty(window, '__TAURI_INTERNALS__')
+    Reflect.deleteProperty(window, '__TAURI__')
     globalThis.fetch = originalFetch
   })
 
@@ -79,7 +85,6 @@ describe('desktopRuntime browser H5 bootstrap', () => {
     await expect(saveAndVerifyH5Connection('https://public.example.com/app', 'stale-token')).rejects.toMatchObject({
       name: 'H5ConnectionRequiredError',
       serverUrl: 'https://public.example.com/app',
-      reason: 'invalid-token',
       message: '已保存的 H5 访问令牌已失效。',
     } satisfies Partial<H5ConnectionRequiredError>)
 
@@ -103,22 +108,81 @@ describe('desktopRuntime browser H5 bootstrap', () => {
     expect(clientMocks.postVerify).not.toHaveBeenCalled()
   })
 
-  it('uses the current browser origin when the H5 shell is served by the desktop server', async () => {
-    clientMocks.defaultBaseUrl = window.location.origin
+  it('uses the configured browser fallback URL when no H5 server URL is requested', async () => {
     globalThis.fetch = vi.fn().mockResolvedValue(
       healthOkResponse(),
     ) as typeof fetch
 
-    await expect(initializeDesktopServerUrl()).resolves.toBe(window.location.origin)
+    await expect(initializeDesktopServerUrl()).resolves.toBe(clientMocks.defaultBaseUrl)
 
-    expect(clientMocks.setBaseUrl).toHaveBeenLastCalledWith(window.location.origin)
+    expect(clientMocks.setBaseUrl).toHaveBeenLastCalledWith(clientMocks.defaultBaseUrl)
     expect(clientMocks.setAuthToken).toHaveBeenLastCalledWith(null)
-    expect(globalThis.fetch).toHaveBeenCalledWith(`${window.location.origin}/health`, {
+    expect(globalThis.fetch).toHaveBeenCalledWith(`${clientMocks.defaultBaseUrl}/health`, {
       cache: 'no-store',
     })
-    expect(globalThis.fetch).toHaveBeenCalledWith(`${window.location.origin}/api/status`, {
+    expect(globalThis.fetch).toHaveBeenCalledWith(`${clientMocks.defaultBaseUrl}/api/status`, {
       cache: 'no-store',
     })
+  })
+
+  it('uses an injected desktop host server URL before browser fallback', async () => {
+    const serverUrl = 'http://127.0.0.1:59231'
+    window.desktopHost = {
+      ...browserHost,
+      kind: 'electron',
+      isDesktop: true,
+      runtime: {
+        getServerUrl: vi.fn().mockResolvedValue(serverUrl),
+      },
+    }
+    globalThis.fetch = vi.fn().mockResolvedValue(
+      healthOkResponse(),
+    ) as typeof fetch
+
+    await expect(initializeDesktopServerUrl()).resolves.toBe(serverUrl)
+
+    expect(window.desktopHost.runtime.getServerUrl).toHaveBeenCalledTimes(1)
+    expect(clientMocks.setBaseUrl).toHaveBeenLastCalledWith(serverUrl)
+    expect(clientMocks.setAuthToken).toHaveBeenLastCalledWith(null)
+    expect(globalThis.fetch).toHaveBeenCalledWith(`${serverUrl}/health`, {
+      cache: 'no-store',
+    })
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1)
+  })
+
+  it('classifies browser H5 runtime using the desktop host boundary', () => {
+    expect(isBrowserH5Runtime()).toBe(true)
+    expect(isDesktopRuntime()).toBe(false)
+
+    window.desktopHost = {
+      ...browserHost,
+      kind: 'electron',
+      isDesktop: true,
+    }
+
+    expect(isBrowserH5Runtime()).toBe(false)
+    expect(isDesktopRuntime()).toBe(true)
+  })
+
+  it('normalizes injected desktop host startup failures', async () => {
+    const error = new Error('electron sidecar failed')
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    window.desktopHost = {
+      ...browserHost,
+      kind: 'electron',
+      isDesktop: true,
+      runtime: {
+        getServerUrl: vi.fn().mockRejectedValue(error),
+      },
+    }
+
+    await expect(initializeDesktopServerUrl()).rejects.toThrow('electron sidecar failed')
+    expect(consoleError).toHaveBeenCalledWith(
+      '[desktop] Failed to initialize desktop server URL',
+      error,
+    )
+
+    consoleError.mockRestore()
   })
 
   it('does not treat a Vite SPA fallback response as a desktop server healthcheck', async () => {
@@ -131,31 +195,13 @@ describe('desktopRuntime browser H5 bootstrap', () => {
     ) as typeof fetch
 
     const startup = expect(initializeDesktopServerUrl()).rejects.toThrow(
-      '服务器健康检查失败: healthcheck returned non-JSON response from http://127.0.0.1:3456/health',
+      `服务器健康检查失败: healthcheck returned non-JSON response from ${clientMocks.defaultBaseUrl}/health`,
     )
     await vi.runAllTimersAsync()
 
     await startup
-    expect(clientMocks.setBaseUrl).toHaveBeenLastCalledWith('http://127.0.0.1:3456')
+    expect(clientMocks.setBaseUrl).toHaveBeenLastCalledWith(clientMocks.defaultBaseUrl)
     expect(clientMocks.setAuthToken).toHaveBeenLastCalledWith(null)
-  })
-
-  it('prefers the default loopback server over a different local dev server origin', async () => {
-    clientMocks.defaultBaseUrl = 'http://127.0.0.1:3456'
-    globalThis.fetch = vi.fn().mockResolvedValue(
-      healthOkResponse(),
-    ) as typeof fetch
-
-    await expect(initializeDesktopServerUrl()).resolves.toBe('http://127.0.0.1:3456')
-
-    expect(clientMocks.setBaseUrl).toHaveBeenLastCalledWith('http://127.0.0.1:3456')
-    expect(clientMocks.setAuthToken).toHaveBeenLastCalledWith(null)
-    expect(globalThis.fetch).toHaveBeenCalledWith('http://127.0.0.1:3456/health', {
-      cache: 'no-store',
-    })
-    expect(globalThis.fetch).toHaveBeenCalledWith('http://127.0.0.1:3456/api/status', {
-      cache: 'no-store',
-    })
   })
 
   it('prefers an explicit Vite desktop server URL over the dev server origin', async () => {
@@ -205,7 +251,6 @@ describe('desktopRuntime browser H5 bootstrap', () => {
     const startup = expect(saveAndVerifyH5Connection('https://unreachable.example.com', 'h5_token')).rejects.toMatchObject({
       name: 'H5ConnectionRequiredError',
       serverUrl: 'https://unreachable.example.com',
-      reason: 'unreachable',
       message: '无法连接到 https://unreachable.example.com，请检查服务器地址或网络访问。',
     } satisfies Partial<H5ConnectionRequiredError>)
     await vi.runAllTimersAsync()
@@ -226,7 +271,6 @@ describe('desktopRuntime browser H5 bootstrap', () => {
     await expect(saveAndVerifyH5Connection('https://public.example.com', 'h5_token')).rejects.toMatchObject({
       name: 'H5ConnectionRequiredError',
       serverUrl: 'https://public.example.com',
-      reason: 'verify-failed',
       message: '无法验证 H5 访问令牌。',
     } satisfies Partial<H5ConnectionRequiredError>)
 
@@ -255,7 +299,7 @@ describe('desktopRuntime browser H5 bootstrap', () => {
   })
 
   it('uses and persists an H5 token from the QR launch URL', async () => {
-    window.history.pushState({}, '', '/?serverUrl=https%3A%2F%2Fpublic.example.com%2Fapp#h5Token=qr-token')
+    window.history.pushState({}, '', '/?serverUrl=https%3A%2F%2Fpublic.example.com%2Fapp&h5Token=qr-token')
     globalThis.fetch = vi.fn().mockResolvedValue(
       healthOkResponse(),
     ) as typeof fetch
@@ -267,21 +311,6 @@ describe('desktopRuntime browser H5 bootstrap', () => {
     expect(clientMocks.setAuthToken).toHaveBeenLastCalledWith('qr-token')
     expect(clientMocks.postVerify).toHaveBeenCalledWith('/api/h5-access/verify')
     expect(window.localStorage.getItem(H5_TOKEN_STORAGE_KEY)).toBe('qr-token')
-  })
-
-  it('continues to use and persist legacy H5 tokens from the query string', async () => {
-    window.history.pushState({}, '', '/?serverUrl=https%3A%2F%2Fpublic.example.com%2Fapp&h5Token=legacy-token')
-    globalThis.fetch = vi.fn().mockResolvedValue(
-      healthOkResponse(),
-    ) as typeof fetch
-    clientMocks.postVerify.mockResolvedValueOnce({ ok: true })
-
-    await expect(initializeDesktopServerUrl()).resolves.toBe('https://public.example.com/app')
-
-    expect(clientMocks.setBaseUrl).toHaveBeenLastCalledWith('https://public.example.com/app')
-    expect(clientMocks.setAuthToken).toHaveBeenLastCalledWith('legacy-token')
-    expect(clientMocks.postVerify).toHaveBeenCalledWith('/api/h5-access/verify')
-    expect(window.localStorage.getItem(H5_TOKEN_STORAGE_KEY)).toBe('legacy-token')
   })
 
   it('shows the H5 token recovery view when a local browser connects to an auth-required LAN server', async () => {

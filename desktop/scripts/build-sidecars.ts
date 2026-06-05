@@ -6,9 +6,10 @@ const repoRoot = path.resolve(desktopRoot, '..')
 const binariesDir = path.join(desktopRoot, 'src-tauri', 'binaries')
 
 const targetTriple =
+  process.env.SIDECAR_TARGET_TRIPLE ||
   process.env.TAURI_ENV_TARGET_TRIPLE ||
   process.env.CARGO_BUILD_TARGET ||
-  (await detectHostTriple())
+  detectHostTriple()
 
 const bunTarget = mapTargetTripleToBun(targetTriple)
 
@@ -38,31 +39,17 @@ await compileExecutable({
 
 console.log(`[build-sidecars] Built desktop sidecar for ${targetTriple} (${bunTarget})`)
 
-async function detectHostTriple() {
-  const proc = Bun.spawn(['rustc', '-vV'], {
-    cwd: repoRoot,
-    stdout: 'pipe',
-    stderr: 'pipe',
-  })
-
-  const stdout = await new Response(proc.stdout).text()
-  const stderr = await new Response(proc.stderr).text()
-  const exitCode = await proc.exited
-
-  if (exitCode !== 0) {
-    throw new Error(`[build-sidecars] rustc -vV failed: ${stderr || stdout}`)
-  }
-
-  const hostLine = stdout
-    .split('\n')
-    .map((line) => line.trim())
-    .find((line) => line.startsWith('host: '))
-
-  if (!hostLine) {
-    throw new Error('[build-sidecars] Could not detect Rust host triple')
-  }
-
-  return hostLine.replace('host: ', '')
+function detectHostTriple(
+  platform: NodeJS.Platform = process.platform,
+  arch: string = process.arch,
+) {
+  if (platform === 'darwin' && arch === 'arm64') return 'aarch64-apple-darwin'
+  if (platform === 'darwin' && arch === 'x64') return 'x86_64-apple-darwin'
+  if (platform === 'win32' && arch === 'arm64') return 'aarch64-pc-windows-msvc'
+  if (platform === 'win32' && arch === 'x64') return 'x86_64-pc-windows-msvc'
+  if (platform === 'linux' && arch === 'arm64') return 'aarch64-unknown-linux-gnu'
+  if (platform === 'linux' && arch === 'x64') return 'x86_64-unknown-linux-gnu'
+  throw new Error(`[build-sidecars] Unsupported host platform: ${platform}/${arch}`)
 }
 
 function mapTargetTripleToBun(triple: string) {
@@ -72,7 +59,7 @@ function mapTargetTripleToBun(triple: string) {
     case 'x86_64-apple-darwin':
       return 'bun-darwin-x64'
     case 'x86_64-pc-windows-msvc':
-      return 'bun-windows-x64'
+      return 'bun-windows-x64-baseline'
     case 'aarch64-pc-windows-msvc':
       return 'bun-windows-arm64'
     case 'x86_64-unknown-linux-gnu':

@@ -29,6 +29,20 @@ vi.mock('../components/workspace/WorkspacePanel', () => ({
   ),
 }))
 
+vi.mock('../api/websocket', () => ({
+  wsManager: {
+    connect: vi.fn(),
+    disconnect: vi.fn(),
+    disconnectAll: vi.fn(),
+    send: vi.fn(),
+    onMessage: vi.fn(() => () => {}),
+    clearHandlers: vi.fn(),
+    isConnected: vi.fn(() => false),
+    getConnectedSessionIds: vi.fn(() => []),
+  },
+  buildSessionWebSocketUrl: vi.fn((sessionId: string) => `ws://127.0.0.1:3456/ws/${encodeURIComponent(sessionId)}`),
+}))
+
 vi.mock('./TerminalSettings', () => ({
   TerminalSettings: ({
     cwd,

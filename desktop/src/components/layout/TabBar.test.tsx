@@ -3,11 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import '@testing-library/jest-dom'
 import type { PerSessionState } from '../../stores/chatStore'
 import type { ChatState } from '../../types/chat'
+import { browserHost } from '../../lib/desktopHost/browserHost'
 
 const startDraggingMock = vi.hoisted(() => vi.fn(() => Promise.resolve()))
-const getCurrentWindowMock = vi.hoisted(() => vi.fn(() => ({
-  startDragging: startDraggingMock,
-})))
 const windowControlsMock = vi.hoisted(() => ({
   show: true,
 }))
@@ -40,10 +38,6 @@ function makeChatSession(chatState: ChatState): PerSessionState {
     composerDraft: null,
   }
 }
-
-vi.mock('@tauri-apps/api/window', () => ({
-  getCurrentWindow: getCurrentWindowMock,
-}))
 
 vi.mock('../../i18n', () => ({
   useTranslation: () => (key: string, params?: Record<string, string | number>) => {
@@ -111,10 +105,19 @@ describe('TabBar', () => {
       value: ResizeObserverMock,
     })
 
-    Object.defineProperty(window, '__TAURI__', {
-      configurable: true,
-      value: {},
-    })
+    window.desktopHost = {
+      ...browserHost,
+      kind: 'electron',
+      isDesktop: true,
+      capabilities: {
+        ...browserHost.capabilities,
+        windowControls: true,
+      },
+      window: {
+        ...browserHost.window,
+        startDragging: startDraggingMock,
+      },
+    }
 
     Object.defineProperty(window.HTMLElement.prototype, 'scrollIntoView', {
       configurable: true,
@@ -136,7 +139,6 @@ describe('TabBar', () => {
     })
 
     startDraggingMock.mockClear()
-    getCurrentWindowMock.mockClear()
     scrollIntoViewMock.mockClear()
     openProjectMenuMock.paths = []
     windowControlsMock.show = true
@@ -167,7 +169,7 @@ describe('TabBar', () => {
     useWorkspacePanelStore.setState(useWorkspacePanelStore.getInitialState(), true)
     useTerminalPanelStore.setState(useTerminalPanelStore.getInitialState(), true)
 
-    delete (window as typeof window & { __TAURI__?: unknown }).__TAURI__
+    Reflect.deleteProperty(window, 'desktopHost')
   })
 
   it('scrolls the active tab into view when the active tab changes', async () => {
@@ -302,10 +304,10 @@ describe('TabBar', () => {
     })
 
     const tabBar = screen.getByTestId('tab-bar')
-    expect(tabBar).not.toHaveAttribute('data-tauri-drag-region')
+    expect(tabBar).not.toHaveAttribute('data-desktop-drag-region')
     expect(tabBar).not.toHaveClass('border-b')
     expect(tabBar).toHaveClass('tab-bar-shell')
-    expect(screen.getByTestId('tab-bar-drag-gutter')).toHaveAttribute('data-tauri-drag-region')
+    expect(screen.getByTestId('tab-bar-drag-gutter')).toHaveAttribute('data-desktop-drag-region')
   })
 
   it('keeps the desktop tab strip at a roomier titlebar height', async () => {
@@ -497,7 +499,7 @@ describe('TabBar', () => {
   })
 
   it('hides the open-project control outside the desktop shell', async () => {
-    delete (window as typeof window & { __TAURI__?: unknown }).__TAURI__
+    Reflect.deleteProperty(window, 'desktopHost')
 
     const { TabBar } = await import('./TabBar')
     const { useTabStore } = await import('../../stores/tabStore')
@@ -555,10 +557,6 @@ describe('TabBar', () => {
       render(<TabBar />)
     })
 
-    await waitFor(() => {
-      expect(getCurrentWindowMock).toHaveBeenCalled()
-    })
-
     const scrollRegion = screen.getByTestId('tab-bar').querySelector('.overflow-x-hidden')
     expect(scrollRegion).toBeInTheDocument()
 
@@ -587,10 +585,6 @@ describe('TabBar', () => {
 
     await act(async () => {
       render(<TabBar />)
-    })
-
-    await waitFor(() => {
-      expect(getCurrentWindowMock).toHaveBeenCalled()
     })
 
     fireEvent.mouseDown(screen.getByText('Untitled Session'))

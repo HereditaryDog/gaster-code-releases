@@ -1,19 +1,93 @@
 {
   "name": "gaster-code-desktop",
   "private": true,
-  "version": "1.0.9",
+  "version": "1.1.1",
+  "description": "Gaster Code desktop app",
+  "homepage": "https://github.com/HereditaryDog/gaster-code-releases",
+  "author": {
+    "name": "HereditaryDog"
+  },
   "type": "module",
+  "main": "electron-dist/main.cjs",
+  "build": {
+    "appId": "com.gastercode.desktop",
+    "productName": "Gaster Code",
+    "asar": true,
+    "asarUnpack": [
+      "dist/**",
+      "node_modules/node-pty/**",
+      "src-tauri/binaries/**"
+    ],
+    "artifactName": "Gaster-Code-${version}-${os}-${arch}.${ext}",
+    "npmRebuild": false,
+    "directories": {
+      "output": "build-artifacts/electron"
+    },
+    "files": [
+      "dist/**",
+      "electron-dist/**",
+      "node_modules/node-pty/**",
+      "src-tauri/binaries/**",
+      "src-tauri/icons/**",
+      "src-tauri/resources/preview-agent.js",
+      "package.json"
+    ],
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "icon": "src-tauri/icons/icon.icns",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.inherit.plist",
+      "notarize": true
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "src-tauri/icons/icon.ico"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "icon": "src-tauri/icons",
+      "category": "Development",
+      "maintainer": "HereditaryDog"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "HereditaryDog",
+        "repo": "gaster-code-releases"
+      }
+    ]
+  },
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "bun run build:preview-agent && tsc -b && vite build",
     "build:sidecars": "bun run ./scripts/build-sidecars.ts",
+    "prepare:node-pty": "bun run ./scripts/prepare-node-pty.ts",
+    "build:electron": "bun run prepare:node-pty && bun build ./electron/main.ts --outfile ./electron-dist/main.cjs --target node --format cjs --external electron --external node-pty && bun build ./electron/preload.ts --outfile ./electron-dist/preload.cjs --target node --format cjs --external electron && bun build ./electron/preview-preload.ts --outfile ./electron-dist/preview-preload.cjs --target node --format cjs --external electron",
+    "build:preview-agent": "bun run ./scripts/build-preview-agent.ts",
+    "clean:electron-output": "bun run ./scripts/clean-electron-output.ts",
+    "electron:dev": "bun run build:electron && bun run ./scripts/electron-dev.ts",
+    "electron:build": "bun run build:sidecars && bun run build && bun run build:electron",
+    "electron:package": "bun run clean:electron-output && bun run electron:build && bunx electron-builder --publish never",
+    "electron:package:dir": "bun run clean:electron-output && bun run electron:build && bunx electron-builder --dir --publish never",
     "build:macos-arm64": "bash ./scripts/build-macos-arm64.sh",
     "build:windows-x64": "powershell -ExecutionPolicy Bypass -File ./scripts/build-windows-x64.ps1",
+    "build:linux-x64": "bash ./scripts/build-linux.sh",
+    "build:linux-arm64": "LINUX_ARCH=arm64 bash ./scripts/build-linux.sh",
     "preview": "vite preview",
     "tauri": "tauri",
     "test": "vitest",
     "test:ui": "vitest --ui",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "check:electron": "node ./node_modules/typescript/bin/tsc -p electron/tsconfig.json && bun test electron && bun run build:electron"
   },
   "dependencies": {
     "@tailwindcss/typography": "^0.5.19",
@@ -21,10 +95,13 @@
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/xterm": "^6.0.0",
     "dompurify": "^3.4.7",
+    "electron-updater": "^6.8.3",
+    "html2canvas": "^1.4.1",
     "katex": "^0.16.45",
     "lucide-react": "^0.469.0",
     "marked": "^15.0.7",
     "mermaid": "^11.15.0",
+    "node-pty": "^1.1.0",
     "prism-react-renderer": "^2.4.1",
     "qrcode": "^1.5.4",
     "react": "^18.3.1",
@@ -39,9 +116,12 @@
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.1.0",
+    "@types/node": "^25.9.1",
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",
     "@vitejs/plugin-react": "^6.0.1",
+    "electron": "^42.3.0",
+    "electron-builder": "^26.8.1",
     "jsdom": "^29.1.1",
     "tailwindcss": "^4.0.0",
     "typescript": "^5.9.3",

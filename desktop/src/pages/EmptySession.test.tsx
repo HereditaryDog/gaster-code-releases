@@ -162,6 +162,9 @@ describe('EmptySession', () => {
     await waitFor(() => {
       expect(screen.getByText('main')).toBeInTheDocument()
     })
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Run/i })).not.toBeDisabled()
+    })
 
     fireEvent.click(screen.getByRole('button', { name: /Run/i }))
 
@@ -285,6 +288,16 @@ describe('EmptySession', () => {
     })
   })
 
+  it('uses the same compact bottom composer treatment as active sessions on desktop', () => {
+    render(<EmptySession />)
+
+    expect(screen.getByTestId('empty-session-composer-shell')).toHaveClass('chat-input-shell--compact')
+    expect(screen.getByTestId('empty-session-composer-panel')).toHaveClass('chat-composer-shell--compact')
+    expect(screen.getByRole('textbox')).toHaveClass('chat-composer-textarea--compact')
+    expect(document.querySelector('.chat-composer-toolbar')).toHaveClass('chat-composer-toolbar--compact')
+    expect(screen.getByTestId('repository-launch-controls-row')).toHaveClass('repository-launch-controls__row--floating')
+  })
+
   it('falls back to a visible branch when the current branch is an internal desktop worktree branch', async () => {
     mocks.getRepositoryContext.mockResolvedValueOnce(okRepositoryContext({
       currentBranch: 'worktree-desktop-feature-a-12345678',
@@ -366,7 +379,7 @@ describe('EmptySession', () => {
     const branchClasses = branchButton.className.split(/\s+/)
     expect(branchButton.parentElement?.className).toContain('flex-nowrap')
     expect(branchButton.parentElement?.className).not.toContain('flex-wrap')
-    expect(branchClasses).toContain('max-w-[260px]')
+    expect(branchClasses).toContain('max-w-[220px]')
     expect(branchClasses).not.toContain('max-w-full')
     expect(branchButton.querySelector('span')?.className).toContain('truncate')
   })

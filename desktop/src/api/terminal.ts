@@ -1,4 +1,4 @@
-import { isTauriRuntime } from '../lib/desktopRuntime'
+import { getDesktopHost } from '../lib/desktopHost'
 
 export type TerminalSpawnResult = {
   session_id: number
@@ -19,40 +19,46 @@ export type TerminalExitPayload = {
 
 type Unlisten = () => void
 
-async function invoke<T>(command: string, args?: Record<string, unknown>): Promise<T> {
-  if (!isTauriRuntime()) {
+function getTerminalHost() {
+  const host = getDesktopHost()
+  if (!host.capabilities.terminal) {
     throw new Error('Terminal is available in the desktop app runtime.')
   }
-  const api = await import('@tauri-apps/api/core')
-  return api.invoke<T>(command, args)
+  return host.terminal
 }
 
 export const terminalApi = {
-  isAvailable: isTauriRuntime,
+  isAvailable: () => getDesktopHost().capabilities.terminal,
 
   spawn(input: { cols: number; rows: number; cwd?: string }) {
-    return invoke<TerminalSpawnResult>('terminal_spawn', input)
+    return getTerminalHost().spawn(input)
   },
 
   write(sessionId: number, data: string) {
-    return invoke<void>('terminal_write', { sessionId, data })
+    return getTerminalHost().write(sessionId, data)
   },
 
   resize(sessionId: number, cols: number, rows: number) {
-    return invoke<void>('terminal_resize', { sessionId, cols, rows })
+    return getTerminalHost().resize(sessionId, cols, rows)
   },
 
   kill(sessionId: number) {
-    return invoke<void>('terminal_kill', { sessionId })
+    return getTerminalHost().kill(sessionId)
   },
 
   async onOutput(handler: (payload: TerminalOutputPayload) => void): Promise<Unlisten> {
-    const events = await import('@tauri-apps/api/event')
-    return events.listen<TerminalOutputPayload>('terminal-output', (event) => handler(event.payload))
+    return getTerminalHost().onOutput(handler)
   },
 
   async onExit(handler: (payload: TerminalExitPayload) => void): Promise<Unlisten> {
-    const events = await import('@tauri-apps/api/event')
-    return events.listen<TerminalExitPayload>('terminal-exit', (event) => handler(event.payload))
+    return getTerminalHost().onExit(handler)
+  },
+
+  getBashPath() {
+    return getTerminalHost().getBashPath()
+  },
+
+  setBashPath(path: string | null) {
+    return getTerminalHost().setBashPath(path)
   },
 }

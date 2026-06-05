@@ -16,24 +16,15 @@ import { SubscriptionPanel } from '../components/account/SubscriptionPanel'
 import { WalletPanel } from '../components/account/WalletPanel'
 import { Button } from '../components/shared/Button'
 import { useTranslation } from '../i18n'
+import { getDesktopHost } from '../lib/desktopHost'
 import { useGMasterAuthStore } from '../stores/gmasterAuthStore'
 
 type AccountLoadState = 'loading' | 'ready' | 'signedOut' | 'error'
 type AuthAction = 'login' | 'register' | 'logout' | null
 type SubscriptionAction = 'cancel' | 'resume' | null
 
-type TauriWindow = Window & {
-  __TAURI__?: unknown
-  __TAURI_INTERNALS__?: unknown
-}
-
-function isTauriRuntime() {
-  const currentWindow = window as TauriWindow
-  return Boolean(currentWindow.__TAURI__ || currentWindow.__TAURI_INTERNALS__)
-}
-
 function reserveBrowserWindow(): Window | null {
-  if (typeof window === 'undefined' || isTauriRuntime()) return null
+  if (typeof window === 'undefined' || getDesktopHost().isDesktop) return null
   const popup = window.open('about:blank', '_blank')
   if (popup) popup.opener = null
   return popup
@@ -59,20 +50,24 @@ function navigateReservedWindow(popup: Window | null, url: string) {
 }
 
 async function openExternalUrl(url: string, reservedWindow: Window | null = null) {
-  try {
-    const { open } = await import('@tauri-apps/plugin-shell')
-    await open(url)
-    closeReservedWindow(reservedWindow)
-    return
-  } catch {
-    if (navigateReservedWindow(reservedWindow, url)) return
-    const popup = window.open(url, '_blank')
-    if (popup) {
-      popup.opener = null
+  const host = getDesktopHost()
+  if (host.isDesktop) {
+    try {
+      await host.shell.open(url)
+      closeReservedWindow(reservedWindow)
       return
+    } catch {
+      // Fall through to browser-style fallbacks if the desktop shell bridge fails.
     }
-    window.location.assign(url)
   }
+
+  if (navigateReservedWindow(reservedWindow, url)) return
+  const popup = window.open(url, '_blank')
+  if (popup) {
+    popup.opener = null
+    return
+  }
+  window.location.assign(url)
 }
 
 function isTerminalCheckoutStatus(status: GMasterCheckoutSession['status']) {

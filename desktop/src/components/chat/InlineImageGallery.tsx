@@ -70,7 +70,7 @@ export function InlineImageGallery({ text }: Props) {
                 src={img.src}
                 alt={img.name}
                 loading="lazy"
-                className="w-full object-cover"
+                className="max-h-[520px] w-full object-contain"
                 style={{ maxHeight: images.length === 1 ? 400 : 240 }}
                 onError={(e) => {
                   // Hide broken images

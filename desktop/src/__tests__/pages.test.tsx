@@ -66,6 +66,20 @@ vi.mock('../api/sessions', async (importOriginal) => {
   }
 })
 
+vi.mock('../api/websocket', () => ({
+  wsManager: {
+    connect: vi.fn(),
+    disconnect: vi.fn(),
+    disconnectAll: vi.fn(),
+    send: vi.fn(),
+    onMessage: vi.fn(() => () => {}),
+    clearHandlers: vi.fn(),
+    isConnected: vi.fn(() => false),
+    getConnectedSessionIds: vi.fn(() => []),
+  },
+  buildSessionWebSocketUrl: vi.fn((sessionId: string) => `ws://127.0.0.1:3456/ws/${encodeURIComponent(sessionId)}`),
+}))
+
 // Import all pages
 import { EmptySession } from '../pages/EmptySession'
 import { ActiveSession } from '../pages/ActiveSession'
@@ -133,6 +147,7 @@ describe('Content-only pages render without errors', () => {
 
   it('EmptySession renders mascot and composer', () => {
     const { container } = render(<EmptySession />)
+    expect(screen.getByRole('img', { name: 'Gaster Code' })).toHaveAttribute('src', './app-icon.svg')
     expect(container.querySelector('textarea')).toBeInTheDocument()
     expect(container.innerHTML).toContain('New session')
     expect(container.innerHTML).toContain('Ask anything')
@@ -200,7 +215,10 @@ describe('Content-only pages render without errors', () => {
     const textarea = container.querySelector('textarea')
     expect(textarea).toBeInTheDocument()
     expect(textarea).toHaveAttribute('placeholder', 'Ask anything...')
-    expect(textarea).toHaveAttribute('rows', '2')
+    expect(textarea).toHaveAttribute('rows', '1')
+    expect(textarea).toHaveClass('chat-composer-textarea--compact')
+    expect(screen.getByTestId('chat-input-shell')).toHaveClass('chat-input-shell--compact')
+    expect(screen.getByTestId('chat-input-panel')).toHaveClass('chat-composer-shell--compact')
     expect(container.innerHTML).not.toContain('Preview')
     // Cleanup
     useTabStore.setState({ tabs: [], activeTabId: null })

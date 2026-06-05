@@ -170,6 +170,10 @@ const settingsSurfaceEndpoints = [
   { path: '/api/plugins', expectedKey: 'plugins' },
   { path: '/api/agents', expectedKey: 'activeAgents' },
 ] as const
+const standaloneCapabilityPaths = [
+  '/local-file/session-1/image.png',
+  '/preview-fs/session-1/index.html',
+] as const
 
 beforeEach(async () => {
   tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'h5-access-auth-test-'))
@@ -303,6 +307,18 @@ describe('remote H5 auth and CORS integration', () => {
       headers: makeUpgradeHeaders(PHONE_ORIGIN),
     })
     expect(wsResponse.status).toBe(403)
+
+    for (const path of standaloneCapabilityPaths) {
+      const response = await fetch(`${baseUrl}${path}`, {
+        headers: {
+          Origin: PHONE_ORIGIN,
+        },
+      })
+      expect(response.status).toBe(403)
+      await expect(response.json()).resolves.toMatchObject({
+        error: 'Forbidden',
+      })
+    }
   })
 
   test('blocks remote browser SDK requests while H5 access is disabled', async () => {
@@ -708,6 +724,68 @@ describe('remote H5 auth and CORS integration', () => {
         type: 'invalid_request_error',
       },
     })
+  })
+
+  test('requires H5 token before standalone file capability routes fall through', async () => {
+    const token = await enableH5Access({
+      allowedOrigins: [PHONE_ORIGIN],
+    })
+
+    for (const path of standaloneCapabilityPaths) {
+      const missingTokenResponse = await fetch(`${baseUrl}${path}`, {
+        headers: {
+          Origin: PHONE_ORIGIN,
+        },
+      })
+      expect(missingTokenResponse.status).toBe(401)
+      expect(missingTokenResponse.headers.get('Access-Control-Allow-Origin')).toBe(PHONE_ORIGIN)
+      await expect(missingTokenResponse.json()).resolves.toMatchObject({
+        message: 'Missing H5 access token',
+      })
+
+      const wrongTokenResponse = await fetch(`${baseUrl}${path}`, {
+        headers: {
+          Origin: PHONE_ORIGIN,
+          Authorization: 'Bearer wrong-token',
+        },
+      })
+      expect(wrongTokenResponse.status).toBe(401)
+      await expect(wrongTokenResponse.json()).resolves.toMatchObject({
+        message: 'Invalid H5 access token',
+      })
+
+      const validTokenResponse = await fetch(`${baseUrl}${path}?token=${token}`, {
+        headers: {
+          Origin: PHONE_ORIGIN,
+        },
+      })
+      expect(validTokenResponse.status).toBe(404)
+      expect(validTokenResponse.headers.get('Access-Control-Allow-Origin')).toBe(PHONE_ORIGIN)
+      await expect(validTokenResponse.text()).resolves.toBe('Not Found')
+    }
+  })
+
+  test('keeps local standalone file capability routes tokenless when H5 access is enabled', async () => {
+    await enableH5Access()
+
+    for (const path of standaloneCapabilityPaths) {
+      const response = await fetch(`${baseUrl}${path}`)
+
+      expect(response.status).toBe(404)
+      await expect(response.text()).resolves.toBe('Not Found')
+    }
+  })
+
+  test('keeps static H5 bootstrap routes tokenless when H5 access is enabled', async () => {
+    await enableH5Access()
+
+    const shellResponse = await fetch(`${baseUrl}/`)
+    expect(shellResponse.status).toBe(200)
+    await expect(shellResponse.text()).resolves.toContain('H5 Shell')
+
+    const assetResponse = await fetch(`${baseUrl}/assets/app.js`)
+    expect(assetResponse.status).toBe(200)
+    await expect(assetResponse.text()).resolves.toContain('window.__h5')
   })
 
   test('keeps Tauri loopback REST requests tokenless when H5 access is enabled', async () => {

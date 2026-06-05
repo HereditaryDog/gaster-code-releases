@@ -44,6 +44,7 @@ import {
   compressImageBufferWithTokenLimit,
   createImageMetadataText,
   detectImageFormatFromBuffer,
+  downsampleImageBufferToVisionTokenBudget,
   type ImageDimensions,
   ImageResizeError,
   maybeResizeAndDownsampleImageBuffer,
@@ -798,6 +799,15 @@ function createImageResponse(
   }
 }
 
+function estimateVisionImageTokens(dimensions?: ImageDimensions): number | null {
+  const width = dimensions?.displayWidth
+  const height = dimensions?.displayHeight
+  if (!width || !height || width <= 0 || height <= 0) {
+    return null
+  }
+  return Math.ceil((width * height) / 750)
+}
+
 /**
  * Inner implementation of call, separated to allow ENOENT handling in the outer call.
  */
@@ -1133,10 +1143,25 @@ export async function readImageWithTokenBudget(
     result = createImageResponse(imageBuffer, detectedFormat, originalSize)
   }
 
-  // Check if it fits in token budget
-  const estimatedTokens = Math.ceil(result.file.base64.length * 0.125)
-  if (estimatedTokens > maxTokens) {
-    // Aggressive compression from the SAME buffer (no re-read)
+  const estimatedTokens = estimateVisionImageTokens(result.file.dimensions)
+  if (estimatedTokens !== null && estimatedTokens > maxTokens) {
+    try {
+      const downsampled = await downsampleImageBufferToVisionTokenBudget(
+        imageBuffer,
+        originalSize,
+        detectedFormat,
+        maxTokens,
+      )
+      return createImageResponse(
+        downsampled.buffer,
+        downsampled.mediaType,
+        originalSize,
+        downsampled.dimensions,
+      )
+    } catch (e) {
+      logError(e)
+    }
+
     try {
       const compressed = await compressImageBufferWithTokenLimit(
         imageBuffer,

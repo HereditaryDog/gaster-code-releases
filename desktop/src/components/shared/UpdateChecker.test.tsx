@@ -3,16 +3,22 @@ import { render, screen } from '@testing-library/react'
 import '@testing-library/jest-dom'
 
 import { UpdateChecker } from './UpdateChecker'
+import { browserHost } from '../../lib/desktopHost/browserHost'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { useUpdateStore } from '../../stores/updateStore'
 
 describe('UpdateChecker', () => {
   beforeEach(() => {
     useSettingsStore.setState({ locale: 'en' })
-    Object.defineProperty(window, '__TAURI__', {
-      value: {},
-      configurable: true,
-    })
+    window.desktopHost = {
+      ...browserHost,
+      kind: 'electron',
+      isDesktop: true,
+      capabilities: {
+        ...browserHost.capabilities,
+        updates: true,
+      },
+    }
 
     useUpdateStore.setState({
       status: 'available',

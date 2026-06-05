@@ -1,8 +1,13 @@
 [CmdletBinding()]
 param(
   [Parameter(ValueFromRemainingArguments = $true)]
-  [string[]]$TauriArgs
+  [string[]]$BuilderArgs
 )
+
+# Environment:
+#   SKIP_INSTALL=1        Skip root/desktop dependency installation.
+#   REBUILD_NATIVE=1      Rebuild Electron native dependencies before packaging.
+#   SKIP_PACKAGE_SMOKE=1  Skip static package-smoke verification after copying artifacts.
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
@@ -12,10 +17,8 @@ $desktopDir = (Resolve-Path (Join-Path $scriptDir '..')).Path
 $repoRoot = (Resolve-Path (Join-Path $desktopDir '..')).Path
 
 $targetTriple = 'x86_64-pc-windows-msvc'
-$tauriTargetDir = Join-Path $desktopDir 'src-tauri\target'
 $canonicalOutputDir = Join-Path $desktopDir 'build-artifacts\windows-x64'
-$activeOutputDir = $canonicalOutputDir
-$appVersion = (Get-Content -Path (Join-Path $desktopDir 'src-tauri\tauri.conf.json') -Raw | ConvertFrom-Json).version
+$electronOutputDir = Join-Path $desktopDir 'build-artifacts\electron'
 
 function Write-Step {
   param([string]$Message)
@@ -30,7 +33,6 @@ function Assert-WindowsHost {
 
 function Assert-Command {
   param([string]$Name)
-
   if (-not (Get-Command $Name -ErrorAction SilentlyContinue)) {
     throw "[build-windows-x64] Missing required command: $Name"
   }
@@ -49,7 +51,7 @@ function Import-VsDevEnvironment {
     Select-Object -First 1
 
   if (-not $installationPath) {
-    throw '[build-windows-x64] Missing Visual C++ build tools. Install the "Desktop development with C++" / VC.Tools.x86.x64 workload first.'
+    throw '[build-windows-x64] Missing Visual C++ build tools. Install the Desktop development with C++ workload first.'
   }
 
   $vsDevCmd = Join-Path $installationPath 'Common7\Tools\VsDevCmd.bat'
@@ -58,7 +60,6 @@ function Import-VsDevEnvironment {
   }
 
   Write-Step "Importing MSVC environment from $vsDevCmd"
-
   $env:VSCMD_SKIP_SENDTELEMETRY = '1'
   $envDump = & cmd.exe /d /s /c "`"$vsDevCmd`" -arch=x64 -host_arch=x64 >nul && set"
   if ($LASTEXITCODE -ne 0) {
@@ -72,84 +73,18 @@ function Import-VsDevEnvironment {
   }
 }
 
-function Get-RustCargoBinDir {
-  return Join-Path $env:USERPROFILE '.cargo\bin'
-}
-
-function Ensure-RustInPath {
-  $cargoBinDir = Get-RustCargoBinDir
-  if ((Test-Path $cargoBinDir) -and -not (($env:Path -split ';') -contains $cargoBinDir)) {
-    $env:Path = "$cargoBinDir;$env:Path"
+function Clear-Directory {
+  param([string]$Path)
+  if (Test-Path $Path) {
+    Remove-Item -LiteralPath $Path -Recurse -Force
   }
-}
-
-function Get-LatestArtifact {
-  param(
-    [string[]]$SearchRoots,
-    [string[]]$Patterns
-  )
-
-  foreach ($root in $SearchRoots) {
-    if (-not (Test-Path $root)) {
-      continue
-    }
-
-    foreach ($pattern in $Patterns) {
-      $match = Get-ChildItem -Path $root -File -Filter $pattern -ErrorAction SilentlyContinue |
-        Sort-Object Name |
-        Select-Object -Last 1
-
-      if ($match) {
-        return $match
-      }
-    }
-  }
-
-  return $null
-}
-
-function Get-StagedArtifactName {
-  param([string]$ArtifactName)
-
-  switch -Regex ($ArtifactName) {
-    '^latest\.json$' { return 'latest.json' }
-    '\.msi\.zip\.sig$' { return "Gaster-Code_${appVersion}_windows_x64_msi.msi.zip.sig" }
-    '\.msi\.zip$' { return "Gaster-Code_${appVersion}_windows_x64_msi.msi.zip" }
-    '\.msi\.sig$' { return "Gaster-Code_${appVersion}_windows_x64_msi.msi.sig" }
-    '\.msi$' { return "Gaster-Code_${appVersion}_windows_x64_msi.msi" }
-    default { return $ArtifactName }
-  }
-}
-
-function Resolve-OutputDirectory {
-  param([string]$PreferredPath)
-
-  New-Item -ItemType Directory -Force -Path $PreferredPath | Out-Null
-
-  $existingArtifacts = Get-ChildItem -Path $PreferredPath -Force -ErrorAction SilentlyContinue
-  foreach ($artifact in $existingArtifacts) {
-    try {
-      Remove-Item -LiteralPath $artifact.FullName -Force -Recurse
-    } catch {
-      $fallbackPath = "$PreferredPath-$(Get-Date -Format 'yyyyMMdd-HHmmss')"
-      Write-Step "Could not clear locked artifact '$($artifact.FullName)'. Using fallback output directory: $fallbackPath"
-      New-Item -ItemType Directory -Force -Path $fallbackPath | Out-Null
-      return $fallbackPath
-    }
-  }
-
-  return $PreferredPath
+  New-Item -ItemType Directory -Force -Path $Path | Out-Null
 }
 
 Assert-WindowsHost
 Assert-Command bun
-
-Ensure-RustInPath
-Import-VsDevEnvironment
-
-Assert-Command cargo
-Assert-Command rustc
 Assert-Command bunx
+Import-VsDevEnvironment
 
 if ($env:SKIP_INSTALL -ne '1') {
   Write-Step 'Installing root dependencies...'
@@ -173,126 +108,95 @@ if ($env:SKIP_INSTALL -ne '1') {
   } finally {
     Pop-Location
   }
-
-  $adaptersDir = Join-Path $repoRoot 'adapters'
-  if (Test-Path (Join-Path $adaptersDir 'package.json')) {
-    Write-Step 'Installing adapter dependencies...'
-    Push-Location $adaptersDir
-    try {
-      & bun install
-      if ($LASTEXITCODE -ne 0) {
-        throw "[build-windows-x64] bun install failed in adapters (exit $LASTEXITCODE)"
-      }
-    } finally {
-      Pop-Location
-    }
-  }
 }
 
-$tauriBuildArgs = @(
-  'tauri',
-  'build',
-  '--target',
-  $targetTriple,
-  '--bundles',
-  'msi',
-  '--ci'
-)
+Write-Step 'Cleaning stale Electron outputs...'
+Remove-Item -LiteralPath (Join-Path $desktopDir 'dist') -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item -LiteralPath (Join-Path $desktopDir 'electron-dist') -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item -LiteralPath $electronOutputDir -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item -Path (Join-Path $desktopDir 'src-tauri\binaries\*-sidecar-*') -Force -ErrorAction SilentlyContinue
+Remove-Item -LiteralPath (Join-Path $desktopDir 'tsconfig.tsbuildinfo') -Force -ErrorAction SilentlyContinue
 
-$tempConfigPath = $null
-if (-not $env:TAURI_SIGNING_PRIVATE_KEY) {
-  $tempConfigPath = Join-Path ([System.IO.Path]::GetTempPath()) 'gaster-code.tauri.local.windows.json'
-  $tempConfig = @{
-    bundle = @{
-      createUpdaterArtifacts = $false
-    }
-  } | ConvertTo-Json -Depth 10
-  Set-Content -Path $tempConfigPath -Value $tempConfig -Encoding UTF8
-  Write-Step 'TAURI_SIGNING_PRIVATE_KEY not set, disabling updater artifacts for local build'
-  $tauriBuildArgs += @('--config', $tempConfigPath)
-}
-
-if ($null -ne $TauriArgs) {
-  $remainingArgs = @($TauriArgs)
-  if ($remainingArgs.Count -gt 0) {
-    $tauriBuildArgs += $remainingArgs
-  }
-}
-
-Write-Step "Building Windows desktop app for $targetTriple"
-
+Write-Step "Building sidecars for $targetTriple..."
 Push-Location $desktopDir
 try {
-  $env:TAURI_ENV_TARGET_TRIPLE = $targetTriple
-  & bunx @tauriBuildArgs
+  $env:SIDECAR_TARGET_TRIPLE = $targetTriple
+  & bun run build:sidecars
   if ($LASTEXITCODE -ne 0) {
-    throw "[build-windows-x64] tauri build failed (exit $LASTEXITCODE)"
+    throw "[build-windows-x64] build:sidecars failed (exit $LASTEXITCODE)"
+  }
+
+  Write-Step 'Building renderer and Electron main/preload bundles...'
+  & bun run build
+  if ($LASTEXITCODE -ne 0) {
+    throw "[build-windows-x64] renderer build failed (exit $LASTEXITCODE)"
+  }
+  & bun run build:electron
+  if ($LASTEXITCODE -ne 0) {
+    throw "[build-windows-x64] Electron build failed (exit $LASTEXITCODE)"
+  }
+
+  if ($env:REBUILD_NATIVE -eq '1') {
+    Write-Step 'Rebuilding native dependencies for Electron ABI...'
+    & bunx electron-builder install-app-deps
+    if ($LASTEXITCODE -ne 0) {
+      throw "[build-windows-x64] electron-builder install-app-deps failed (exit $LASTEXITCODE)"
+    }
+    & bun run prepare:node-pty
+    if ($LASTEXITCODE -ne 0) {
+      throw "[build-windows-x64] prepare:node-pty failed (exit $LASTEXITCODE)"
+    }
+  }
+
+  $args = @('electron-builder', '--win', 'nsis', '--x64', '--publish', 'never')
+  $remainingArgs = @($BuilderArgs)
+  if ($remainingArgs.Count -gt 0) {
+    $args += $remainingArgs
+  }
+
+  Write-Step 'Packaging Electron app...'
+  & bunx @args
+  if ($LASTEXITCODE -ne 0) {
+    throw "[build-windows-x64] electron-builder failed (exit $LASTEXITCODE)"
   }
 } finally {
   Pop-Location
-  if ($tempConfigPath -and (Test-Path $tempConfigPath)) {
-    Remove-Item -LiteralPath $tempConfigPath -Force
-  }
 }
 
-$activeOutputDir = Resolve-OutputDirectory -PreferredPath $canonicalOutputDir
+Clear-Directory -Path $canonicalOutputDir
 
-$bundleRoots = @(
-  (Join-Path $tauriTargetDir "$targetTriple\release\bundle"),
-  (Join-Path $tauriTargetDir 'release\bundle')
-)
+Get-ChildItem -Path $electronOutputDir -File -ErrorAction SilentlyContinue |
+  Where-Object { $_.Name -match '\.(exe|blockmap|yml)$' } |
+  ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $canonicalOutputDir $_.Name) -Force }
 
-$artifactPatterns = @('*.msi', '*.msi.sig', '*.msi.zip', '*.msi.zip.sig', 'latest.json')
-$copiedArtifacts = New-Object System.Collections.Generic.List[string]
-
-foreach ($root in $bundleRoots) {
-  if (-not (Test-Path $root)) {
-    continue
-  }
-
-  foreach ($pattern in $artifactPatterns) {
-    $artifacts = Get-ChildItem -Path $root -Recurse -File -Filter $pattern -ErrorAction SilentlyContinue
-    foreach ($artifact in $artifacts) {
-      $destinationName = Get-StagedArtifactName -ArtifactName $artifact.Name
-      $destination = Join-Path $activeOutputDir $destinationName
-      Copy-Item -LiteralPath $artifact.FullName -Destination $destination -Force
-      if (-not $copiedArtifacts.Contains($destination)) {
-        $copiedArtifacts.Add($destination) | Out-Null
-      }
-    }
-  }
-}
-
-$msiInstaller = Get-LatestArtifact -SearchRoots @(
-  (Join-Path $tauriTargetDir "$targetTriple\release\bundle\msi"),
-  (Join-Path $tauriTargetDir 'release\bundle\msi')
-) -Patterns @('*.msi')
-
-$msiInstallerPath = if ($msiInstaller) { $msiInstaller.FullName } else { 'not found' }
-
-$buildInfo = @(
-  "App version: $appVersion"
-  "Target triple: $targetTriple"
-  "Canonical output: $canonicalOutputDir"
-  "Actual output: $activeOutputDir"
-  "Windows installer (MSI): $msiInstallerPath"
-  "Artifacts copied: $($copiedArtifacts.Count)"
-  "Built at: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss zzz')"
-)
-
-Set-Content -Path (Join-Path $activeOutputDir 'BUILD_INFO.txt') -Value $buildInfo -Encoding UTF8
-
-Write-Host ''
-Write-Step 'Build finished.'
-Write-Step "Artifacts output: $activeOutputDir"
-if ($msiInstaller) {
-  Write-Step "MSI installer source: $($msiInstaller.FullName)"
+$winUnpackedDir = Join-Path $electronOutputDir 'win-unpacked'
+if (Test-Path $winUnpackedDir) {
+  Copy-Item -LiteralPath $winUnpackedDir -Destination (Join-Path $canonicalOutputDir 'win-unpacked') -Recurse -Force
 } else {
-  Write-Step 'No MSI installer found under bundle directories.'
+  Write-Step "Warning: win-unpacked was not found under $electronOutputDir; package-smoke will fail if it is required."
 }
 
+Set-Content -Path (Join-Path $canonicalOutputDir 'BUILD_INFO.txt') -Value @"
+Target triple: $targetTriple
+Builder output: $electronOutputDir
+Canonical output: $canonicalOutputDir
+Built at: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss zzz')
+"@ -Encoding UTF8
+
+if ($env:SKIP_PACKAGE_SMOKE -eq '1') {
+  Write-Step 'Skipping package-smoke because SKIP_PACKAGE_SMOKE=1.'
+} else {
+  Write-Step 'Running package-smoke against canonical Windows artifacts...'
+  Push-Location $repoRoot
+  try {
+    & bun run test:package-smoke --platform windows --package-kind release --artifacts-dir desktop/build-artifacts/windows-x64
+    if ($LASTEXITCODE -ne 0) {
+      throw "[build-windows-x64] package-smoke failed (exit $LASTEXITCODE)"
+    }
+  } finally {
+    Pop-Location
+  }
+}
+
+Write-Step 'Build finished.'
 Write-Step "Canonical output: $canonicalOutputDir"
-
-if ($env:OPEN_OUTPUT -eq '1') {
-  Invoke-Item $canonicalOutputDir
-}

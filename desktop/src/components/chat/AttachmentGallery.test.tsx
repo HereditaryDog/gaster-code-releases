@@ -64,4 +64,22 @@ describe('AttachmentGallery', () => {
 
     expect(onRemove).toHaveBeenCalledWith('selection-1')
   })
+
+  it('shows message images with full-content object fitting for tall screenshots', () => {
+    const view = render(
+      <AttachmentGallery
+        variant="message"
+        attachments={[{
+          id: 'screenshot-1',
+          type: 'image',
+          name: 'tall-screenshot.png',
+          data: 'data:image/png;base64,AAAA',
+        }]}
+      />,
+    )
+
+    const image = view.getByAltText('tall-screenshot.png')
+    expect(image.className).toContain('object-contain')
+    expect(image.className).not.toContain('object-cover')
+  })
 })

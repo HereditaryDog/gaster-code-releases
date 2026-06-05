@@ -1,6 +1,5 @@
 import { create } from 'zustand'
-import type { Update } from '@tauri-apps/plugin-updater'
-import { isTauriRuntime } from '../lib/desktopRuntime'
+import { getDesktopHost, type DesktopUpdate } from '../lib/desktopHost'
 import {
   readMigratedStorage,
   removeMigratedStorage,
@@ -36,12 +35,12 @@ type UpdateStore = {
   checkedAt: number | null
   shouldPrompt: boolean
   initialize: () => Promise<void>
-  checkForUpdates: (options?: CheckOptions) => Promise<Update | null>
+  checkForUpdates: (options?: CheckOptions) => Promise<DesktopUpdate | null>
   installUpdate: () => Promise<void>
   dismissPrompt: () => void
 }
 
-let pendingUpdate: Update | null = null
+let pendingUpdate: DesktopUpdate | null = null
 let pendingUpdateProxyKey: string | null = null
 let startupCheckPromise: Promise<void> | null = null
 
@@ -95,12 +94,12 @@ function getUpdateCheckOptions() {
   return proxy ? { proxy } : undefined
 }
 
-async function setPendingUpdate(next: Update | null, proxyKey: string | null) {
+async function setPendingUpdate(next: DesktopUpdate | null, proxyKey: string | null) {
   const previous = pendingUpdate
   pendingUpdate = next
   pendingUpdateProxyKey = next ? proxyKey : null
 
-  if (previous && previous !== next) {
+  if (previous && previous !== next && next === null) {
     try {
       await previous.close()
     } catch {
@@ -125,7 +124,8 @@ export const useUpdateStore = create<UpdateStore>((set, get) => ({
   shouldPrompt: false,
 
   initialize: async () => {
-    if (!isTauriRuntime()) return
+    const host = getDesktopHost()
+    if (!host.capabilities.updates) return
     if (!startupCheckPromise) {
       startupCheckPromise = (async () => {
         await new Promise((resolve) => setTimeout(resolve, 5000))
@@ -139,7 +139,8 @@ export const useUpdateStore = create<UpdateStore>((set, get) => ({
   },
 
   checkForUpdates: async ({ silent = false } = {}) => {
-    if (!isTauriRuntime()) return null
+    const host = getDesktopHost()
+    if (!host.capabilities.updates) return null
 
     set((state) => ({
       ...state,
@@ -148,9 +149,8 @@ export const useUpdateStore = create<UpdateStore>((set, get) => ({
     }))
 
     try {
-      const { check } = await import('@tauri-apps/plugin-updater')
       const updateProxyKey = getUpdateProxyKey()
-      const update = await check(getUpdateCheckOptions())
+      const update = await host.updates.check(getUpdateCheckOptions())
       await setPendingUpdate(update, updateProxyKey)
 
       const checkedAt = Date.now()
@@ -208,7 +208,8 @@ export const useUpdateStore = create<UpdateStore>((set, get) => ({
   },
 
   installUpdate: async () => {
-    if (!isTauriRuntime()) return
+    const host = getDesktopHost()
+    if (!host.capabilities.updates) return
 
     let update = pendingUpdate
     if (update && pendingUpdateProxyKey !== getUpdateProxyKey()) {
@@ -233,8 +234,6 @@ export const useUpdateStore = create<UpdateStore>((set, get) => ({
     let prepareInstallAttempted = false
     try {
       writeDismissedUpdateVersion(null)
-      const { invoke } = await import('@tauri-apps/api/core')
-      const { relaunch } = await import('@tauri-apps/plugin-process')
       let totalBytes: number | null = null
       let downloadedBytes = 0
 
@@ -270,7 +269,7 @@ export const useUpdateStore = create<UpdateStore>((set, get) => ({
       })
 
       prepareInstallAttempted = true
-      await invoke('prepare_for_update_install')
+      await host.updates.prepareInstall()
       await update.install()
 
       set((state) => ({
@@ -279,12 +278,11 @@ export const useUpdateStore = create<UpdateStore>((set, get) => ({
         progressPercent: 100,
       }))
 
-      await relaunch()
+      await host.updates.relaunch()
     } catch (error) {
       if (prepareInstallAttempted) {
         try {
-          const { invoke } = await import('@tauri-apps/api/core')
-          await invoke('cancel_update_install')
+          await host.updates.cancelInstall()
         } catch {
           // Best effort: keep the update prompt recoverable even if native reset fails.
         }

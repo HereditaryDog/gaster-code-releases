@@ -216,6 +216,35 @@ describe('MessageList nested tool calls', () => {
     expect(window.getSelection()?.toString()).toBe('')
   })
 
+  it('dismisses the selected-message action when the transcript scrolls', async () => {
+    useChatStore.setState({
+      sessions: {
+        [ACTIVE_TAB]: makeSessionState({
+          messages: [{
+            id: 'assistant-scroll',
+            type: 'assistant_text',
+            content: 'Scrolling should clear the selected reply action.',
+            timestamp: 1,
+          }],
+        }),
+      },
+    })
+
+    render(<MessageList />)
+
+    const assistantText = screen.getByText(/Scrolling should clear/)
+    await selectMessageText(assistantText, 'selected reply')
+    expect(screen.getByRole('button', { name: 'Add to chat' })).toBeTruthy()
+
+    await act(async () => {
+      fireEvent.scroll(document)
+      await Promise.resolve()
+    })
+
+    expect(screen.queryByRole('button', { name: 'Add to chat' })).toBeNull()
+    expect(window.getSelection()?.toString()).toBe('')
+  })
+
   it('renders sub-agent tool calls inline beneath the parent agent tool call', () => {
     useChatStore.setState({
       sessions: {

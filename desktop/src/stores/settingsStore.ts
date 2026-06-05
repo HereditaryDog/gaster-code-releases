@@ -20,7 +20,7 @@ import {
 } from '../types/settings'
 import type { Locale } from '../i18n'
 import { readMigratedStorage, writeMigratedStorage } from '../lib/storageMigration'
-import { isTauriRuntime } from '../lib/desktopRuntime'
+import { getDesktopHost } from '../lib/desktopHost'
 import {
   APP_ZOOM_CONTROL_STEP,
   DEFAULT_APP_ZOOM,
@@ -196,10 +196,10 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
   },
 
   fetchAppMode: async () => {
-    if (!isTauriRuntime()) return
+    const host = getDesktopHost()
+    if (!host.capabilities.appMode) return
     try {
-      const { invoke } = await import('@tauri-apps/api/core')
-      const result = await invoke<AppModeConfig>('get_app_mode')
+      const result = await host.appMode.get()
       set({ appMode: result })
     } catch {
       // Non-Tauri runtimes and older native builds simply do not expose this.
@@ -326,7 +326,8 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
   },
 
   setAppMode: async (mode, portableDir) => {
-    if (!isTauriRuntime()) return
+    const host = getDesktopHost()
+    if (!host.capabilities.appMode) return
     const prev = get().appMode
     const next: AppModeConfig = {
       ...prev,
@@ -341,8 +342,7 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
     }
     set({ appMode: next, appModeRequiresRestart: true })
     try {
-      const { invoke } = await import('@tauri-apps/api/core')
-      await invoke('set_app_mode', {
+      await host.appMode.set({
         mode,
         portableDir: next.portableDir || null,
       })

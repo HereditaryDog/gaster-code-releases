@@ -15,11 +15,12 @@ import { useTranslation } from '../../i18n'
 import { WindowControls, showWindowControls } from './WindowControls'
 import { OpenProjectMenu } from './OpenProjectMenu'
 import { Folder, FolderOpen, SquareTerminal } from 'lucide-react'
+import { getDesktopHost } from '../../lib/desktopHost'
 
 const TAB_WIDTH = 180
 const DRAG_START_THRESHOLD = 4
 const DRAG_SLOT_SHIFT = TAB_WIDTH - 20
-const isTauri = typeof window !== 'undefined' && ('__TAURI_INTERNALS__' in window || '__TAURI__' in window)
+const isDesktop = getDesktopHost().isDesktop
 
 type PendingCloseRequest = {
   tabs: Tab[]
@@ -114,13 +115,9 @@ export function TabBar() {
   }, [activeChatSessionIds, tabs])
 
   useEffect(() => {
-    if (!isTauri) return
-    import('@tauri-apps/api/window')
-      .then(({ getCurrentWindow }) => {
-        const win = getCurrentWindow()
-        startDraggingRef.current = () => win.startDragging()
-      })
-      .catch(() => {})
+    const host = getDesktopHost()
+    if (!host.capabilities.windowControls) return
+    startDraggingRef.current = () => host.window.startDragging()
   }, [])
 
   const updateScrollState = useCallback(() => {
@@ -515,7 +512,7 @@ export function TabBar() {
       </div>
 
       <div className="flex shrink-0 items-center gap-1 border-l border-[var(--color-border)]/70 px-2">
-        {isTauri && isActiveSessionTab && (
+        {isDesktop && isActiveSessionTab && (
           <OpenProjectMenu path={openProjectPath} />
         )}
         <ToolbarIconButton
@@ -540,10 +537,10 @@ export function TabBar() {
         )}
       </div>
 
-      {isTauri && (
+      {isDesktop && (
         <div
           data-testid="tab-bar-drag-gutter"
-          data-tauri-drag-region
+          data-desktop-drag-region
           aria-hidden="true"
           className={`min-h-11 flex-shrink-0 ${showWindowControls ? 'w-3' : 'w-4'}`}
         />

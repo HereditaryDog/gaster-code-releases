@@ -14,5 +14,10 @@ export default defineConfig({
     globals: true,
     css: true,
     setupFiles: [],
+    exclude: [
+      '**/node_modules/**',
+      '**/.git/**',
+      'electron/**',
+    ],
   },
 })

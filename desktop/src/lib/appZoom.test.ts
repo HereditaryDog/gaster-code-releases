@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   APP_ZOOM_STORAGE_KEY,
   LEGACY_UI_ZOOM_STORAGE_KEY,
@@ -8,6 +8,7 @@ import {
   nextAppZoomLevel,
   normalizeAppZoomLevel,
 } from './appZoom'
+import { browserHost } from './desktopHost/browserHost'
 
 describe('appZoom', () => {
   beforeEach(() => {
@@ -16,6 +17,9 @@ describe('appZoom', () => {
     document.documentElement.removeAttribute('data-app-zoom-percent')
     document.documentElement.style.removeProperty('--app-zoom')
     document.body.style.removeProperty('zoom')
+    Reflect.deleteProperty(window, 'desktopHost')
+    Reflect.deleteProperty(window, '__TAURI_INTERNALS__')
+    Reflect.deleteProperty(window, '__TAURI__')
   })
 
   it('normalizes, clamps, and steps app zoom levels', () => {
@@ -40,22 +44,42 @@ describe('appZoom', () => {
     expect(window.localStorage.getItem(APP_ZOOM_STORAGE_KEY)).toBe('1.2')
   })
 
-  it('migrates the legacy UI zoom key when the app zoom key is absent', async () => {
+  it('reads the legacy UI zoom key when the app zoom key is absent', async () => {
     window.localStorage.setItem(LEGACY_UI_ZOOM_STORAGE_KEY, '1.25')
 
     await initializeAppZoom()
 
     expect(document.documentElement.getAttribute('data-app-zoom-percent')).toBe('125')
     expect(window.localStorage.getItem(APP_ZOOM_STORAGE_KEY)).toBe('1.25')
-    expect(window.localStorage.getItem(LEGACY_UI_ZOOM_STORAGE_KEY)).toBeNull()
   })
 
-  it('persists app zoom changes to the Gaster Code key', async () => {
+  it('persists app zoom changes', async () => {
     await applyAppZoomLevel(1.3)
 
     expect(window.localStorage.getItem(APP_ZOOM_STORAGE_KEY)).toBe('1.3')
-    expect(window.localStorage.getItem(LEGACY_UI_ZOOM_STORAGE_KEY)).toBeNull()
     expect(document.documentElement.style.getPropertyValue('--app-zoom')).toBe('1.3')
+  })
+
+  it('uses injected desktop host native zoom when available', async () => {
+    const setZoom = vi.fn().mockResolvedValue(undefined)
+    window.desktopHost = {
+      ...browserHost,
+      kind: 'electron',
+      isDesktop: true,
+      capabilities: {
+        ...browserHost.capabilities,
+        zoom: true,
+      },
+      zoom: {
+        set: setZoom,
+      },
+    }
+
+    await applyAppZoomLevel(1.4)
+
+    expect(setZoom).toHaveBeenCalledWith(1.4)
+    expect(document.documentElement.getAttribute('data-app-zoom-mode')).toBe('native')
+    expect(document.body.style.zoom).toBe('')
   })
 
   it('maps IDE-style zoom shortcuts by platform', () => {

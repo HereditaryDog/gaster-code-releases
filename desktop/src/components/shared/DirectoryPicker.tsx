@@ -4,12 +4,13 @@ import { sessionsApi, type RecentProject } from '../../api/sessions'
 import { filesystemApi } from '../../api/filesystem'
 import { useTranslation } from '../../i18n'
 import { useMobileViewport } from '../../hooks/useMobileViewport'
+import { getDesktopHost } from '../../lib/desktopHost'
 import { MobileBottomSheet } from './MobileBottomSheet'
 
 type Props = {
   value: string
   onChange: (path: string) => void
-  variant?: 'chip' | 'workbar'
+  variant?: 'chip' | 'workbar' | 'floating'
   isGitProject?: boolean
 }
 
@@ -20,10 +21,6 @@ let cachedProjects: RecentProject[] | null = null
 let cacheTimestamp = 0
 const CACHE_TTL = 30_000 // 30s
 const DESKTOP_WORKTREE_MARKER = '/.claude/worktrees/'
-
-function isTauriRuntime() {
-  return typeof window !== 'undefined' && ('__TAURI_INTERNALS__' in window || '__TAURI__' in window)
-}
 
 function projectNameFromPath(filePath: string) {
   const displayRoot = filePath.includes(DESKTOP_WORKTREE_MARKER)
@@ -44,7 +41,8 @@ export function DirectoryPicker({ value, onChange, variant = 'chip', isGitProjec
   const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number; direction: 'up' | 'down' } | null>(null)
   const ref = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
-  const isMobileBrowser = useMobileViewport() && !isTauriRuntime()
+  const host = getDesktopHost()
+  const isMobileBrowser = useMobileViewport() && !host.isDesktop
 
   const dropdownRef = useRef<HTMLDivElement>(null)
 
@@ -52,12 +50,15 @@ export function DirectoryPicker({ value, onChange, variant = 'chip', isGitProjec
     if (!triggerRef.current) return
     const rect = triggerRef.current.getBoundingClientRect()
     const DROPDOWN_HEIGHT = 380 // approximate max height
+    const DROPDOWN_WIDTH = 400
+    const VIEWPORT_MARGIN = 12
     const spaceAbove = rect.top
     const spaceBelow = window.innerHeight - rect.bottom
     const direction = spaceBelow >= DROPDOWN_HEIGHT || spaceBelow >= spaceAbove ? 'down' : 'up'
+    const maxLeft = Math.max(VIEWPORT_MARGIN, window.innerWidth - DROPDOWN_WIDTH - VIEWPORT_MARGIN)
     setDropdownPos({
       top: direction === 'down' ? rect.bottom + 4 : rect.top - 4,
-      left: rect.left,
+      left: Math.min(Math.max(VIEWPORT_MARGIN, rect.left), maxLeft),
       direction,
     })
   }, [])
@@ -126,17 +127,17 @@ export function DirectoryPicker({ value, onChange, variant = 'chip', isGitProjec
   }
 
   const handleChooseFolder = async () => {
-    if (isTauriRuntime()) {
+    const host = getDesktopHost()
+    if (host.isDesktop && host.capabilities.dialogs) {
       // Desktop: native OS folder dialog
       setIsOpen(false)
       try {
-        const { open } = await import('@tauri-apps/plugin-dialog')
-        const selected = await open({
+        const selected = await host.dialogs.open({
           directory: true,
           multiple: false,
           title: t('dirPicker.chooseProjectFolder'),
         })
-        if (selected) onChange(selected)
+        if (typeof selected === 'string') onChange(selected)
       } catch (err) {
         console.error('[DirectoryPicker] Failed to open folder dialog:', err)
       }
@@ -149,11 +150,12 @@ export function DirectoryPicker({ value, onChange, variant = 'chip', isGitProjec
 
   const selectedProject = projects.find((p) => p.realPath === value)
   const isWorkbar = variant === 'workbar'
+  const isFloating = variant === 'floating'
   const selectedLabel = selectedProject?.repoName || selectedProject?.projectName || projectNameFromPath(value)
   const showGitIcon = selectedProject?.isGit || isGitProject
   const triggerClassName = isWorkbar
     ? 'inline-flex h-9 max-w-full min-w-0 items-center gap-1.5 rounded-[7px] border border-transparent px-2.5 text-[13px] font-medium leading-none text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-container-lowest)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)]/35'
-    : 'project-context-chip project-context-chip--frosted flex items-center gap-2 rounded-full px-3 py-1.5 text-xs transition-colors hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)]/35'
+    : `project-context-chip project-context-chip--frosted flex items-center gap-2 rounded-full text-xs transition-colors hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)]/35 ${isFloating ? 'px-3 py-2' : 'px-3 py-1.5'}`
   const emptyTriggerClassName = isWorkbar
     ? 'flex h-9 min-w-0 items-center gap-1.5 rounded-[7px] border border-transparent px-2.5 text-[13px] font-medium leading-none text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-container-lowest)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)]/35'
     : 'flex items-center gap-2 text-xs text-[var(--color-text-tertiary)] hover:text-[var(--color-text-secondary)] transition-colors'
@@ -162,6 +164,7 @@ export function DirectoryPicker({ value, onChange, variant = 'chip', isGitProjec
   const dropdownStyle = {
     position: 'fixed' as const,
     left: dropdownPos?.left,
+    width: 400,
     ...(dropdownPos?.direction === 'down'
       ? { top: dropdownPos.top }
       : { bottom: window.innerHeight - (dropdownPos?.top ?? 0) }),
@@ -337,9 +340,10 @@ export function DirectoryPicker({ value, onChange, variant = 'chip', isGitProjec
             {dropdownContent}
           </MobileBottomSheet>
         ) : createPortal(
-          <div
-            ref={dropdownRef}
-            className={dropdownClassName}
+      <div
+        data-testid="directory-picker-menu"
+        ref={dropdownRef}
+        className={dropdownClassName}
             style={dropdownStyle}
           >
             {dropdownContent}

@@ -1,4 +1,5 @@
 import { useSettingsStore } from '../stores/settingsStore'
+import { getDesktopHost } from './desktopHost'
 
 const DEFAULT_COOLDOWN_MS = 750
 
@@ -81,8 +82,7 @@ async function invokeWindowsNotificationPermissionState(): Promise<DesktopNotifi
   if (detectPlatform() !== 'win32') return null
 
   try {
-    const { invoke } = await import('@tauri-apps/api/core')
-    const granted = await invoke<boolean | null>('plugin:notification|is_permission_granted')
+    const granted = await getDesktopHost().commands.invoke<boolean | null>('plugin:notification|is_permission_granted')
     return normalizePermission(granted)
   } catch (err) {
     if (typeof console !== 'undefined') {
@@ -96,8 +96,7 @@ async function invokeWindowsNotificationPermissionRequest(): Promise<DesktopNoti
   if (detectPlatform() !== 'win32') return null
 
   try {
-    const { invoke } = await import('@tauri-apps/api/core')
-    const permission = await invoke<PluginPermissionState>('plugin:notification|request_permission')
+    const permission = await getDesktopHost().commands.invoke<PluginPermissionState>('plugin:notification|request_permission')
     return normalizePermission(permission)
   } catch (err) {
     if (typeof console !== 'undefined') {
@@ -111,8 +110,7 @@ async function invokeMacNotificationPermissionState(): Promise<DesktopNotificati
   if (detectPlatform() !== 'darwin') return null
 
   try {
-    const { invoke } = await import('@tauri-apps/api/core')
-    const permission = await invoke<DesktopNotificationPermission>('macos_notification_permission_state')
+    const permission = await getDesktopHost().commands.invoke<DesktopNotificationPermission>('macos_notification_permission_state')
     return ['default', 'denied', 'granted', 'unsupported'].includes(permission) ? permission : 'unsupported'
   } catch (err) {
     if (typeof console !== 'undefined') {
@@ -126,8 +124,7 @@ async function invokeMacNotificationPermissionRequest(): Promise<DesktopNotifica
   if (detectPlatform() !== 'darwin') return null
 
   try {
-    const { invoke } = await import('@tauri-apps/api/core')
-    const permission = await invoke<DesktopNotificationPermission>('macos_request_notification_permission')
+    const permission = await getDesktopHost().commands.invoke<DesktopNotificationPermission>('macos_request_notification_permission')
     return ['default', 'denied', 'granted', 'unsupported'].includes(permission) ? permission : 'unsupported'
   } catch (err) {
     if (typeof console !== 'undefined') {
@@ -168,6 +165,9 @@ function notificationTargetFromPayload(payload: unknown): DesktopNotificationTar
 
   const directTarget = notificationTargetFromPayload(record.target)
   if (directTarget) return directTarget
+
+  const eventPayloadTarget = notificationTargetFromPayload(record.payload)
+  if (eventPayloadTarget) return eventPayloadTarget
 
   const extra = record.extra && typeof record.extra === 'object'
     ? record.extra as Record<string, unknown>
@@ -210,9 +210,8 @@ async function sendMacNotification(options: { title: string; body?: string; targ
   if (detectPlatform() !== 'darwin') return null
 
   try {
-    const { invoke } = await import('@tauri-apps/api/core')
     const target = options.target ? JSON.stringify(options.target) : undefined
-    const sent = await invoke<boolean>('macos_send_notification', {
+    const sent = await getDesktopHost().commands.invoke<boolean>('macos_send_notification', {
       title: options.title,
       body: options.body,
       ...(target ? { target } : {}),
@@ -234,8 +233,8 @@ export async function getDesktopNotificationPermission(): Promise<DesktopNotific
   if (windowsPermission) return windowsPermission
 
   try {
-    const { isPermissionGranted } = await import('@tauri-apps/plugin-notification')
-    if (await isPermissionGranted()) return 'granted'
+    const permission = await getDesktopHost().notifications.permissionState()
+    if (permission === 'granted') return 'granted'
   } catch {
     // Fall back to the Web Notification permission state below.
   }
@@ -250,13 +249,7 @@ export async function requestDesktopNotificationPermission(): Promise<DesktopNot
   if (windowsPermission) return windowsPermission
 
   try {
-    const {
-      isPermissionGranted,
-      requestPermission,
-    } = await import('@tauri-apps/plugin-notification')
-
-    if (await isPermissionGranted()) return 'granted'
-    return await requestPermission()
+    return await getDesktopHost().notifications.requestPermission()
   } catch {
     return readBrowserNotificationPermission()
   }
@@ -266,10 +259,19 @@ export async function openDesktopNotificationSettings(): Promise<boolean> {
   const url = getNotificationSettingsUrl()
   if (!url) return false
 
-  if (detectPlatform() === 'win32') {
+  const platform = detectPlatform()
+  if (platform === 'darwin') {
     try {
-      const { invoke } = await import('@tauri-apps/api/core')
-      const opened = await invoke<boolean>('open_windows_notification_settings')
+      const opened = await getDesktopHost().commands.invoke<boolean>('macos_open_notification_settings')
+      if (opened) return true
+    } catch {
+      // Fall back to shell.open/window.open below.
+    }
+  }
+
+  if (platform === 'win32') {
+    try {
+      const opened = await getDesktopHost().commands.invoke<boolean>('open_windows_notification_settings')
       if (opened) return true
     } catch {
       // Fall back to shell.open/window.open below.
@@ -277,8 +279,7 @@ export async function openDesktopNotificationSettings(): Promise<boolean> {
   }
 
   try {
-    const { open } = await import('@tauri-apps/plugin-shell')
-    await open(url)
+    await getDesktopHost().shell.open(url)
     return true
   } catch {
     try {
@@ -294,26 +295,22 @@ async function sendNativeNotification(options: { title: string; body?: string; t
   const macSent = await sendMacNotification(options)
   if (macSent !== null) return macSent
 
-  const {
-    isPermissionGranted,
-    sendNotification,
-  } = await import('@tauri-apps/plugin-notification')
-
   const windowsPermission = await invokeWindowsNotificationPermissionState()
-  const permissionGranted = windowsPermission ? windowsPermission === 'granted' : await isPermissionGranted()
+  const permissionGranted = windowsPermission
+    ? windowsPermission === 'granted'
+    : await getDesktopHost().notifications.permissionState() === 'granted'
   if (!permissionGranted) {
     return false
   }
 
   const payload = buildNativeNotificationPayload(options)
-  sendNotification(payload)
+  await getDesktopHost().notifications.send(payload)
   return true
 }
 
 async function requestWindowAttention(): Promise<boolean> {
   try {
-    const { getCurrentWindow, UserAttentionType } = await import('@tauri-apps/api/window')
-    await getCurrentWindow().requestUserAttention(UserAttentionType.Critical)
+    await getDesktopHost().window.requestAttention()
     return true
   } catch {
     return false
@@ -322,24 +319,10 @@ async function requestWindowAttention(): Promise<boolean> {
 
 async function focusCurrentWindow(): Promise<void> {
   try {
-    const { getCurrentWindow } = await import('@tauri-apps/api/window')
-    const win = getCurrentWindow()
-    await (win as unknown as { show?: () => Promise<void> | void }).show?.()
-    await (win as unknown as { setFocus?: () => Promise<void> | void }).setFocus?.()
+    await getDesktopHost().window.focus()
   } catch {
     // Best effort only: the notification target can still be opened in the UI.
   }
-}
-
-function disposePluginListener(listener: unknown): void {
-  if (typeof listener === 'function') {
-    listener()
-    return
-  }
-  const unregister = listener && typeof listener === 'object'
-    ? (listener as { unregister?: () => Promise<void> | void }).unregister
-    : undefined
-  if (typeof unregister === 'function') void unregister.call(listener)
 }
 
 export async function installDesktopNotificationClickListener(
@@ -351,26 +334,19 @@ export async function installDesktopNotificationClickListener(
     if (!target) return
     void focusCurrentWindow()
     onTarget(target)
+    void getDesktopHost().notifications.ackAction({ target, payload }).catch(() => {})
   }
 
   try {
-    const { listen } = await import('@tauri-apps/api/event')
-    const unlisten = await listen<unknown>('desktop-notification-clicked', (event) => {
-      handlePayload(event.payload)
-    })
+    const unlisten = await getDesktopHost().events.listen<unknown>('desktop-notification-clicked', handlePayload)
     cleanups.push(unlisten)
   } catch {
     // Non-Tauri browser tests and unsupported runtimes do not expose native events.
   }
 
   try {
-    const { onAction } = await import('@tauri-apps/plugin-notification') as {
-      onAction?: (cb: (notification: unknown) => void) => Promise<unknown>
-    }
-    if (onAction) {
-      const listener = await onAction(handlePayload)
-      cleanups.push(() => disposePluginListener(listener))
-    }
+    const unlisten = await getDesktopHost().notifications.onAction(handlePayload)
+    cleanups.push(unlisten)
   } catch {
     // The desktop plugin does not expose click actions on every platform.
   }

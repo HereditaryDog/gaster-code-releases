@@ -13,6 +13,17 @@ const PROMPT = [
   'When the tests pass, briefly say done.',
 ].join(' ')
 
+export function resolveDesktopSmokeRuntimeSelection(target: BaselineTarget | undefined) {
+  if (!target) return null
+  if (!target.providerId && target.modelId === 'current' && target.label === 'current-runtime') {
+    return null
+  }
+  return {
+    providerId: target.providerId ?? null,
+    modelId: target.modelId,
+  }
+}
+
 async function getPort(): Promise<number> {
   return await new Promise((resolve, reject) => {
     const server = createServer()
@@ -262,10 +273,10 @@ export async function executeDesktopSmoke(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ workDir: projectDir }),
     })
-    const runtimeSelection = {
-      providerId: target?.providerId ?? null,
-      modelId: target?.modelId ?? 'current',
-    }
+    const runtimeSelection = resolveDesktopSmokeRuntimeSelection(target)
+    writeFileSync(join(artifactDir, 'runtime-selection.json'), JSON.stringify(runtimeSelection
+      ? { source: 'explicit-target', ...runtimeSelection }
+      : { source: 'default-runtime' }, null, 2) + '\n')
 
     await runLoggedCommand(['agent-browser', 'open', appUrl], {
       cwd: rootDir,
@@ -281,9 +292,11 @@ export async function executeDesktopSmoke(
           openTabs: [{ sessionId: session.sessionId, title: 'Desktop Smoke', type: 'session' }],
           activeTabId: session.sessionId,
         }))})`,
-        `localStorage.setItem('gaster-code-session-runtime', ${JSON.stringify(JSON.stringify({
-          [session.sessionId]: runtimeSelection,
-        }))})`,
+        runtimeSelection
+          ? `localStorage.setItem('gaster-code-session-runtime', ${JSON.stringify(JSON.stringify({
+            [session.sessionId]: runtimeSelection,
+          }))})`
+          : `localStorage.removeItem('gaster-code-session-runtime')`,
       ].join(';'),
     ], {
       cwd: rootDir,

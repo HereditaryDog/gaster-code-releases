@@ -274,6 +274,124 @@ describe('ChatInput file mentions', () => {
     })
   })
 
+  it('appends a delayed browser screenshot without clearing an unsent draft after remount', async () => {
+    const { unmount } = render(<ChatInput compact />)
+
+    const input = screen.getByRole('textbox') as HTMLTextAreaElement
+    fireEvent.change(input, {
+      target: { value: 'draft written while the agent is still running', selectionStart: 44 },
+    })
+    expect(input.value).toBe('draft written while the agent is still running')
+
+    unmount()
+
+    act(() => {
+      useChatStore.getState().queueComposerPrefill(sessionId, {
+        text: '',
+        mode: 'append',
+        attachments: [{
+          type: 'image',
+          name: 'screenshot-full.png',
+          mimeType: 'image/png',
+          data: 'data:image/png;base64,DELAYED',
+        }],
+      })
+    })
+
+    render(<ChatInput compact />)
+
+    await waitFor(() => {
+      expect(screen.getByRole('textbox')).toHaveValue('draft written while the agent is still running')
+      expect(screen.getByAltText('screenshot-full.png')).toBeInTheDocument()
+    })
+  })
+
+  it('does not replay a handled browser screenshot after the composer remounts', async () => {
+    const { unmount } = render(<ChatInput compact />)
+
+    act(() => {
+      useChatStore.getState().queueComposerPrefill(sessionId, {
+        text: '',
+        mode: 'append',
+        attachments: [{
+          type: 'image',
+          name: 'screenshot-full.png',
+          mimeType: 'image/png',
+          data: 'data:image/png;base64,OLD',
+        }],
+      })
+    })
+
+    await waitFor(() => {
+      expect(screen.getByAltText('screenshot-full.png')).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByLabelText('Remove screenshot-full.png'))
+
+    await waitFor(() => {
+      expect(screen.queryByAltText('screenshot-full.png')).not.toBeInTheDocument()
+    })
+
+    unmount()
+    render(<ChatInput compact />)
+
+    await waitFor(() => {
+      expect(screen.queryByAltText('screenshot-full.png')).not.toBeInTheDocument()
+    })
+  })
+
+  it('keeps rapid browser screenshots independently removable when the clock collides', async () => {
+    const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(123456)
+
+    try {
+      render(<ChatInput compact />)
+
+      act(() => {
+        useChatStore.getState().queueComposerPrefill(sessionId, {
+          text: '',
+          mode: 'append',
+          attachments: [{
+            type: 'image',
+            name: 'screenshot-a.png',
+            mimeType: 'image/png',
+            data: 'data:image/png;base64,AAAA',
+          }],
+        })
+      })
+
+      await waitFor(() => {
+        expect(screen.getByAltText('screenshot-a.png')).toBeInTheDocument()
+      })
+
+      act(() => {
+        useChatStore.getState().queueComposerPrefill(sessionId, {
+          text: '',
+          mode: 'append',
+          attachments: [{
+            type: 'image',
+            name: 'screenshot-b.png',
+            mimeType: 'image/png',
+            data: 'data:image/png;base64,BBBB',
+          }],
+        })
+      })
+
+      await waitFor(() => {
+        expect(screen.getByAltText('screenshot-a.png')).toBeInTheDocument()
+        expect(screen.getByAltText('screenshot-b.png')).toBeInTheDocument()
+      })
+
+      fireEvent.click(screen.getByLabelText('Remove screenshot-a.png'))
+
+      await waitFor(() => {
+        expect(screen.queryByAltText('screenshot-a.png')).not.toBeInTheDocument()
+        expect(screen.getByAltText('screenshot-b.png')).toBeInTheDocument()
+      })
+    } finally {
+      nowSpy.mockRestore()
+    }
+  })
+
   it('turns a selected @ file into a chip without corrupting the typed path', async () => {
     mocks.search.mockResolvedValueOnce({
       currentPath: '/repo',
@@ -436,6 +554,98 @@ describe('ChatInput file mentions', () => {
     expect(screen.getByRole('textbox')).toHaveClass('chat-composer-textarea--compact')
     expect(container.querySelector('.chat-composer-toolbar')).toHaveClass('chat-composer-toolbar--compact')
     await waitFor(() => expect(mocks.getGitInfo).toHaveBeenCalled())
+  })
+
+  it('uses the compact bottom composer treatment for empty active-session hero composers on desktop', async () => {
+    useSessionStore.setState({
+      sessions: [{
+        id: sessionId,
+        title: 'Project',
+        createdAt: '2026-05-01T00:00:00.000Z',
+        modifiedAt: '2026-05-01T00:00:00.000Z',
+        messageCount: 0,
+        projectPath: '/repo',
+        workDir: '/repo',
+        workDirExists: true,
+      }],
+      activeSessionId: sessionId,
+    })
+    useChatStore.setState({
+      sessions: {
+        [sessionId]: {
+          messages: [],
+          chatState: 'idle',
+          connectionState: 'connected',
+          streamingText: '',
+          streamingToolInput: '',
+          activeToolUseId: null,
+          activeToolName: null,
+          activeThinkingId: null,
+          pendingPermission: null,
+          pendingComputerUsePermission: null,
+          tokenUsage: { input_tokens: 0, output_tokens: 0 },
+          elapsedSeconds: 0,
+          statusVerb: '',
+          slashCommands: [],
+          agentTaskNotifications: {},
+          elapsedTimer: null,
+        },
+      },
+    })
+
+    const { container } = render(<ChatInput variant="hero" />)
+
+    expect(screen.getByTestId('chat-input-shell')).toHaveClass('chat-input-shell--compact')
+    expect(screen.getByTestId('chat-input-panel')).toHaveClass('chat-composer-shell--compact')
+    expect(screen.getByRole('textbox')).toHaveClass('chat-composer-textarea--compact')
+    expect(container.querySelector('.chat-composer-toolbar')).toHaveClass('chat-composer-toolbar--compact')
+    const row = await screen.findByTestId('repository-launch-controls-row')
+    expect(row).toHaveClass('repository-launch-controls__row--floating')
+  })
+
+  it('uses a floating repository row under the default desktop composer before messages exist', async () => {
+    useSessionStore.setState({
+      sessions: [{
+        id: sessionId,
+        title: 'Project',
+        createdAt: '2026-05-01T00:00:00.000Z',
+        modifiedAt: '2026-05-01T00:00:00.000Z',
+        messageCount: 0,
+        projectPath: '/repo',
+        workDir: '/repo',
+        workDirExists: true,
+      }],
+      activeSessionId: sessionId,
+    })
+    useChatStore.setState({
+      sessions: {
+        [sessionId]: {
+          messages: [],
+          chatState: 'idle',
+          connectionState: 'connected',
+          streamingText: '',
+          streamingToolInput: '',
+          activeToolUseId: null,
+          activeToolName: null,
+          activeThinkingId: null,
+          pendingPermission: null,
+          pendingComputerUsePermission: null,
+          tokenUsage: { input_tokens: 0, output_tokens: 0 },
+          elapsedSeconds: 0,
+          statusVerb: '',
+          slashCommands: [],
+          agentTaskNotifications: {},
+          elapsedTimer: null,
+        },
+      },
+    })
+
+    render(<ChatInput />)
+
+    const row = await screen.findByTestId('repository-launch-controls-row')
+    expect(row).toHaveClass('repository-launch-controls__row--floating')
+    expect(row.className).not.toContain('border-t')
+    expect(screen.getByRole('button', { name: /repo/i })).toHaveClass('project-context-chip--frosted')
   })
 
   it('hides local composer glow controls in dev by default', async () => {

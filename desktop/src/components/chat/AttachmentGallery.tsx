@@ -65,7 +65,7 @@ export function AttachmentGallery({ attachments, variant = 'message', onRemove }
                     className={
                       isComposer
                         ? 'h-16 w-16 object-cover'
-                        : 'max-h-[340px] w-full max-w-[360px] object-cover'
+                        : 'max-h-[520px] max-w-[min(360px,80vw)] object-contain'
                     }
                   />
                 </button>

@@ -10,11 +10,13 @@ import { useTabStore, SETTINGS_TAB_ID, SCHEDULED_TAB_ID, DRAWING_TAB_ID } from '
 import { useChatStore } from '../../stores/chatStore'
 import { SessionStatusMarker, type SidebarSessionActivityState } from './SessionStatusMarker'
 import { SIDEBAR_COLLAPSE_THRESHOLD, SIDEBAR_MAX_WIDTH, SIDEBAR_MIN_WIDTH } from '../../stores/uiStore'
+import { getDesktopHost } from '../../lib/desktopHost'
+import { GASTER_CODE_APP_NAME } from '../../constants/branding'
 
-const isTauri = typeof window !== 'undefined' && ('__TAURI_INTERNALS__' in window || '__TAURI__' in window)
+const isDesktop = getDesktopHost().isDesktop
 const isWindows = typeof navigator !== 'undefined' && /Win/.test(navigator.platform)
-const APP_NAME = 'Gaster Code'
-const APP_LOGO_PATH = '/app-icon.svg'
+const APP_NAME = GASTER_CODE_APP_NAME
+const GASTER_CODE_G_PATH = 'M512 449.142857l414.285714 0q6.857143 38.285714 6.857143 73.142857 0 124-52 221.428571t-148.285714 152.285714-220.857143 54.857143q-89.714286 0-170.857143-34.571429t-140-93.428571-93.428571-140-34.571429-170.857143 34.571429-170.857143 93.428571-140 140-93.428571 170.857143-34.571429q171.428571 0 294.285714 114.857143l-119.428571 114.857143q-70.285714-68-174.857143-68-73.714286 0-136.285714 37.142857t-99.142857 100.857143-36.571429 139.142857 36.571429 139.142857 99.142857 100.857143 136.285714 37.142857q49.714286 0 91.428571-13.714286t68.571429-34.285714 46.857143-46.857143 29.428571-49.714286 12.857143-44.571429l-249.142857 0 0-150.857143z'
 
 
 type TimeGroup = 'today' | 'yesterday' | 'last7days' | 'last30days' | 'older'
@@ -221,13 +223,9 @@ export function Sidebar({ isMobile = false, onRequestClose }: SidebarProps) {
   const startDraggingRef = useRef<(() => Promise<void>) | null>(null)
 
   useEffect(() => {
-    if (!isTauri) return
-    import('@tauri-apps/api/window')
-      .then(({ getCurrentWindow }) => {
-        const win = getCurrentWindow()
-        startDraggingRef.current = () => win.startDragging()
-      })
-      .catch(() => {})
+    const host = getDesktopHost()
+    if (!host.capabilities.windowControls) return
+    startDraggingRef.current = () => host.window.startDragging()
   }, [])
 
   const handleSidebarDrag = useCallback((e: React.MouseEvent) => {
@@ -316,10 +314,10 @@ export function Sidebar({ isMobile = false, onRequestClose }: SidebarProps) {
       data-state={expanded ? 'open' : 'closed'}
       aria-label="Sidebar"
     >
-      <div className={`px-3 pb-2 ${isTauri && !isWindows ? 'pt-[44px]' : 'pt-3'}`}>
+      <div className={`px-3 pb-2 ${isDesktop && !isWindows ? 'pt-[44px]' : 'pt-3'}`}>
         <div className={`flex ${expanded ? 'items-center justify-between gap-3' : 'flex-col items-center gap-2'}`}>
           <div className={`flex min-w-0 ${expanded ? 'items-end gap-2.5' : 'items-center justify-center'}`}>
-            <img src={APP_LOGO_PATH} alt="" className="sidebar-brand-logo h-7 w-7 flex-shrink-0" />
+            <SidebarBrandMark />
             <span
               className={`sidebar-copy ${expanded ? 'sidebar-copy--visible' : 'sidebar-copy--hidden'} text-[13px] font-semibold tracking-tight text-[var(--color-text-primary)]`}
             >
@@ -441,7 +439,7 @@ export function Sidebar({ isMobile = false, onRequestClose }: SidebarProps) {
             style={{ overflow: 'visible' }}
           >
             <div className="flex items-center gap-1.5">
-              <div className="flex h-9 min-w-0 flex-1 items-center rounded-[14px] border border-[var(--color-sidebar-search-border)] bg-[var(--color-sidebar-search-bg)] pl-1.5 pr-3 transition-colors focus-within:border-[var(--color-border-focus)]">
+              <div className="sidebar-control-surface sidebar-search-surface flex h-9 min-w-0 flex-1 items-center rounded-[14px] border border-[var(--color-sidebar-search-border)] bg-[var(--color-sidebar-search-bg)] pl-1.5 pr-3 transition-colors focus-within:border-[var(--color-border-focus)]">
                 <ProjectFilter variant="embedded" />
                 <span className="mx-2 h-4 w-px bg-[var(--color-border)]/80" aria-hidden="true" />
                 <span className="pointer-events-none flex shrink-0 items-center text-[var(--color-text-tertiary)]">
@@ -460,9 +458,9 @@ export function Sidebar({ isMobile = false, onRequestClose }: SidebarProps) {
               <button
                 type="button"
                 onClick={isBatchMode ? handleExitBatchMode : enterBatchMode}
-                className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-[12px] border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-border-focus)] ${
+                className={`sidebar-control-surface flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-[12px] border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-border-focus)] ${
                   isBatchMode
-                    ? 'border-[var(--color-brand)] bg-[var(--color-sidebar-item-active)] text-[var(--color-brand)]'
+                    ? 'sidebar-control-surface--active border-[var(--color-brand)] bg-[var(--color-sidebar-item-active)] text-[var(--color-brand)]'
                     : 'border-[var(--color-sidebar-search-border)] bg-[var(--color-sidebar-search-bg)] text-[var(--color-text-secondary)] hover:bg-[var(--color-sidebar-item-hover)] hover:text-[var(--color-text-primary)]'
                 }`}
                 aria-label={isBatchMode ? t('sidebar.batchExit') : t('sidebar.batchManage')}
@@ -597,7 +595,7 @@ export function Sidebar({ isMobile = false, onRequestClose }: SidebarProps) {
                               className={`
                                 group w-full rounded-[12px] border px-3 ${isMobile ? 'py-3' : 'py-2.5'} text-left text-sm transition-[background,border-color,box-shadow,filter,color] duration-200
                                 ${selectedSessionIds.has(session.id)
-                                  ? 'sidebar-session-row--selected border-[var(--color-sidebar-item-active-border)] bg-[var(--color-sidebar-item-active)] text-[var(--color-text-primary)] shadow-[inset_0_1px_0_rgba(255,255,255,0.72),0_3px_10px_rgba(143,72,47,0.07)] hover:brightness-[0.995]'
+                                  ? 'sidebar-session-row--selected border-[var(--color-sidebar-item-active-border)] bg-[var(--color-sidebar-item-active)] text-[var(--color-text-primary)] hover:brightness-[1.02]'
                                   : isActiveSession
                                   ? 'sidebar-session-row--active border-transparent bg-[var(--color-sidebar-item-active)] text-[var(--color-text-primary)]'
                                   : 'sidebar-session-row--idle border-transparent text-[var(--color-text-secondary)] hover:bg-[var(--color-sidebar-item-hover)]'
@@ -818,7 +816,7 @@ function NavItem({
       aria-label={label}
       title={collapsed ? label : undefined}
       className={`
-        flex items-center transition-colors duration-200
+        sidebar-nav-item ${active ? 'sidebar-nav-item--active' : 'sidebar-nav-item--idle'} flex items-center transition-colors duration-200
         ${collapsed ? 'h-10 w-10 justify-center rounded-[var(--radius-md)] px-0 py-0' : `w-full gap-2.5 rounded-[12px] px-3 ${touchFriendly ? 'py-3' : 'py-2.5'} text-sm`}
         ${active
           ? 'bg-[var(--color-sidebar-item-active)] font-medium text-[var(--color-text-primary)]'
@@ -847,6 +845,16 @@ function BrandWordmark() {
       }}
     >
       {APP_NAME}
+    </span>
+  )
+}
+
+function SidebarBrandMark() {
+  return (
+    <span className="sidebar-brand-logo inline-flex h-7 w-7 flex-shrink-0 items-center justify-center text-[var(--color-brand-wordmark)]" aria-hidden="true">
+      <svg viewBox="0 0 1024 1024" className="h-full w-full" focusable="false">
+        <path d={GASTER_CODE_G_PATH} fill="currentColor" />
+      </svg>
     </span>
   )
 }

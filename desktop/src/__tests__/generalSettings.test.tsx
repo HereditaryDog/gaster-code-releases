@@ -7,6 +7,7 @@ import { useSettingsStore } from '../stores/settingsStore'
 import { useUIStore } from '../stores/uiStore'
 import { useUpdateStore } from '../stores/updateStore'
 import { useGMasterAuthStore } from '../stores/gmasterAuthStore'
+import { browserHost } from '../lib/desktopHost/browserHost'
 import type { SavedProvider } from '../types/provider'
 import type { ProviderPreset } from '../types/providerPreset'
 import type { ThemeMode, UpdateProxySettings } from '../types/settings'
@@ -658,6 +659,15 @@ describe('Settings > Providers tab', () => {
 
 describe('Settings > About tab', () => {
   beforeEach(() => {
+    window.desktopHost = {
+      ...browserHost,
+      kind: 'electron',
+      isDesktop: true,
+      app: {
+        ...browserHost.app,
+        getVersion: vi.fn().mockRejectedValue(new Error('version unavailable')),
+      },
+    }
     useSettingsStore.setState({ locale: 'en' })
     useUIStore.setState({ pendingSettingsTab: 'about' })
     useSettingsStore.setState({
@@ -696,7 +706,7 @@ describe('Settings > About tab', () => {
     render(<Settings />)
 
     const logo = await screen.findByRole('img', { name: 'Gaster Code' })
-    expect(logo).toHaveAttribute('src', '/app-icon.svg')
+    expect(logo).toHaveAttribute('src', './app-icon.svg')
     expect(logo).toHaveClass('hero-brand-logo')
 
     expect(screen.getByText('HereditaryDog')).toBeInTheDocument()

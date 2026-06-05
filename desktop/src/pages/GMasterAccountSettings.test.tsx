@@ -15,6 +15,12 @@ const mocks = vi.hoisted(() => ({
   cancelSubscription: vi.fn(),
   resumeSubscription: vi.fn(),
   openExternal: vi.fn(),
+  desktopHost: {
+    isDesktop: true,
+    shell: {
+      open: vi.fn(),
+    },
+  },
 }))
 
 vi.mock('../api/gmasterAuth', () => ({
@@ -33,8 +39,8 @@ vi.mock('../api/gmasterAuth', () => ({
   },
 }))
 
-vi.mock('@tauri-apps/plugin-shell', () => ({
-  open: mocks.openExternal,
+vi.mock('../lib/desktopHost', () => ({
+  getDesktopHost: () => mocks.desktopHost,
 }))
 
 import { GMasterAccountSettings } from './GMasterAccountSettings'
@@ -45,10 +51,12 @@ import { useSettingsStore } from '../stores/settingsStore'
 describe('GMasterAccountSettings', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    Object.defineProperty(window, '__TAURI_INTERNALS__', {
-      configurable: true,
-      value: {},
-    })
+    mocks.desktopHost = {
+      isDesktop: true,
+      shell: {
+        open: mocks.openExternal,
+      },
+    }
     useSettingsStore.setState({ locale: 'en' })
     useGMasterAuthStore.setState(useGMasterAuthStore.getInitialState(), true)
     mocks.status.mockResolvedValue({ loggedIn: false })
@@ -68,7 +76,6 @@ describe('GMasterAccountSettings', () => {
       useGMasterAuthStore.getState().stopPolling()
       useGMasterAuthStore.setState(useGMasterAuthStore.getInitialState(), true)
     })
-    delete (window as Window & { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__
     vi.restoreAllMocks()
   })
 
@@ -99,13 +106,17 @@ describe('GMasterAccountSettings', () => {
   })
 
   it('reserves a browser popup before waiting for the registration URL when shell open is unavailable', async () => {
-    delete (window as Window & { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__
+    mocks.desktopHost = {
+      isDesktop: false,
+      shell: {
+        open: mocks.openExternal,
+      },
+    }
     mockAuthStoreActions()
     let resolveStart: (value: { authorizeUrl: string; state: string }) => void = () => {}
     mocks.start.mockReturnValueOnce(new Promise((resolve) => {
       resolveStart = resolve
     }))
-    mocks.openExternal.mockRejectedValueOnce(new Error('shell unavailable'))
     const popup = {
       closed: false,
       close: vi.fn(),
@@ -134,6 +145,7 @@ describe('GMasterAccountSettings', () => {
 
     await waitFor(() => {
       expect(popup.location.href).toBe('https://gmapi.example.test/register?redirect=%2Fgaster-code%2Fdesktop-login')
+      expect(mocks.openExternal).not.toHaveBeenCalled()
       expect(registerButton).toBeEnabled()
     })
   })

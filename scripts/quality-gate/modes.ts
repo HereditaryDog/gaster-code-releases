@@ -1,7 +1,26 @@
 import { baselineCases } from './baseline/cases'
 import type { BaselineTarget, LaneDefinition, QualityGateMode } from './types'
 
+export function currentPackageSmokePlatform(platform: NodeJS.Platform = process.platform) {
+  if (platform === 'darwin') return 'macos'
+  if (platform === 'win32') return 'windows'
+  if (platform === 'linux') return 'linux'
+  return null
+}
+
+export function currentReleaseArtifactsDir(
+  platform: NodeJS.Platform = process.platform,
+  arch: NodeJS.Architecture = process.arch,
+) {
+  if (platform === 'darwin') return arch === 'x64' ? 'desktop/build-artifacts/macos-x64' : 'desktop/build-artifacts/macos-arm64'
+  if (platform === 'win32') return arch === 'arm64' ? 'desktop/build-artifacts/windows-arm64' : 'desktop/build-artifacts/windows-x64'
+  if (platform === 'linux') return arch === 'arm64' ? 'desktop/build-artifacts/linux-arm64' : 'desktop/build-artifacts/linux-x64'
+  return null
+}
+
 export function lanesForMode(mode: QualityGateMode, baselineTargets: BaselineTarget[] = []): LaneDefinition[] {
+  const packageSmokePlatform = currentPackageSmokePlatform()
+  const releaseArtifactsDir = currentReleaseArtifactsDir()
   const lanes: LaneDefinition[] = [
     {
       id: 'impact-report',
@@ -44,6 +63,32 @@ export function lanesForMode(mode: QualityGateMode, baselineTargets: BaselineTar
       requiredForModes: ['pr', 'release'],
     },
   ]
+
+  if (packageSmokePlatform && releaseArtifactsDir) {
+    const packageSmokeCommand = [
+      'bun',
+      'run',
+      'test:package-smoke',
+      '--platform',
+      packageSmokePlatform,
+      '--package-kind',
+      'release',
+      '--artifacts-dir',
+      releaseArtifactsDir,
+    ]
+    if (packageSmokePlatform === 'macos') {
+      packageSmokeCommand.push('--require-macos-gatekeeper')
+    }
+
+    lanes.push({
+      id: `desktop-package-smoke:${packageSmokePlatform}`,
+      title: `Desktop packaged artifact smoke (${packageSmokePlatform})`,
+      description: 'Inspect the current-platform canonical Electron release artifact for app metadata, app.asar, sidecar binaries, update metadata, and unpacked native runtime resources.',
+      kind: 'command',
+      command: packageSmokeCommand,
+      requiredForModes: ['release'],
+    })
+  }
 
   const targets = baselineTargets.length > 0
     ? baselineTargets

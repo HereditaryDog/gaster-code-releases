@@ -11,7 +11,7 @@ vi.mock('../../hooks/useMobileViewport', () => ({
 }))
 
 vi.mock('../../lib/desktopRuntime', () => ({
-  isTauriRuntime: () => false,
+  isDesktopRuntime: () => false,
 }))
 
 vi.mock('../../i18n', () => ({

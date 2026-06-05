@@ -36,6 +36,15 @@ const VERSION_FILES = [
     },
   },
   {
+    path: path.join(root, 'desktop/src-tauri/Cargo.lock'),
+    update(content: string, version: string) {
+      return content.replace(
+        /(\[\[package\]\]\nname = "gaster-code-desktop"\nversion = ")[^"]+(")/,
+        `$1${version}$2`,
+      )
+    },
+  },
+  {
     path: path.join(root, 'desktop/src/version.ts'),
     update(content: string, version: string) {
       return content.replace(/GASTER_CODE_VERSION\s*=\s*'[^']*'/, `GASTER_CODE_VERSION = '${version}'`)
@@ -47,10 +56,10 @@ const SEMVER_PATTERN = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/
 const BASE_VERSION_PATTERN = /^(\d+)\.(\d+)\.(\d+)/
 
 function getCurrentVersion(): string {
-  const tauriConf = JSON.parse(
-    readFileSync(path.join(root, 'desktop/src-tauri/tauri.conf.json'), 'utf-8'),
+  const desktopPackage = JSON.parse(
+    readFileSync(path.join(root, 'desktop/package.json'), 'utf-8'),
   )
-  return tauriConf.version
+  return desktopPackage.version
 }
 
 function getReleaseNotesPath(version: string): string {
@@ -141,10 +150,6 @@ for (const file of VERSION_FILES) {
   writeFileSync(file.path, updated)
   console.log(`  Updated: ${path.relative(root, file.path)}`)
 }
-
-// Regenerate Cargo.lock
-console.log('\n  Updating Cargo.lock...')
-await run(['cargo', 'generate-lockfile'], path.join(root, 'desktop/src-tauri'))
 
 // Git commit + tag
 console.log('  Creating git commit...')

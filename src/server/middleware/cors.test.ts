@@ -74,9 +74,10 @@ describe('resolveCors', () => {
   })
 
   it('keeps trusted local desktop origins allowed when H5 token mode is active', async () => {
-    for (const origin of ['http://tauri.localhost', 'http://127.0.0.1:5179']) {
+    for (const origin of ['http://tauri.localhost', 'http://127.0.0.1:5179', 'file://']) {
       const result = await resolveCors(origin, 'http://192.168.0.20:3456', {
         h5Enabled: true,
+        clientAddress: '127.0.0.1',
         isOriginAllowed: async () => false,
       })
 
@@ -86,9 +87,24 @@ describe('resolveCors', () => {
     }
   })
 
+  it('does not trust local desktop origins from remote clients when H5 token mode is active', async () => {
+    for (const origin of ['http://tauri.localhost', 'http://127.0.0.1:5179', 'file://']) {
+      const result = await resolveCors(origin, 'http://192.168.0.20:3456', {
+        h5Enabled: true,
+        clientAddress: '192.168.0.44',
+        isOriginAllowed: async () => false,
+      })
+
+      expect(result.allowed).toBe(false)
+      expect(result.rejected).toBe(true)
+      expect(result.headers['Access-Control-Allow-Origin']).toBeUndefined()
+    }
+  })
+
   it('does not trust non-local same-origin requests unless explicitly configured', async () => {
     const result = await resolveCors('http://192.168.0.20:3456', 'http://192.168.0.20:3456', {
       h5Enabled: true,
+      clientAddress: '192.168.0.44',
       isOriginAllowed: async () => false,
     })
 

@@ -64,8 +64,8 @@ export function ImageGalleryModal({ open, images, activeIndex, onClose, onSelect
           )}
         </div>
 
-        <div className="flex max-h-[70vh] items-center justify-center overflow-hidden rounded-2xl bg-[#111]">
-          <img src={activeImage.src} alt={activeImage.name} className="max-h-[70vh] w-full object-contain" />
+        <div className="flex max-h-[70vh] items-center justify-center overflow-auto rounded-2xl bg-[#111]">
+          <img src={activeImage.src} alt={activeImage.name} className="max-h-[70vh] max-w-full object-contain" />
         </div>
 
         {images.length > 1 && (
