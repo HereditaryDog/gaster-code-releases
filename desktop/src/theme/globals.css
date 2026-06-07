@@ -1101,14 +1101,16 @@ button, input, textarea, select, a, [role="button"] {
     opacity calc(var(--motion-sidebar-duration) - 80ms) ease;
 }
 
-[data-theme="light"] .sidebar-brand-logo,
 [data-theme="light"] .hero-brand-logo {
   filter: brightness(0) saturate(100%) opacity(0.92);
 }
 
-[data-theme="dark"] .sidebar-brand-logo,
 [data-theme="dark"] .hero-brand-logo {
   filter: brightness(0) invert(1) opacity(0.92);
+}
+
+.sidebar-brand-logo {
+  filter: none;
 }
 
 .sidebar-shell {
@@ -1117,9 +1119,9 @@ button, input, textarea, select, a, [role="button"] {
   width: var(--sidebar-current-width);
   max-width: var(--sidebar-current-width);
   flex: 0 0 var(--sidebar-current-width);
-  background: var(--color-surface-sidebar);
+  background: transparent;
   isolation: isolate;
-  overflow: hidden;
+  overflow: visible;
   transition:
     width var(--motion-sidebar-duration) var(--motion-sidebar-easing),
     max-width var(--motion-sidebar-duration) var(--motion-sidebar-easing),
@@ -1175,19 +1177,96 @@ button, input, textarea, select, a, [role="button"] {
 }
 
 .sidebar-panel--glass {
-  background: var(--color-surface-sidebar);
-  border-right-color: var(--color-border);
+  --color-surface-sidebar: rgba(16, 18, 22, 0.72);
+  --color-surface-hover: rgba(255, 255, 255, 0.055);
+  --color-text-primary: rgba(247, 245, 240, 0.96);
+  --color-text-secondary: rgba(226, 222, 214, 0.72);
+  --color-text-tertiary: rgba(226, 222, 214, 0.48);
+  --color-brand-wordmark: rgba(247, 245, 240, 0.96);
+  --color-border: rgba(255, 255, 255, 0.075);
+  --color-sidebar-filter-bg: rgba(255, 255, 255, 0.044);
+  --color-sidebar-filter-border: rgba(255, 255, 255, 0.072);
+  --color-sidebar-search-bg: rgba(255, 255, 255, 0.044);
+  --color-sidebar-search-border: rgba(255, 255, 255, 0.072);
+  --color-sidebar-item-hover: rgba(255, 255, 255, 0.052);
+  --color-sidebar-item-active: rgba(255, 255, 255, 0.078);
+  --color-sidebar-item-active-border: rgba(255, 255, 255, 0.055);
+
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  background:
+    linear-gradient(180deg, rgba(27, 29, 33, 0.78), rgba(11, 13, 16, 0.84)),
+    rgba(16, 18, 22, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.095);
+  border-left-color: rgba(255, 255, 255, 0.04);
+  border-right-color: transparent;
+  border-radius: 0 22px 22px 0;
+  backdrop-filter: blur(34px) saturate(128%);
+  -webkit-backdrop-filter: blur(34px) saturate(128%);
   box-shadow:
-    inset -1px 0 0 color-mix(in srgb, var(--color-surface-bright) 8%, var(--color-surface-sidebar)),
-    18px 0 40px rgba(0, 0, 0, 0.12);
+    inset 0 1px 0 rgba(255, 255, 255, 0.13),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.62),
+    inset 1px 0 0 rgba(255, 255, 255, 0.045);
 }
 
 [data-theme="dark"] .sidebar-panel--glass {
-  background: var(--color-surface-sidebar);
-  border-right-color: var(--color-border);
+  background:
+    linear-gradient(180deg, rgba(27, 29, 33, 0.78), rgba(11, 13, 16, 0.84)),
+    rgba(16, 18, 22, 0.72);
+}
+
+.sidebar-control-surface {
+  background: rgba(255, 255, 255, 0.044);
+  border-color: rgba(255, 255, 255, 0.072);
   box-shadow:
-    inset -1px 0 0 color-mix(in srgb, #fff 3.5%, var(--color-surface-sidebar)),
-    18px 0 44px rgba(0, 0, 0, 0.28);
+    inset 0 1px 0 rgba(255, 255, 255, 0.085),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.32);
+}
+
+.sidebar-control-surface:hover {
+  background: rgba(255, 255, 255, 0.062);
+  border-color: rgba(255, 255, 255, 0.095);
+}
+
+.sidebar-search-surface:focus-within,
+.sidebar-control-surface:focus-visible {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(119, 168, 255, 0.38);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.11),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.34),
+    inset 0 0 0 1px rgba(119, 168, 255, 0.16);
+}
+
+.sidebar-control-surface--active {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.102), rgba(255, 255, 255, 0.064)),
+    rgba(255, 255, 255, 0.078);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.sidebar-nav-item {
+  border: 1px solid transparent;
+}
+
+.sidebar-nav-item--active,
+.sidebar-session-row--active,
+.sidebar-session-row--selected {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.102), rgba(255, 255, 255, 0.064)),
+    rgba(255, 255, 255, 0.078);
+  border-color: rgba(255, 255, 255, 0.055);
+  border-radius: 13px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.34);
+}
+
+.sidebar-nav-item--idle:hover,
+.sidebar-session-row--idle:hover {
+  background: rgba(255, 255, 255, 0.052);
+  border-color: rgba(255, 255, 255, 0.04);
 }
 
 .sidebar-panel[data-state="closed"] {

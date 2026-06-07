@@ -64,6 +64,21 @@ describe('theme tokens', () => {
     }
   })
 
+  it('prevents release sync from restoring the old sidebar menu shadow', () => {
+    const sidebarShellRule = themeCss.match(/\.sidebar-shell\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? ''
+    const sidebarGlassRule = themeCss.match(/\.sidebar-panel--glass\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? ''
+    const darkSidebarGlassRule = themeCss.match(/\[data-theme="dark"\]\s*\.sidebar-panel--glass\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? ''
+
+    expect(sidebarShellRule).toContain('background: transparent;')
+    expect(sidebarShellRule).toContain('overflow: visible;')
+    expect(sidebarGlassRule).toContain('backdrop-filter: blur(34px) saturate(128%);')
+    expect(sidebarGlassRule).toContain('border-right-color: transparent;')
+    expect(sidebarGlassRule).not.toContain('background: var(--color-surface-sidebar);')
+    expect(sidebarGlassRule).not.toMatch(/\n\s*\d+px\s+0\s+\d+px\s+rgba/)
+    expect(darkSidebarGlassRule).not.toContain('background: var(--color-surface-sidebar);')
+    expect(darkSidebarGlassRule).not.toMatch(/\n\s*\d+px\s+0\s+\d+px\s+rgba/)
+  })
+
   it('keeps sidebar live markers inside a small WebView paint area', () => {
     const markerRules = [...themeCss.matchAll(/\.sidebar-session-status-marker[^{}]*\{[^}]*\}/g)]
       .map((match) => match[0])
