@@ -92,6 +92,9 @@ const zhSidebar = [
       { text: '功能详解', link: '/desktop/03-features' },
       { text: '安装与构建', link: '/desktop/04-installation' },
       { text: 'H5 访问', link: '/desktop/06-h5-access' },
+      { text: 'Electron 迁移研究', link: '/desktop/07-electron-migration-research' },
+      { text: 'Electron 迁移任务', link: '/desktop/08-electron-migration-tasks' },
+      { text: 'Electron 验证清单', link: '/desktop/09-electron-migration-validation-checklist' },
     ],
   },
   {

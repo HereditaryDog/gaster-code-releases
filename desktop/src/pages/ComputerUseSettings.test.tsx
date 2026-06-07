@@ -4,6 +4,7 @@ import '@testing-library/jest-dom'
 
 import { ComputerUseSettings } from './ComputerUseSettings'
 import { useSettingsStore } from '../stores/settingsStore'
+import { browserHost } from '../lib/desktopHost/browserHost'
 
 const computerUseApiMock = vi.hoisted(() => ({
   getStatus: vi.fn(),
@@ -70,6 +71,7 @@ describe('ComputerUseSettings', () => {
     computerUseApiMock.setAuthorizedApps.mockReset()
     computerUseApiMock.runSetup.mockReset()
     computerUseApiMock.openSettings.mockReset()
+    Reflect.deleteProperty(window, 'desktopHost')
 
     computerUseApiMock.getStatus.mockResolvedValue(readyStatus)
     computerUseApiMock.getAuthorizedApps.mockResolvedValue(enabledConfig)
@@ -124,6 +126,63 @@ describe('ComputerUseSettings', () => {
       pythonPath: 'C:\\Users\\me\\miniconda3\\envs\\cu\\python.exe',
     })
     expect(computerUseApiMock.getStatus).toHaveBeenCalledTimes(2)
+  })
+
+  it('selects a custom Python interpreter through the injected desktop host', async () => {
+    const open = vi.fn().mockResolvedValue('/opt/python/bin/python3')
+    window.desktopHost = {
+      ...browserHost,
+      kind: 'electron',
+      isDesktop: true,
+      capabilities: {
+        ...browserHost.capabilities,
+        dialogs: true,
+      },
+      dialogs: {
+        ...browserHost.dialogs,
+        open,
+      },
+    }
+
+    render(<ComputerUseSettings />)
+
+    await screen.findByLabelText('Python Interpreter Path')
+    await act(async () => {
+      fireEvent.click(screen.getByText('Browse'))
+      await Promise.resolve()
+    })
+
+    expect(open).toHaveBeenCalledWith({
+      multiple: false,
+      directory: false,
+      title: 'Select Python Interpreter',
+    })
+    expect(computerUseApiMock.setAuthorizedApps).toHaveBeenCalledWith({
+      pythonPath: '/opt/python/bin/python3',
+    })
+  })
+
+  it('falls back to manual Python path entry when dialogs are unavailable', async () => {
+    window.desktopHost = {
+      ...browserHost,
+      kind: 'browser',
+      isDesktop: false,
+      capabilities: {
+        ...browserHost.capabilities,
+        dialogs: false,
+      },
+    }
+
+    render(<ComputerUseSettings />)
+
+    await screen.findByLabelText('Python Interpreter Path')
+    await act(async () => {
+      fireEvent.click(screen.getByText('Browse'))
+      await Promise.resolve()
+    })
+
+    expect(screen.getByText('Could not open the file picker. Paste the path manually.')).toBeInTheDocument()
+    expect(computerUseApiMock.setAuthorizedApps).not.toHaveBeenCalled()
   })
 
   it('keeps the user-selected enablement when a stale refresh resolves later', async () => {

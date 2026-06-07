@@ -162,6 +162,16 @@ interface CompressedImageResult {
   originalSize: number
 }
 
+type ResizeDimensions = {
+  width: number
+  height: number
+}
+
+const IMAGE_PROMPT_SOFT_LONG_EDGE = 2048
+const IMAGE_PROMPT_READABLE_LONG_EDGE = 1568
+const READABLE_JPEG_QUALITIES = [85, 75] as const
+const FALLBACK_JPEG_QUALITIES = [65] as const
+
 /**
  * Extracted from FileReadTool's readImage function
  * Resizes image buffer to meet size and dimension constraints
@@ -226,160 +236,99 @@ export async function maybeResizeAndDownsampleImageBuffer(
       }
     }
 
+    const hardDims = constrainDimensions(
+      width,
+      height,
+      IMAGE_MAX_WIDTH,
+      IMAGE_MAX_HEIGHT,
+    )
     const needsDimensionResize =
-      width > IMAGE_MAX_WIDTH || height > IMAGE_MAX_HEIGHT
-    const isPng = normalizedMediaType === 'png'
+      hardDims.width !== width || hardDims.height !== height
 
-    // If dimensions are within limits but file is too large, try compression first
-    // This preserves full resolution when possible
+    // Try lossless or high-quality compression at original dimensions first.
+    // This keeps screenshot text sharp when the only problem is payload size.
     if (!needsDimensionResize && originalSize > IMAGE_TARGET_RAW_SIZE) {
-      // For PNGs, try PNG compression first to preserve transparency
-      if (isPng) {
-        // Create fresh sharp instance for each compression attempt
-        const pngCompressed = await sharp(imageBuffer)
-          .png({ compressionLevel: 9, palette: true })
-          .toBuffer()
-        if (pngCompressed.length <= IMAGE_TARGET_RAW_SIZE) {
-          return {
-            buffer: pngCompressed,
-            mediaType: 'png',
-            dimensions: {
-              originalWidth,
-              originalHeight,
-              displayWidth: width,
-              displayHeight: height,
-            },
-          }
-        }
-      }
-      // Try JPEG compression (lossy but much smaller)
-      for (const quality of [80, 60, 40, 20]) {
-        // Create fresh sharp instance for each attempt
-        const compressedBuffer = await sharp(imageBuffer)
-          .jpeg({ quality })
-          .toBuffer()
-        if (compressedBuffer.length <= IMAGE_TARGET_RAW_SIZE) {
-          return {
-            buffer: compressedBuffer,
-            mediaType: 'jpeg',
-            dimensions: {
-              originalWidth,
-              originalHeight,
-              displayWidth: width,
-              displayHeight: height,
-            },
-          }
-        }
-      }
-      // Quality reduction alone wasn't enough, fall through to resize
-    }
-
-    // Constrain dimensions if needed
-    if (width > IMAGE_MAX_WIDTH) {
-      height = Math.round((height * IMAGE_MAX_WIDTH) / width)
-      width = IMAGE_MAX_WIDTH
-    }
-
-    if (height > IMAGE_MAX_HEIGHT) {
-      width = Math.round((width * IMAGE_MAX_HEIGHT) / height)
-      height = IMAGE_MAX_HEIGHT
-    }
-
-    // IMPORTANT: Always create fresh sharp(imageBuffer) instances for each operation.
-    // The native image-processor-napi module doesn't properly apply format conversions
-    // when reusing a sharp instance after calling toBuffer(). This caused a bug where
-    // all compression attempts (PNG, JPEG at various qualities) returned identical sizes.
-    logForDebugging(`Resizing to ${width}x${height}`)
-    const resizedImageBuffer = await sharp(imageBuffer)
-      .resize(width, height, {
-        fit: 'inside',
-        withoutEnlargement: true,
-      })
-      .toBuffer()
-
-    // If still too large after resize, try compression
-    if (resizedImageBuffer.length > IMAGE_TARGET_RAW_SIZE) {
-      // For PNGs, try PNG compression first to preserve transparency
-      if (isPng) {
-        const pngCompressed = await sharp(imageBuffer)
-          .resize(width, height, {
-            fit: 'inside',
-            withoutEnlargement: true,
-          })
-          .png({ compressionLevel: 9, palette: true })
-          .toBuffer()
-        if (pngCompressed.length <= IMAGE_TARGET_RAW_SIZE) {
-          return {
-            buffer: pngCompressed,
-            mediaType: 'png',
-            dimensions: {
-              originalWidth,
-              originalHeight,
-              displayWidth: width,
-              displayHeight: height,
-            },
-          }
-        }
-      }
-
-      // Try JPEG with progressively lower quality
-      for (const quality of [80, 60, 40, 20]) {
-        const compressedBuffer = await sharp(imageBuffer)
-          .resize(width, height, {
-            fit: 'inside',
-            withoutEnlargement: true,
-          })
-          .jpeg({ quality })
-          .toBuffer()
-        if (compressedBuffer.length <= IMAGE_TARGET_RAW_SIZE) {
-          return {
-            buffer: compressedBuffer,
-            mediaType: 'jpeg',
-            dimensions: {
-              originalWidth,
-              originalHeight,
-              displayWidth: width,
-              displayHeight: height,
-            },
-          }
-        }
-      }
-      // If still too large, resize smaller and compress aggressively
-      const smallerWidth = Math.min(width, 1000)
-      const smallerHeight = Math.round(
-        (height * smallerWidth) / Math.max(width, 1),
-      )
-      logForDebugging('Still too large, compressing with JPEG')
-      const compressedBuffer = await sharp(imageBuffer)
-        .resize(smallerWidth, smallerHeight, {
-          fit: 'inside',
-          withoutEnlargement: true,
-        })
-        .jpeg({ quality: 20 })
-        .toBuffer()
-      logForDebugging(`JPEG compressed buffer size: ${compressedBuffer.length}`)
-      return {
-        buffer: compressedBuffer,
-        mediaType: 'jpeg',
-        dimensions: {
-          originalWidth,
-          originalHeight,
-          displayWidth: smallerWidth,
-          displayHeight: smallerHeight,
-        },
-      }
-    }
-
-    return {
-      buffer: resizedImageBuffer,
-      mediaType: normalizedMediaType,
-      dimensions: {
+      const compressed = await tryEncodeImageCandidate({
+        sharp,
+        imageBuffer,
         originalWidth,
         originalHeight,
-        displayWidth: width,
-        displayHeight: height,
-      },
+        dimensions: { width, height },
+        format: normalizedMediaType,
+        maxBytes: IMAGE_TARGET_RAW_SIZE,
+      })
+      if (compressed) return compressed
     }
+
+    if (needsDimensionResize) {
+      logForDebugging(`Resizing to ${hardDims.width}x${hardDims.height}`)
+      const hardResize = await tryEncodeImageCandidate({
+        sharp,
+        imageBuffer,
+        originalWidth,
+        originalHeight,
+        dimensions: hardDims,
+        format: normalizedMediaType,
+        maxBytes: IMAGE_TARGET_RAW_SIZE,
+      })
+      if (hardResize) return hardResize
+    }
+
+    const softDims = constrainDimensions(
+      hardDims.width,
+      hardDims.height,
+      IMAGE_PROMPT_SOFT_LONG_EDGE,
+      IMAGE_PROMPT_SOFT_LONG_EDGE,
+    )
+    if (
+      softDims.width !== hardDims.width ||
+      softDims.height !== hardDims.height
+    ) {
+      logForDebugging(
+        `Downsampling image to ${softDims.width}x${softDims.height}`,
+      )
+      const softResize = await tryEncodeImageCandidate({
+        sharp,
+        imageBuffer,
+        originalWidth,
+        originalHeight,
+        dimensions: softDims,
+        format: normalizedMediaType,
+        maxBytes: IMAGE_TARGET_RAW_SIZE,
+      })
+      if (softResize) return softResize
+    }
+
+    const readableDims = constrainDimensions(
+      hardDims.width,
+      hardDims.height,
+      IMAGE_PROMPT_READABLE_LONG_EDGE,
+      IMAGE_PROMPT_READABLE_LONG_EDGE,
+    )
+    if (
+      readableDims.width !== softDims.width ||
+      readableDims.height !== softDims.height
+    ) {
+      logForDebugging(
+        `Downsampling image to readable fallback ${readableDims.width}x${readableDims.height}`,
+      )
+      const readableResize = await tryEncodeImageCandidate({
+        sharp,
+        imageBuffer,
+        originalWidth,
+        originalHeight,
+        dimensions: readableDims,
+        format: normalizedMediaType,
+        maxBytes: IMAGE_TARGET_RAW_SIZE,
+        allowFallbackQuality: true,
+      })
+      if (readableResize) return readableResize
+    }
+
+    throw new ImageResizeError(
+      `Unable to compress image (${formatFileSize(originalSize)}) below the 5MB API base64 limit without over-compressing it. ` +
+        `Please resize the image manually or use a smaller image.`,
+    )
   } catch (error) {
     // Log the error and emit analytics event
     logError(error as Error)
@@ -430,6 +379,277 @@ export async function maybeResizeAndDownsampleImageBuffer(
             `Please resize the image manually or use a smaller image.`,
     )
   }
+}
+
+function constrainDimensions(
+  width: number,
+  height: number,
+  maxWidth: number,
+  maxHeight: number,
+): ResizeDimensions {
+  let nextWidth = width
+  let nextHeight = height
+
+  if (nextWidth > maxWidth) {
+    nextHeight = Math.round((nextHeight * maxWidth) / nextWidth)
+    nextWidth = maxWidth
+  }
+
+  if (nextHeight > maxHeight) {
+    nextWidth = Math.round((nextWidth * maxHeight) / nextHeight)
+    nextHeight = maxHeight
+  }
+
+  return {
+    width: Math.max(1, nextWidth),
+    height: Math.max(1, nextHeight),
+  }
+}
+
+function constrainDimensionsToPixelBudget(
+  width: number,
+  height: number,
+  maxPixels: number,
+): ResizeDimensions {
+  if (width * height <= maxPixels) {
+    return { width, height }
+  }
+
+  const scale = Math.sqrt(maxPixels / (width * height))
+  let nextWidth = Math.max(1, Math.round(width * scale))
+  let nextHeight = Math.max(1, Math.round(height * scale))
+
+  while (nextWidth * nextHeight > maxPixels) {
+    if (nextWidth >= nextHeight) {
+      nextWidth -= 1
+    } else {
+      nextHeight -= 1
+    }
+  }
+
+  return {
+    width: nextWidth,
+    height: nextHeight,
+  }
+}
+
+function createResizeResult(
+  buffer: Buffer,
+  mediaType: string,
+  originalWidth: number,
+  originalHeight: number,
+  dimensions: ResizeDimensions,
+): ResizeResult {
+  return {
+    buffer,
+    mediaType,
+    dimensions: {
+      originalWidth,
+      originalHeight,
+      displayWidth: dimensions.width,
+      displayHeight: dimensions.height,
+    },
+  }
+}
+
+function createImagePipeline(
+  sharp: SharpFunction,
+  imageBuffer: Buffer,
+  originalWidth: number,
+  originalHeight: number,
+  dimensions: ResizeDimensions,
+): SharpInstance {
+  const pipeline = sharp(imageBuffer)
+  if (
+    dimensions.width === originalWidth &&
+    dimensions.height === originalHeight
+  ) {
+    return pipeline
+  }
+
+  return pipeline.resize(dimensions.width, dimensions.height, {
+    fit: 'inside',
+    withoutEnlargement: true,
+  })
+}
+
+async function tryEncodeImageCandidate({
+  sharp,
+  imageBuffer,
+  originalWidth,
+  originalHeight,
+  dimensions,
+  format,
+  maxBytes,
+  allowFallbackQuality = false,
+}: {
+  sharp: SharpFunction
+  imageBuffer: Buffer
+  originalWidth: number
+  originalHeight: number
+  dimensions: ResizeDimensions
+  format: string
+  maxBytes: number
+  allowFallbackQuality?: boolean
+}): Promise<ResizeResult | null> {
+  const normalizedFormat = format === 'jpg' ? 'jpeg' : format
+
+  if (normalizedFormat === 'png') {
+    const pngCompressed = await createImagePipeline(
+      sharp,
+      imageBuffer,
+      originalWidth,
+      originalHeight,
+      dimensions,
+    )
+      .png({ compressionLevel: 9 })
+      .toBuffer()
+    if (pngCompressed.length <= maxBytes) {
+      return createResizeResult(
+        pngCompressed,
+        'png',
+        originalWidth,
+        originalHeight,
+        dimensions,
+      )
+    }
+
+    const webpLossless = await createImagePipeline(
+      sharp,
+      imageBuffer,
+      originalWidth,
+      originalHeight,
+      dimensions,
+    )
+      .webp({ lossless: true })
+      .toBuffer()
+    if (webpLossless.length <= maxBytes) {
+      return createResizeResult(
+        webpLossless,
+        'webp',
+        originalWidth,
+        originalHeight,
+        dimensions,
+      )
+    }
+  } else if (normalizedFormat === 'webp') {
+    const webpLossless = await createImagePipeline(
+      sharp,
+      imageBuffer,
+      originalWidth,
+      originalHeight,
+      dimensions,
+    )
+      .webp({ lossless: true })
+      .toBuffer()
+    if (webpLossless.length <= maxBytes) {
+      return createResizeResult(
+        webpLossless,
+        'webp',
+        originalWidth,
+        originalHeight,
+        dimensions,
+      )
+    }
+  }
+
+  const jpegQualities = allowFallbackQuality
+    ? [...READABLE_JPEG_QUALITIES, ...FALLBACK_JPEG_QUALITIES]
+    : READABLE_JPEG_QUALITIES
+  for (const quality of jpegQualities) {
+    const jpegBuffer = await createImagePipeline(
+      sharp,
+      imageBuffer,
+      originalWidth,
+      originalHeight,
+      dimensions,
+    )
+      .jpeg({ quality })
+      .toBuffer()
+    if (jpegBuffer.length <= maxBytes) {
+      return createResizeResult(
+        jpegBuffer,
+        'jpeg',
+        originalWidth,
+        originalHeight,
+        dimensions,
+      )
+    }
+  }
+
+  return null
+}
+
+export async function downsampleImageBufferToVisionTokenBudget(
+  imageBuffer: Buffer,
+  originalSize: number,
+  ext: string,
+  maxTokens: number,
+): Promise<ResizeResult> {
+  const sharp = await getImageProcessor()
+  const metadata = await sharp(imageBuffer).metadata()
+  const format = metadata.format ?? ext
+  const normalizedMediaType = format === 'jpg' ? 'jpeg' : format
+
+  if (!metadata.width || !metadata.height) {
+    throw new ImageResizeError(
+      'Unable to downsample image for token budget because dimensions are unavailable.',
+    )
+  }
+
+  const originalWidth = metadata.width
+  const originalHeight = metadata.height
+  const hardDims = constrainDimensions(
+    originalWidth,
+    originalHeight,
+    IMAGE_MAX_WIDTH,
+    IMAGE_MAX_HEIGHT,
+  )
+  const maxPixels = Math.max(1, maxTokens * 750)
+  const tokenDims = constrainDimensionsToPixelBudget(
+    hardDims.width,
+    hardDims.height,
+    maxPixels,
+  )
+
+  const tokenResize = await tryEncodeImageCandidate({
+    sharp,
+    imageBuffer,
+    originalWidth,
+    originalHeight,
+    dimensions: tokenDims,
+    format: normalizedMediaType,
+    maxBytes: IMAGE_TARGET_RAW_SIZE,
+    allowFallbackQuality: true,
+  })
+  if (tokenResize) return tokenResize
+
+  const readableDims = constrainDimensions(
+    tokenDims.width,
+    tokenDims.height,
+    IMAGE_PROMPT_READABLE_LONG_EDGE,
+    IMAGE_PROMPT_READABLE_LONG_EDGE,
+  )
+  if (
+    readableDims.width !== tokenDims.width ||
+    readableDims.height !== tokenDims.height
+  ) {
+    const readableResize = await tryEncodeImageCandidate({
+      sharp,
+      imageBuffer,
+      originalWidth,
+      originalHeight,
+      dimensions: readableDims,
+      format: normalizedMediaType,
+      maxBytes: IMAGE_TARGET_RAW_SIZE,
+      allowFallbackQuality: true,
+    })
+    if (readableResize) return readableResize
+  }
+
+  throw new ImageResizeError(
+    `Unable to downsample image (${formatFileSize(originalSize)}) below the ${maxTokens} token budget without over-compressing it.`,
+  )
 }
 
 export interface ImageBlockWithDimensions {

@@ -2,7 +2,7 @@
  * CORS middleware for desktop and H5 browser access.
  */
 
-import { isLoopbackHost } from '../h5AccessPolicy.js'
+import { isTrustedLocalDesktopRequest } from '../h5AccessPolicy.js'
 
 export function corsHeaders(origin?: string | null): Record<string, string> {
   const allowedOrigin = origin || 'http://localhost:3000'
@@ -33,28 +33,7 @@ export type CorsResolution = {
 export type CorsResolutionOptions = {
   h5Enabled?: boolean
   isOriginAllowed?: (origin: string) => Promise<boolean>
-}
-
-const LOCAL_ORIGINS = new Set([
-  'http://tauri.localhost',
-  'https://tauri.localhost',
-  'tauri://localhost',
-])
-
-function isLocalOrigin(origin?: string | null): boolean {
-  if (!origin) {
-    return true
-  }
-
-  if (LOCAL_ORIGINS.has(origin)) {
-    return true
-  }
-
-  try {
-    return isLoopbackHost(new URL(origin).hostname)
-  } catch {
-    return false
-  }
+  clientAddress?: string | null
 }
 
 export async function resolveCors(
@@ -70,7 +49,10 @@ export async function resolveCors(
     }
   }
 
-  if (!options.h5Enabled || isLocalOrigin(origin)) {
+  if (
+    !options.h5Enabled ||
+    isTrustedLocalDesktopRequest(origin, { clientAddress: options.clientAddress ?? null })
+  ) {
     return {
       allowed: true,
       rejected: false,

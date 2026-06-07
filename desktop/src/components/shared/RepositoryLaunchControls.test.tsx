@@ -17,7 +17,7 @@ vi.mock('../../hooks/useMobileViewport', () => ({
 }))
 
 vi.mock('../../lib/desktopRuntime', () => ({
-  isTauriRuntime: () => viewportMocks.isTauri,
+  isDesktopRuntime: () => viewportMocks.isTauri,
 }))
 
 vi.mock('../../api/sessions', () => ({
@@ -27,8 +27,13 @@ vi.mock('../../api/sessions', () => ({
 }))
 
 vi.mock('./DirectoryPicker', () => ({
-  DirectoryPicker: ({ value }: { value: string }) => (
-    <button type="button">Project {value}</button>
+  DirectoryPicker: ({ value, variant }: { value: string; variant?: 'chip' | 'workbar' | 'floating' }) => (
+    <button
+      type="button"
+      className={variant === 'floating' ? 'project-context-chip project-context-chip--frosted' : ''}
+    >
+      Project {value}
+    </button>
   ),
 }))
 
@@ -120,6 +125,18 @@ describe('RepositoryLaunchControls', () => {
     expect(listbox).toBeInTheDocument()
     expect(screen.queryByRole('dialog', { name: 'Select branch' })).not.toBeInTheDocument()
     expect(listbox.parentElement?.className).toContain('w-[390px]')
+  })
+
+  it('renders as a floating project chip row for the desktop composer', async () => {
+    renderControls({ variant: 'floating' })
+
+    const root = await screen.findByTestId('repository-launch-controls')
+    const row = await screen.findByTestId('repository-launch-controls-row')
+    expect(root.className).toContain('items-start')
+    expect(row).toHaveClass('repository-launch-controls__row--floating')
+    expect(row.className).not.toContain('border-t')
+    expect(row.className).not.toContain('rounded-b-xl')
+    expect(screen.getByRole('button', { name: /Project/ }).className).toContain('project-context-chip--frosted')
   })
 
   it('uses the full-width mobile bottom sheet in H5 mobile browser mode', async () => {

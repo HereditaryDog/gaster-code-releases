@@ -3,6 +3,7 @@ import {
   classifyH5Request,
   isLoopbackHost,
   shouldBlockDisabledH5Access,
+  shouldGateUnhandledH5CapabilityPath,
   shouldRequireH5Token,
 } from '../h5AccessPolicy.js'
 
@@ -27,6 +28,17 @@ describe('h5AccessPolicy', () => {
     })
     expect(classifyH5Request(request, new URL(request.url), localContext)).toBe('local-trusted')
     expect(shouldRequireH5Token({ request, url: new URL(request.url), h5Enabled: true, context: localContext })).toBe(false)
+  })
+
+  test('keeps packaged Electron file renderer requests tokenless only from loopback clients', () => {
+    const request = req('http://127.0.0.1:3456/api/status', {
+      headers: { Origin: 'file://' },
+    })
+    expect(classifyH5Request(request, new URL(request.url), localContext)).toBe('local-trusted')
+    expect(shouldRequireH5Token({ request, url: new URL(request.url), h5Enabled: true, context: localContext })).toBe(false)
+
+    expect(classifyH5Request(request, new URL(request.url), remoteContext)).toBe('h5-browser')
+    expect(shouldRequireH5Token({ request, url: new URL(request.url), h5Enabled: true, context: remoteContext })).toBe(true)
   })
 
   test('keeps local internal SDK websocket routes tokenless', () => {
@@ -85,6 +97,8 @@ describe('h5AccessPolicy', () => {
       '/api/agents',
       '/proxy/openai/v1/chat/completions',
       '/ws/session-1',
+      '/local-file/session-1/image.png',
+      '/preview-fs/session-1/index.html',
     ]) {
       const request = req(`http://192.168.0.20:3456${pathname}`, {
         headers: { Origin: 'http://192.168.0.20:3456' },
@@ -103,6 +117,8 @@ describe('h5AccessPolicy', () => {
       '/proxy/openai/v1/chat/completions',
       '/ws/session-1',
       '/sdk/session-1',
+      '/local-file/session-1/image.png',
+      '/preview-fs/session-1/index.html',
     ]) {
       const request = req(`http://192.168.0.20:3456${pathname}`, {
         headers: { Origin: 'http://192.168.0.20:3456' },
@@ -118,7 +134,14 @@ describe('h5AccessPolicy', () => {
   })
 
   test('keeps local capability routes and static bootstrap routes available while H5 access is disabled', () => {
-    for (const pathname of ['/api/status', '/proxy/openai/v1/chat/completions', '/ws/session-1', '/sdk/session-1']) {
+    for (const pathname of [
+      '/api/status',
+      '/proxy/openai/v1/chat/completions',
+      '/ws/session-1',
+      '/sdk/session-1',
+      '/local-file/session-1/image.png',
+      '/preview-fs/session-1/index.html',
+    ]) {
       const request = req(`http://127.0.0.1:3456${pathname}`)
       expect(shouldBlockDisabledH5Access({
         request,
@@ -151,6 +174,18 @@ describe('h5AccessPolicy', () => {
       h5Enabled: false,
       context: localContext,
     })).toBe(false)
+  })
+
+  test('gates only standalone H5 capability paths outside handled server branches', () => {
+    expect(shouldGateUnhandledH5CapabilityPath('/local-file/session-1/image.png')).toBe(true)
+    expect(shouldGateUnhandledH5CapabilityPath('/preview-fs/session-1/index.html')).toBe(true)
+    expect(shouldGateUnhandledH5CapabilityPath('/api/status')).toBe(false)
+    expect(shouldGateUnhandledH5CapabilityPath('/proxy/openai/v1/chat/completions')).toBe(false)
+    expect(shouldGateUnhandledH5CapabilityPath('/ws/session-1')).toBe(false)
+    expect(shouldGateUnhandledH5CapabilityPath('/sdk/session-1')).toBe(false)
+    expect(shouldGateUnhandledH5CapabilityPath('/')).toBe(false)
+    expect(shouldGateUnhandledH5CapabilityPath('/assets/app.js')).toBe(false)
+    expect(shouldGateUnhandledH5CapabilityPath('/health')).toBe(false)
   })
 
   test('does not block explicitly authenticated deployments before auth middleware runs', () => {

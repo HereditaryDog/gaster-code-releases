@@ -4,8 +4,8 @@
  * These constants define server-side limits enforced by the Anthropic API.
  * Keep this file dependency-free to prevent circular imports.
  *
- * Last verified: 2025-12-22
- * Source: api/api/schemas/messages/blocks/ and api/api/config.py
+ * Last verified: 2026-06-01
+ * Source: Claude Vision API docs and api/api/config.py
  *
  * Future: See issue #13240 for dynamic limits fetching from server.
  */
@@ -29,18 +29,18 @@ export const API_IMAGE_MAX_BASE64_SIZE = 5 * 1024 * 1024 // 5 MB
 export const IMAGE_TARGET_RAW_SIZE = (API_IMAGE_MAX_BASE64_SIZE * 3) / 4 // 3.75 MB
 
 /**
- * Client-side maximum dimensions for image resizing.
+ * API-enforced maximum dimensions for image inputs.
  *
- * Note: The API internally resizes images larger than 1568px (source:
- * encoding/full_encoding.py), but this is handled server-side and doesn't
- * cause errors. These client-side limits (2000px) are slightly larger to
- * preserve quality when beneficial.
+ * Note: The API internally resizes images whose long edge is larger than
+ * 1568px, but that is handled server-side and doesn't cause errors. Keep this
+ * limit aligned with the API's rejection threshold so common tall screenshots
+ * are not locally resized or rejected just because they exceed 2000px.
  *
  * The API_IMAGE_MAX_BASE64_SIZE (5MB) is the actual hard limit that causes
- * API errors if exceeded.
+ * API errors for ordinary screenshots before dimensions usually matter.
  */
-export const IMAGE_MAX_WIDTH = 2000
-export const IMAGE_MAX_HEIGHT = 2000
+export const IMAGE_MAX_WIDTH = 8000
+export const IMAGE_MAX_HEIGHT = 8000
 
 // =============================================================================
 // PDF LIMITS

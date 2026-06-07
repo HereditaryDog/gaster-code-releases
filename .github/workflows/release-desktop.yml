@@ -1,22 +1,14 @@
 name: Release Desktop
 
 on:
+  push:
+    tags: ['v*.*.*']
   workflow_dispatch:
     inputs:
       draft:
         description: 'Create as draft release'
         required: false
         default: true
-        type: boolean
-      include_windows:
-        description: 'Also build Windows x64. Requires GitHub Actions billing capacity.'
-        required: false
-        default: false
-        type: boolean
-      include_linux_arm64:
-        description: 'Also build Linux ARM64. Requires GitHub Actions billing capacity.'
-        required: false
-        default: false
         type: boolean
 
 permissions:
@@ -27,69 +19,80 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  release-matrix:
-    name: Prepare release matrix
+  signing-preflight:
     runs-on: ubuntu-latest
     outputs:
-      matrix: ${{ steps.matrix.outputs.matrix }}
-
+      macos_signed: ${{ steps.validate.outputs.macos_signed }}
     steps:
-      - name: Build matrix
-        id: matrix
+      - name: Validate release signing and notarization secrets
+        id: validate
         shell: bash
         env:
-          INCLUDE_WINDOWS: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.include_windows) }}
-          INCLUDE_LINUX_ARM64: ${{ github.event_name == 'workflow_dispatch' && inputs.include_linux_arm64 || false }}
+          CSC_LINK: ${{ secrets.MACOS_CERTIFICATE }}
+          CSC_KEY_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          WIN_CSC_LINK: ${{ secrets.WINDOWS_CERTIFICATE }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
         run: |
-          MATRIX=$(jq -nc \
-            --argjson include_windows "$INCLUDE_WINDOWS" \
-            --argjson include_linux_arm64 "$INCLUDE_LINUX_ARM64" \
-            '[
-              {
-                platform: "macos-latest",
-                rust_target: "aarch64-apple-darwin",
-                tauri_args: "--target aarch64-apple-darwin",
-                label: "macOS-ARM64",
-                asset_name_pattern: "Gaster-Code_[version]_macos_arm64_[bundle][ext]"
-              },
-              {
-                platform: "macos-latest",
-                rust_target: "x86_64-apple-darwin",
-                tauri_args: "--target x86_64-apple-darwin",
-                label: "macOS-x64",
-                asset_name_pattern: "Gaster-Code_[version]_macos_x64_[bundle][ext]"
-              },
-              {
-                platform: "ubuntu-22.04",
-                rust_target: "x86_64-unknown-linux-gnu",
-                tauri_args: "--bundles deb",
-                label: "Linux-x64",
-                asset_name_pattern: "Gaster-Code_[version]_linux_x64_[bundle][ext]"
-              }
-            ]
-            + (if $include_linux_arm64 then [{
-                platform: "ubuntu-22.04-arm",
-                rust_target: "aarch64-unknown-linux-gnu",
-                tauri_args: "--bundles deb",
-                label: "Linux-ARM64",
-                asset_name_pattern: "Gaster-Code_[version]_linux_arm64_[bundle][ext]"
-              }] else [] end)
-            + (if $include_windows then [{
-                platform: "windows-latest",
-                rust_target: "x86_64-pc-windows-msvc",
-                tauri_args: "--bundles nsis",
-                label: "Windows-x64",
-                asset_name_pattern: "Gaster-Code_[version]_windows_x64_[bundle][ext]"
-              }] else [] end)
-            | {include: .}')
-          echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
+          # macOS signing + notarization is preferred: Squirrel.Mac auto-update and
+          # first-launch Gatekeeper approval work best with a notarized Developer ID build.
+          # A migration release may still ship unsigned while Apple Developer ID setup is pending.
+          missing=()
+          [ -n "$CSC_LINK" ] || missing+=("MACOS_CERTIFICATE")
+          [ -n "$CSC_KEY_PASSWORD" ] || missing+=("MACOS_CERTIFICATE_PASSWORD")
+          [ -n "$APPLE_ID" ] || missing+=("APPLE_ID")
+          [ -n "$APPLE_APP_SPECIFIC_PASSWORD" ] || missing+=("APPLE_APP_SPECIFIC_PASSWORD")
+          [ -n "$APPLE_TEAM_ID" ] || missing+=("APPLE_TEAM_ID")
+          if [ "${#missing[@]}" -gt 0 ]; then
+            printf '::warning::Missing macOS signing/notarization secrets (%s): macOS artifacts will be unsigned and users must use install-macos-unsigned.sh.\n' "${missing[*]}"
+            echo "macos_signed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "macos_signed=true" >> "$GITHUB_OUTPUT"
+          fi
+          # Windows signing is optional: an unsigned NSIS installer still auto-updates
+          # (electron-updater), it only triggers SmartScreen warnings. Warn, do not block,
+          # so releases can ship with an Apple Developer ID alone.
+          win_missing=()
+          [ -n "$WIN_CSC_LINK" ] || win_missing+=("WINDOWS_CERTIFICATE")
+          [ -n "$WIN_CSC_KEY_PASSWORD" ] || win_missing+=("WINDOWS_CERTIFICATE_PASSWORD")
+          if [ "${#win_missing[@]}" -gt 0 ]; then
+            printf '::warning::Windows signing secrets missing (%s): the Windows build will be unsigned. Auto-update still works, but users will see SmartScreen warnings.\n' "${win_missing[*]}"
+          fi
 
   build:
-    needs: release-matrix
+    needs:
+      - signing-preflight
     strategy:
       fail-fast: false
-      max-parallel: 1
-      matrix: ${{ fromJson(needs.release-matrix.outputs.matrix) }}
+      matrix:
+        include:
+          - platform: macos-latest
+            target_triple: aarch64-apple-darwin
+            builder_args: --mac dmg zip --arm64
+            label: macOS-ARM64
+            smoke_platform: macos
+          - platform: macos-latest
+            target_triple: x86_64-apple-darwin
+            builder_args: --mac dmg zip --x64
+            label: macOS-x64
+            smoke_platform: macos
+          - platform: ubuntu-22.04
+            target_triple: x86_64-unknown-linux-gnu
+            builder_args: --linux AppImage deb --x64
+            label: Linux-x64
+            smoke_platform: linux
+          - platform: ubuntu-22.04-arm
+            target_triple: aarch64-unknown-linux-gnu
+            builder_args: --linux AppImage deb --arm64
+            label: Linux-ARM64
+            smoke_platform: linux
+          - platform: windows-latest
+            target_triple: x86_64-pc-windows-msvc
+            builder_args: --win nsis --x64
+            label: Windows-x64
+            smoke_platform: windows
 
     runs-on: ${{ matrix.platform }}
     name: Build (${{ matrix.label }})
@@ -102,7 +105,216 @@ jobs:
         id: version
         shell: bash
         run: |
-          VERSION=$(jq -r '.version' desktop/src-tauri/tauri.conf.json)
+          VERSION=$(node -p "require('./desktop/package.json').version")
+          echo "value=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Validate tag matches version
+        if: github.event_name == 'push'
+        shell: bash
+        run: |
+          EXPECTED_TAG="v${{ steps.version.outputs.value }}"
+          if [ "${GITHUB_REF_NAME}" != "$EXPECTED_TAG" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match app version ${EXPECTED_TAG}"
+            exit 1
+          fi
+
+      - name: Install Linux dependencies
+        if: contains(matrix.platform, 'ubuntu')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential curl wget file libfuse2
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install root dependencies
+        run: bun install
+
+      - name: Install desktop dependencies
+        working-directory: desktop
+        run: bun install
+
+      - name: Install adapter dependencies
+        working-directory: adapters
+        run: bun install
+
+      - name: Build sidecars
+        working-directory: desktop
+        env:
+          BUN_INSTALL_CACHE_DIR: ${{ runner.temp }}/bun-install-cache
+          SIDECAR_TARGET_TRIPLE: ${{ matrix.target_triple }}
+        run: bun run build:sidecars
+
+      - name: Build renderer and Electron bundles
+        working-directory: desktop
+        run: |
+          bun run build
+          bun run build:electron
+
+      - name: Build Electron release artifacts
+        working-directory: desktop
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MACOS_SIGNED: ${{ needs.signing-preflight.outputs.macos_signed }}
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          APPLE_ID_SECRET: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD_SECRET: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID_SECRET: ${{ secrets.APPLE_TEAM_ID }}
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          builder_args=(${{ matrix.builder_args }} --publish never)
+
+          case "${{ matrix.smoke_platform }}" in
+            macos)
+              if [ "$MACOS_SIGNED" = "true" ]; then
+                export CSC_LINK="$MACOS_CERTIFICATE"
+                export CSC_KEY_PASSWORD="$MACOS_CERTIFICATE_PASSWORD"
+                export APPLE_ID="$APPLE_ID_SECRET"
+                export APPLE_APP_SPECIFIC_PASSWORD="$APPLE_APP_SPECIFIC_PASSWORD_SECRET"
+                export APPLE_TEAM_ID="$APPLE_TEAM_ID_SECRET"
+              else
+                export CSC_IDENTITY_AUTO_DISCOVERY=false
+                builder_args+=(-c.mac.notarize=false)
+              fi
+              ;;
+            windows)
+              export CSC_IDENTITY_AUTO_DISCOVERY=false
+              [ -z "$WINDOWS_CERTIFICATE" ] || export WIN_CSC_LINK="$WINDOWS_CERTIFICATE"
+              [ -z "$WINDOWS_CERTIFICATE_PASSWORD" ] || export WIN_CSC_KEY_PASSWORD="$WINDOWS_CERTIFICATE_PASSWORD"
+              ;;
+            *)
+              export CSC_IDENTITY_AUTO_DISCOVERY=false
+              ;;
+          esac
+
+          bunx electron-builder "${builder_args[@]}"
+
+      - name: Verify packaged app structure
+        run: bun run test:package-smoke --platform ${{ matrix.smoke_platform }} --package-kind release --artifacts-dir desktop/build-artifacts/electron
+
+      - name: Verify macOS launch policy
+        if: matrix.smoke_platform == 'macos' && needs.signing-preflight.outputs.macos_signed == 'true'
+        run: bun run test:package-smoke --platform macos --package-kind release --artifacts-dir desktop/build-artifacts/electron --require-macos-gatekeeper
+
+      - name: Warn unsigned macOS launch policy skipped
+        if: matrix.smoke_platform == 'macos' && needs.signing-preflight.outputs.macos_signed != 'true'
+        run: echo "::warning::Skipping macOS Gatekeeper package-smoke because this release is unsigned. Ship install-macos-unsigned.sh with the DMG."
+
+      - name: Validate matrix release asset set
+        shell: bash
+        working-directory: desktop/build-artifacts/electron
+        env:
+          APP_VERSION: ${{ steps.version.outputs.value }}
+        run: |
+          case "${{ matrix.label }}" in
+            macOS-ARM64)
+              expected=(
+                "Gaster-Code-${APP_VERSION}-mac-arm64.dmg"
+                "Gaster-Code-${APP_VERSION}-mac-arm64.dmg.blockmap"
+                "Gaster-Code-${APP_VERSION}-mac-arm64.zip"
+                "Gaster-Code-${APP_VERSION}-mac-arm64.zip.blockmap"
+                "latest-mac.yml"
+              )
+              ;;
+            macOS-x64)
+              expected=(
+                "Gaster-Code-${APP_VERSION}-mac-x64.dmg"
+                "Gaster-Code-${APP_VERSION}-mac-x64.dmg.blockmap"
+                "Gaster-Code-${APP_VERSION}-mac-x64.zip"
+                "Gaster-Code-${APP_VERSION}-mac-x64.zip.blockmap"
+                "latest-mac.yml"
+              )
+              ;;
+            Linux-x64)
+              expected=(
+                "Gaster-Code-${APP_VERSION}-linux-x86_64.AppImage"
+                "Gaster-Code-${APP_VERSION}-linux-amd64.deb"
+                "latest-linux.yml"
+              )
+              ;;
+            Linux-ARM64)
+              expected=(
+                "Gaster-Code-${APP_VERSION}-linux-arm64.AppImage"
+                "Gaster-Code-${APP_VERSION}-linux-arm64.deb"
+                "latest-linux-arm64.yml"
+              )
+              ;;
+            Windows-x64)
+              expected=(
+                "Gaster-Code-${APP_VERSION}-win-x64.exe"
+                "Gaster-Code-${APP_VERSION}-win-x64.exe.blockmap"
+                "latest.yml"
+              )
+              ;;
+            *)
+              echo "::error::No expected asset list for matrix label ${{ matrix.label }}"
+              exit 1
+              ;;
+          esac
+
+          missing=()
+          for file in "${expected[@]}"; do
+            [ -f "$file" ] || missing+=("$file")
+          done
+          if [ "${#missing[@]}" -gt 0 ]; then
+            printf '::error::Missing release assets for %s: %s\n' "${{ matrix.label }}" "${missing[*]}"
+            exit 1
+          fi
+
+      - name: Namespace update metadata assets
+        shell: bash
+        working-directory: desktop/build-artifacts/electron
+        run: |
+          shopt -s nullglob
+          for file in latest*.yml; do
+            mv "$file" "${file%.yml}-${{ matrix.label }}.yml"
+          done
+
+      - name: Upload update metadata for merge
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-update-metadata-${{ matrix.label }}
+          path: desktop/build-artifacts/electron/latest*.yml
+          if-no-files-found: ignore
+
+      - name: Upload release artifacts for final publish
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-release-artifacts-${{ matrix.label }}
+          path: |
+            desktop/build-artifacts/electron/*.dmg
+            desktop/build-artifacts/electron/*.zip
+            desktop/build-artifacts/electron/*.exe
+            desktop/build-artifacts/electron/*.AppImage
+            desktop/build-artifacts/electron/*.deb
+            desktop/build-artifacts/electron/*.blockmap
+            desktop/build-artifacts/electron/*.yml
+          if-no-files-found: error
+
+  publish-private-release:
+    name: Publish private release
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Read version
+        id: version
+        shell: bash
+        run: |
+          VERSION=$(node -p "require('./desktop/package.json').version")
           echo "value=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Validate tag matches version
@@ -124,7 +336,6 @@ jobs:
             echo "::error::Missing release notes file: $NOTES_FILE"
             exit 1
           fi
-
           {
             echo 'body<<__RELEASE_NOTES__'
             cat "$NOTES_FILE"
@@ -132,113 +343,107 @@ jobs:
             echo '__RELEASE_NOTES__'
           } >> "$GITHUB_OUTPUT"
 
-      # ── System dependencies (Linux) ──────────────────────────
-      - name: Install Linux dependencies
-        if: contains(matrix.platform, 'ubuntu')
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            build-essential \
-            curl \
-            wget \
-            file \
-            libxdo-dev \
-            libssl-dev \
-            libwebkit2gtk-4.1-dev \
-            libayatana-appindicator3-dev \
-            librsvg2-dev \
-            patchelf \
-            libfuse2
-
-      # ── Bun ──────────────────────────────────────────────────
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
 
-      # ── Node.js (for tauri-action compatibility) ─────────────
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      # ── Rust ─────────────────────────────────────────────────
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.rust_target }}
-
-      - name: Rust cache
-        uses: swatinem/rust-cache@v2
-        with:
-          workspaces: 'desktop/src-tauri -> target'
-          shared-key: ${{ matrix.rust_target }}
-
-      # ── Install dependencies ─────────────────────────────────
       - name: Install root dependencies
         run: bun install
 
-      - name: Install desktop dependencies
-        working-directory: desktop
-        run: bun install
+      - name: Download release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: desktop-release-artifacts-*
+          path: artifacts/release-assets
+          merge-multiple: true
 
-      - name: Install adapter dependencies
-        working-directory: adapters
-        run: bun install
-
-      # ── Build sidecars ───────────────────────────────────────
-      - name: Build sidecars
-        working-directory: desktop
-        env:
-          BUN_INSTALL_CACHE_DIR: ${{ runner.temp }}/bun-install-cache
-          TAURI_ENV_TARGET_TRIPLE: ${{ matrix.rust_target }}
-        run: bun run build:sidecars
-
-      - name: Export Tauri signing key
+      - name: Validate complete release asset set
         shell: bash
         env:
-          RAW_TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          APP_VERSION: ${{ steps.version.outputs.value }}
         run: |
-          if [ -z "${RAW_TAURI_SIGNING_PRIVATE_KEY:-}" ]; then
-            echo "::error::Missing TAURI_SIGNING_PRIVATE_KEY secret"
+          expected=(
+            "Gaster-Code-${APP_VERSION}-mac-arm64.dmg"
+            "Gaster-Code-${APP_VERSION}-mac-arm64.dmg.blockmap"
+            "Gaster-Code-${APP_VERSION}-mac-arm64.zip"
+            "Gaster-Code-${APP_VERSION}-mac-arm64.zip.blockmap"
+            "Gaster-Code-${APP_VERSION}-mac-x64.dmg"
+            "Gaster-Code-${APP_VERSION}-mac-x64.dmg.blockmap"
+            "Gaster-Code-${APP_VERSION}-mac-x64.zip"
+            "Gaster-Code-${APP_VERSION}-mac-x64.zip.blockmap"
+            "Gaster-Code-${APP_VERSION}-linux-x86_64.AppImage"
+            "Gaster-Code-${APP_VERSION}-linux-amd64.deb"
+            "Gaster-Code-${APP_VERSION}-linux-arm64.AppImage"
+            "Gaster-Code-${APP_VERSION}-linux-arm64.deb"
+            "Gaster-Code-${APP_VERSION}-win-x64.exe"
+            "Gaster-Code-${APP_VERSION}-win-x64.exe.blockmap"
+          )
+
+          missing=()
+          for file in "${expected[@]}"; do
+            [ -f "artifacts/release-assets/$file" ] || missing+=("$file")
+          done
+          if [ "${#missing[@]}" -gt 0 ]; then
+            printf '::error::Missing complete release assets: %s\n' "${missing[*]}"
             exit 1
           fi
 
-          {
-            echo 'TAURI_SIGNING_PRIVATE_KEY<<__TAURI_SIGNING_PRIVATE_KEY__'
-            printf '%s\n' "$RAW_TAURI_SIGNING_PRIVATE_KEY"
-            echo '__TAURI_SIGNING_PRIVATE_KEY__'
-          } >> "$GITHUB_ENV"
-
-      # ── Build Tauri app ──────────────────────────────────────
-      - name: Build Tauri app
-        uses: tauri-apps/tauri-action@v0
-        env:
-          BUN_INSTALL_CACHE_DIR: ${{ runner.temp }}/bun-install-cache
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_ENV_TARGET_TRIPLE: ${{ matrix.rust_target }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+      - name: Download update metadata artifacts
+        uses: actions/download-artifact@v4
         with:
-          projectPath: desktop
-          tauriScript: bunx tauri
-          tagName: v__VERSION__
-          releaseName: 'Gaster Code v__VERSION__'
-          releaseBody: ${{ steps.release_notes.outputs.body }}
-          releaseDraft: ${{ github.event_name == 'workflow_dispatch' && inputs.draft || false }}
-          prerelease: false
-          updaterJsonPreferNsis: true
-          assetNamePattern: ${{ matrix.asset_name_pattern }}
-          args: ${{ matrix.tauri_args }} --ci --config src-tauri/tauri.release-ci.json
+          pattern: desktop-update-metadata-*
+          path: artifacts/update-metadata
+          merge-multiple: true
 
-  public-release:
+      - name: Merge standard update metadata
+        run: bun run scripts/release-update-metadata.ts --metadata-dir artifacts/update-metadata --out-dir artifacts/update-metadata-standard
+
+      - name: Validate standard update metadata set
+        shell: bash
+        run: |
+          expected=(
+            "latest-mac.yml"
+            "latest-linux.yml"
+            "latest-linux-arm64.yml"
+            "latest.yml"
+          )
+          missing=()
+          for file in "${expected[@]}"; do
+            [ -f "artifacts/update-metadata-standard/$file" ] || missing+=("$file")
+          done
+          if [ "${#missing[@]}" -gt 0 ]; then
+            printf '::error::Missing standard update metadata: %s\n' "${missing[*]}"
+            exit 1
+          fi
+
+      - name: Publish complete GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.value }}
+          name: Gaster Code v${{ steps.version.outputs.value }}
+          body: ${{ steps.release_notes.outputs.body }}
+          draft: ${{ github.event_name == 'workflow_dispatch' && inputs.draft || false }}
+          prerelease: false
+          fail_on_unmatched_files: true
+          files: |
+            artifacts/release-assets/**/*.dmg
+            artifacts/release-assets/**/*.zip
+            artifacts/release-assets/**/*.exe
+            artifacts/release-assets/**/*.AppImage
+            artifacts/release-assets/**/*.deb
+            artifacts/release-assets/**/*.blockmap
+            artifacts/update-metadata-standard/*.yml
+            desktop/scripts/install-macos-unsigned.sh
+
+  publish-public-release:
     name: Publish public release assets
-    needs: build
+    needs: publish-private-release
     runs-on: ubuntu-latest
     if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.draft == false)
     permissions:
       contents: read
     env:
-      PRIVATE_RELEASE_REPOSITORY: ${{ github.repository }}
       PUBLIC_RELEASE_REPOSITORY: HereditaryDog/gaster-code-releases
       GH_TOKEN: ${{ secrets.PUBLIC_RELEASE_TOKEN }}
 
@@ -250,7 +455,7 @@ jobs:
         id: version
         shell: bash
         run: |
-          VERSION=$(jq -r '.version' desktop/src-tauri/tauri.conf.json)
+          VERSION=$(node -p "require('./desktop/package.json').version")
           echo "value=$VERSION" >> "$GITHUB_OUTPUT"
           echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
 
@@ -258,11 +463,11 @@ jobs:
         shell: bash
         run: |
           if [ -z "${GH_TOKEN:-}" ]; then
-            echo "::error::Missing PUBLIC_RELEASE_TOKEN. Add a GitHub token that can read ${PRIVATE_RELEASE_REPOSITORY} releases and write ${PUBLIC_RELEASE_REPOSITORY} releases."
+            echo "::error::Missing PUBLIC_RELEASE_TOKEN. Add a GitHub token that can write ${PUBLIC_RELEASE_REPOSITORY} releases."
             exit 1
           fi
 
-      - name: Validate release notes
+      - name: Validate public release notes
         shell: bash
         run: |
           NOTES_FILE="release-notes/${{ steps.version.outputs.tag }}.md"
@@ -271,35 +476,69 @@ jobs:
             exit 1
           fi
 
-      - name: Download private release assets
-        shell: bash
-        run: |
-          TAG="${{ steps.version.outputs.tag }}"
-          mkdir -p public-release-assets
-          gh release download "$TAG" \
-            --repo "$PRIVATE_RELEASE_REPOSITORY" \
-            --dir public-release-assets
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
 
-          if [ ! -f public-release-assets/latest.json ]; then
-            echo "::error::Missing updater manifest latest.json in private release assets"
+      - name: Install root dependencies
+        run: bun install
+
+      - name: Download release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: desktop-release-artifacts-*
+          path: artifacts/release-assets
+          merge-multiple: true
+
+      - name: Download update metadata artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: desktop-update-metadata-*
+          path: artifacts/update-metadata
+          merge-multiple: true
+
+      - name: Merge standard update metadata
+        run: bun run scripts/release-update-metadata.ts --metadata-dir artifacts/update-metadata --out-dir artifacts/update-metadata-standard
+
+      - name: Validate public release asset set
+        shell: bash
+        env:
+          APP_VERSION: ${{ steps.version.outputs.value }}
+        run: |
+          expected=(
+            "Gaster-Code-${APP_VERSION}-mac-arm64.dmg"
+            "Gaster-Code-${APP_VERSION}-mac-arm64.dmg.blockmap"
+            "Gaster-Code-${APP_VERSION}-mac-arm64.zip"
+            "Gaster-Code-${APP_VERSION}-mac-arm64.zip.blockmap"
+            "Gaster-Code-${APP_VERSION}-mac-x64.dmg"
+            "Gaster-Code-${APP_VERSION}-mac-x64.dmg.blockmap"
+            "Gaster-Code-${APP_VERSION}-mac-x64.zip"
+            "Gaster-Code-${APP_VERSION}-mac-x64.zip.blockmap"
+            "Gaster-Code-${APP_VERSION}-linux-x86_64.AppImage"
+            "Gaster-Code-${APP_VERSION}-linux-amd64.deb"
+            "Gaster-Code-${APP_VERSION}-linux-arm64.AppImage"
+            "Gaster-Code-${APP_VERSION}-linux-arm64.deb"
+            "Gaster-Code-${APP_VERSION}-win-x64.exe"
+            "Gaster-Code-${APP_VERSION}-win-x64.exe.blockmap"
+            "latest-mac.yml"
+            "latest-linux.yml"
+            "latest-linux-arm64.yml"
+            "latest.yml"
+          )
+
+          missing=()
+          for file in "${expected[@]}"; do
+            if [[ "$file" == latest* ]]; then
+              [ -f "artifacts/update-metadata-standard/$file" ] || missing+=("$file")
+            else
+              [ -f "artifacts/release-assets/$file" ] || missing+=("$file")
+            fi
+          done
+          if [ "${#missing[@]}" -gt 0 ]; then
+            printf '::error::Missing public release assets: %s\n' "${missing[*]}"
             exit 1
           fi
-
-          PRIVATE_ASSET_BASE="https://github.com/${PRIVATE_RELEASE_REPOSITORY}/releases/download/${TAG}/"
-          PUBLIC_ASSET_BASE="https://github.com/${PUBLIC_RELEASE_REPOSITORY}/releases/download/${TAG}/"
-
-          jq \
-            --arg private "$PRIVATE_ASSET_BASE" \
-            --arg public "$PUBLIC_ASSET_BASE" \
-            '.platforms |= with_entries(.value.url |= if startswith($private) then $public + (.[($private | length):]) else . end)' \
-            public-release-assets/latest.json > public-release-assets/latest.public.json
-          mv public-release-assets/latest.public.json public-release-assets/latest.json
-
-          jq -e \
-            --arg private "$PRIVATE_ASSET_BASE" \
-            --arg public "$PUBLIC_ASSET_BASE" \
-            '.platforms | to_entries | all(.value.url | (startswith($public) and (startswith($private) | not)))' \
-            public-release-assets/latest.json >/dev/null
 
       - name: Publish assets to public release repository
         shell: bash
@@ -322,6 +561,14 @@ jobs:
               --latest
           fi
 
-          gh release upload "$TAG" public-release-assets/* \
+          gh release upload "$TAG" \
+            artifacts/release-assets/*.dmg \
+            artifacts/release-assets/*.zip \
+            artifacts/release-assets/*.exe \
+            artifacts/release-assets/*.AppImage \
+            artifacts/release-assets/*.deb \
+            artifacts/release-assets/*.blockmap \
+            artifacts/update-metadata-standard/*.yml \
+            desktop/scripts/install-macos-unsigned.sh \
             --repo "$PUBLIC_RELEASE_REPOSITORY" \
             --clobber

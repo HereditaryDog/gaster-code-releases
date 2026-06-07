@@ -1,31 +1,41 @@
+// @vitest-environment jsdom
+
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { browserHost } from '../lib/desktopHost/browserHost'
 
 const check = vi.fn()
 const relaunch = vi.fn()
-const invoke = vi.fn()
+const prepareInstall = vi.fn()
+const cancelInstall = vi.fn()
 
-vi.mock('@tauri-apps/plugin-updater', () => ({
-  check,
-}))
-
-vi.mock('@tauri-apps/plugin-process', () => ({
-  relaunch,
-}))
-
-vi.mock('@tauri-apps/api/core', () => ({
-  invoke,
-}))
+function installDesktopUpdateHost() {
+  window.desktopHost = {
+    ...browserHost,
+    kind: 'electron',
+    isDesktop: true,
+    capabilities: {
+      ...browserHost.capabilities,
+      updates: true,
+    },
+    updates: {
+      ...browserHost.updates,
+      check,
+      prepareInstall,
+      cancelInstall,
+      relaunch,
+    },
+  }
+}
 
 describe('updateStore', () => {
   beforeEach(() => {
     check.mockReset()
     relaunch.mockReset()
-    invoke.mockReset()
+    prepareInstall.mockReset()
+    cancelInstall.mockReset()
     window.localStorage.clear()
-    Object.defineProperty(window, '__TAURI_INTERNALS__', {
-      configurable: true,
-      value: {},
-    })
+    Reflect.deleteProperty(window, 'desktopHost')
+    installDesktopUpdateHost()
   })
 
   it('stores available update metadata after a successful check', async () => {
@@ -153,7 +163,8 @@ describe('updateStore', () => {
       install,
       close: vi.fn().mockResolvedValue(undefined),
     })
-    invoke.mockResolvedValue(undefined)
+    prepareInstall.mockResolvedValue(undefined)
+    cancelInstall.mockResolvedValue(undefined)
     relaunch.mockResolvedValue(undefined)
 
     vi.resetModules()
@@ -163,9 +174,9 @@ describe('updateStore', () => {
     await useUpdateStore.getState().installUpdate()
 
     expect(download).toHaveBeenCalledTimes(1)
-    expect(invoke).toHaveBeenCalledWith('prepare_for_update_install')
+    expect(prepareInstall).toHaveBeenCalledTimes(1)
     expect(install).toHaveBeenCalledTimes(1)
-    const prepareCallOrder = invoke.mock.invocationCallOrder[0]
+    const prepareCallOrder = prepareInstall.mock.invocationCallOrder[0]
     const installCallOrder = install.mock.invocationCallOrder[0]
     expect(prepareCallOrder).toBeDefined()
     expect(installCallOrder).toBeDefined()
@@ -173,6 +184,58 @@ describe('updateStore', () => {
     expect(useUpdateStore.getState().progressPercent).toBe(100)
     expect(useUpdateStore.getState().status).toBe('restarting')
     expect(relaunch).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps the newly checked native update installable after a second available check', async () => {
+    let nativePendingUpdate: 'first' | 'second' | null = null
+    const staleClose = vi.fn(async () => {
+      nativePendingUpdate = null
+    })
+    const secondDownload = vi.fn(async (onEvent?: (event: unknown) => void) => {
+      if (nativePendingUpdate !== 'second') throw new Error('native update was cancelled')
+      onEvent?.({ event: 'Started', data: { contentLength: 100 } })
+      onEvent?.({ event: 'Progress', data: { chunkLength: 100 } })
+      onEvent?.({ event: 'Finished' })
+    })
+    const secondInstall = vi.fn(async () => {
+      if (nativePendingUpdate !== 'second') throw new Error('native update was cancelled')
+    })
+
+    check
+      .mockImplementationOnce(async () => {
+        nativePendingUpdate = 'first'
+        return {
+          version: '0.2.0',
+          body: 'Notes',
+          close: staleClose,
+        }
+      })
+      .mockImplementationOnce(async () => {
+        nativePendingUpdate = 'second'
+        return {
+          version: '0.2.0',
+          body: 'Notes',
+          download: secondDownload,
+          install: secondInstall,
+          close: vi.fn().mockResolvedValue(undefined),
+        }
+      })
+    prepareInstall.mockResolvedValue(undefined)
+    cancelInstall.mockResolvedValue(undefined)
+    relaunch.mockResolvedValue(undefined)
+
+    vi.resetModules()
+    const { useUpdateStore } = await import('./updateStore')
+
+    await useUpdateStore.getState().checkForUpdates()
+    await useUpdateStore.getState().checkForUpdates()
+    await useUpdateStore.getState().installUpdate()
+
+    expect(staleClose).not.toHaveBeenCalled()
+    expect(secondDownload).toHaveBeenCalledTimes(1)
+    expect(secondInstall).toHaveBeenCalledTimes(1)
+    expect(cancelInstall).not.toHaveBeenCalled()
+    expect(useUpdateStore.getState().status).toBe('restarting')
   })
 
   it('refreshes the pending update when the proxy changes before install', async () => {
@@ -197,7 +260,8 @@ describe('updateStore', () => {
         install: freshInstall,
         close: vi.fn().mockResolvedValue(undefined),
       })
-    invoke.mockResolvedValue(undefined)
+    prepareInstall.mockResolvedValue(undefined)
+    cancelInstall.mockResolvedValue(undefined)
     relaunch.mockResolvedValue(undefined)
 
     vi.resetModules()
@@ -233,7 +297,8 @@ describe('updateStore', () => {
       install,
       close: vi.fn().mockResolvedValue(undefined),
     })
-    invoke.mockResolvedValue(undefined)
+    prepareInstall.mockResolvedValue(undefined)
+    cancelInstall.mockResolvedValue(undefined)
 
     vi.resetModules()
     const { useUpdateStore } = await import('./updateStore')
@@ -241,8 +306,8 @@ describe('updateStore', () => {
     await useUpdateStore.getState().checkForUpdates()
     await useUpdateStore.getState().installUpdate()
 
-    expect(invoke).toHaveBeenNthCalledWith(1, 'prepare_for_update_install')
-    expect(invoke).toHaveBeenNthCalledWith(2, 'cancel_update_install')
+    expect(prepareInstall).toHaveBeenCalledTimes(1)
+    expect(cancelInstall).toHaveBeenCalledTimes(1)
     expect(useUpdateStore.getState().status).toBe('available')
     expect(useUpdateStore.getState().error).toContain('installer failed')
     expect(useUpdateStore.getState().shouldPrompt).toBe(true)
@@ -263,7 +328,7 @@ describe('updateStore', () => {
     await useUpdateStore.getState().checkForUpdates()
     await useUpdateStore.getState().installUpdate()
 
-    expect(invoke).not.toHaveBeenCalledWith('cancel_update_install')
+    expect(cancelInstall).not.toHaveBeenCalled()
     expect(useUpdateStore.getState().status).toBe('available')
     expect(useUpdateStore.getState().error).toBe('download failed')
   })
@@ -276,7 +341,8 @@ describe('updateStore', () => {
       install: vi.fn().mockRejectedValue(new Error('install failed')),
       close: vi.fn().mockResolvedValue(undefined),
     })
-    invoke.mockResolvedValue(undefined)
+    prepareInstall.mockResolvedValue(undefined)
+    cancelInstall.mockResolvedValue(undefined)
 
     vi.resetModules()
     const { useUpdateStore } = await import('./updateStore')
@@ -284,8 +350,8 @@ describe('updateStore', () => {
     await useUpdateStore.getState().checkForUpdates()
     await useUpdateStore.getState().installUpdate()
 
-    expect(invoke).toHaveBeenCalledWith('prepare_for_update_install')
-    expect(invoke).toHaveBeenCalledWith('cancel_update_install')
+    expect(prepareInstall).toHaveBeenCalledTimes(1)
+    expect(cancelInstall).toHaveBeenCalledTimes(1)
     expect(useUpdateStore.getState().status).toBe('available')
     expect(useUpdateStore.getState().error).toBe('install failed')
   })

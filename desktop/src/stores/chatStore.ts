@@ -38,6 +38,8 @@ export type ComposerDraftState = {
   attachments: ComposerAttachment[]
 }
 
+export type ComposerPrefillMode = 'replace' | 'append'
+
 const INVALID_HISTORY_SESSION_STORAGE_KEY = 'gaster-code-invalid-history-sessions'
 const CLI_SESSION_MISSING_CODE = 'CLI_SESSION_MISSING'
 const CLI_SESSION_MISSING_MESSAGE = '这个历史会话已无法恢复，请新建会话继续。'
@@ -73,6 +75,7 @@ export type PerSessionState = {
   composerPrefill?: {
     text: string
     attachments?: UIAttachment[]
+    mode?: ComposerPrefillMode
     nonce: number
   } | null
   composerDraft?: ComposerDraftState | null
@@ -189,8 +192,9 @@ type ChatStore = {
   reloadHistory: (sessionId: string) => Promise<void>
   queueComposerPrefill: (
     sessionId: string,
-    prefill: { text: string; attachments?: UIAttachment[] },
+    prefill: { text: string; attachments?: UIAttachment[]; mode?: ComposerPrefillMode },
   ) => void
+  clearComposerPrefill: (sessionId: string, nonce?: number) => void
   setComposerDraft: (sessionId: string, draft: ComposerDraftState) => void
   clearComposerDraft: (sessionId: string) => void
   clearMessages: (sessionId: string) => void
@@ -250,6 +254,8 @@ function clearPendingToolParentUseIds(sessionId: string): void {
 
 let msgCounter = 0
 const nextId = () => `msg-${++msgCounter}-${Date.now()}`
+let composerPrefillNonceCounter = 0
+const nextComposerPrefillNonce = () => ++composerPrefillNonceCounter
 
 // Streaming throttle for content_delta
 let pendingDelta = ''
@@ -867,9 +873,19 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         composerPrefill: {
           text: prefill.text,
           attachments: prefill.attachments,
-          nonce: Date.now(),
+          mode: prefill.mode,
+          nonce: nextComposerPrefillNonce(),
         },
       })),
+    }))
+  },
+
+  clearComposerPrefill: (sessionId, nonce) => {
+    set((state) => ({
+      sessions: updateSessionIn(state.sessions, sessionId, (session) => {
+        if (nonce !== undefined && session.composerPrefill?.nonce !== nonce) return {}
+        return { composerPrefill: null }
+      }),
     }))
   },
 

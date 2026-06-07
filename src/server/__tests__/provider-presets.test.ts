@@ -104,8 +104,8 @@ describe('provider presets API', () => {
     expect(kimi?.defaultModels.main).toBe('kimi-k2.6')
     expect(kimi?.defaultEnv?.GASTER_CODE_SEND_DISABLED_THINKING).toBe('1')
     expect(minimax?.authStrategy).toBe('auth_token')
-    expect(minimax?.defaultModels.main).toBe('MiniMax-M2.7')
-    expect(minimax?.modelContextWindows?.['MiniMax-M2.7']).toBe(204800)
+    expect(minimax?.defaultModels.main).toBe('MiniMax-M3')
+    expect(minimax?.modelContextWindows?.['MiniMax-M3']).toBe(1000000)
   })
 
   test('configured presets can expose optional API key and promo metadata', () => {

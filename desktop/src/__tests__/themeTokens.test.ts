@@ -13,25 +13,55 @@ describe('theme tokens', () => {
     expect(themeCss).not.toMatch(/rgba\(143,\s*72,\s*47|rgba\(239,\s*160,\s*131|rgba\(255,\s*219,\s*208/i)
   })
 
-  it('keeps the sidebar opaque in the desktop shell', () => {
+  it('gives the desktop sidebar a restrained macOS frosted material', () => {
     const sidebarShellRule = themeCss.match(/\.sidebar-shell\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? ''
     const contentAreaRule = themeCss.match(/\.app-shell-content\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? ''
     const sidebarGlassRule = themeCss.match(/\.sidebar-panel--glass\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? ''
     const darkSidebarGlassRule = themeCss.match(/\[data-theme="dark"\]\s*\.sidebar-panel--glass\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? ''
     const sidebarScrollRule = themeCss.match(/\.sidebar-scroll-area\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? ''
+    const activePillRule = themeCss.match(
+      /\.sidebar-nav-item--active,\s*\.sidebar-session-row--active,\s*\.sidebar-session-row--selected\s*\{(?<body>[^}]*)\}/,
+    )?.groups?.body ?? ''
+    const controlSurfaceRule = themeCss.match(/\.sidebar-control-surface\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? ''
 
-    expect(sidebarShellRule).toContain('background: var(--color-surface-sidebar);')
+    expect(sidebarShellRule).toContain('background: transparent;')
     expect(sidebarShellRule).toContain('isolation: isolate;')
     expect(sidebarShellRule).toContain('z-index: 20;')
+    expect(sidebarShellRule).toContain('overflow: visible;')
     expect(contentAreaRule).toContain('contain: paint;')
     expect(contentAreaRule).toContain('isolation: isolate;')
     expect(sidebarScrollRule).toContain('contain: paint;')
-    expect(sidebarGlassRule).not.toContain('backdrop-filter')
-    expect(darkSidebarGlassRule).not.toContain('backdrop-filter')
-    expect(sidebarGlassRule).not.toContain('transparent')
-    expect(darkSidebarGlassRule).not.toContain('transparent')
-    expect(sidebarGlassRule).toContain('background: var(--color-surface-sidebar);')
-    expect(darkSidebarGlassRule).toContain('background: var(--color-surface-sidebar);')
+    expect(sidebarGlassRule).toContain('backdrop-filter: blur(34px) saturate(128%);')
+    expect(sidebarGlassRule).toContain('-webkit-backdrop-filter: blur(34px) saturate(128%);')
+    expect(sidebarGlassRule).toContain('border: 1px solid rgba(255, 255, 255, 0.095);')
+    expect(sidebarGlassRule).toContain('border-right-color: transparent;')
+    expect(sidebarGlassRule).toContain('overflow: hidden;')
+    expect(sidebarGlassRule).toContain('inset 0 1px 0 rgba(255, 255, 255, 0.13)')
+    const sidebarShadow = sidebarGlassRule.match(/box-shadow:\s*(?<shadow>[^;]+);/)?.groups?.shadow ?? ''
+    const sidebarShadowLayers = sidebarShadow.split(',\n').map((layer) => layer.trim()).filter(Boolean)
+    expect(sidebarShadowLayers).toEqual(expect.arrayContaining([
+      'inset 0 1px 0 rgba(255, 255, 255, 0.13)',
+      'inset 1px 0 0 rgba(255, 255, 255, 0.045)',
+    ]))
+    expect(sidebarShadowLayers.every((layer) => layer.startsWith('inset '))).toBe(true)
+    expect(sidebarGlassRule).not.toContain('0 34px 90px')
+    expect(sidebarGlassRule).not.toContain('0 14px 38px')
+    expect(sidebarGlassRule).not.toContain('12px 0 26px')
+    expect(sidebarGlassRule).not.toContain('3px 0 10px')
+    expect(darkSidebarGlassRule).toContain('linear-gradient(180deg, rgba(27, 29, 33, 0.78), rgba(11, 13, 16, 0.84))')
+    expect(darkSidebarGlassRule).not.toContain('background: var(--color-surface-sidebar);')
+    expect(activePillRule).toContain('border-radius: 13px;')
+    expect(activePillRule).toContain('rgba(255, 255, 255, 0.078)')
+    expect(activePillRule).toContain('inset 0 1px 0 rgba(255, 255, 255, 0.12)')
+    expect(controlSurfaceRule).toContain('background: rgba(255, 255, 255, 0.044);')
+    expect(controlSurfaceRule).toContain('box-shadow:')
+
+    for (const ruleBody of [controlSurfaceRule, activePillRule]) {
+      const shadow = ruleBody.match(/box-shadow:\s*(?<shadow>[^;]+);/)?.groups?.shadow ?? ''
+      expect(shadow.split(',\n').map((layer) => layer.trim()).filter(Boolean).every((layer) => layer.startsWith('inset ')))
+        .toBe(true)
+      expect(shadow).not.toMatch(/(?:^|,\n)\s*0\s+\d/)
+    }
   })
 
   it('keeps sidebar live markers inside a small WebView paint area', () => {

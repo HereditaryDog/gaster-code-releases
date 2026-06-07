@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { browserHost } from '../lib/desktopHost/browserHost'
 
 describe('adapterStore IM pairing behavior', () => {
   const adaptersApi = {
@@ -17,7 +18,60 @@ describe('adapterStore IM pairing behavior', () => {
     vi.clearAllMocks()
     adaptersApi.updateConfig.mockImplementation(async (patch) => patch)
     vi.doMock('../api/adapters', () => ({ adaptersApi }))
-    vi.doMock('@tauri-apps/api/core', () => ({ invoke: vi.fn() }))
+    Reflect.deleteProperty(window, 'desktopHost')
+    Reflect.deleteProperty(window, '__TAURI_INTERNALS__')
+    Reflect.deleteProperty(window, '__TAURI__')
+  })
+
+  it('restarts adapter sidecar through an injected desktop host after config changes', async () => {
+    const restartSidecar = vi.fn().mockResolvedValue(undefined)
+    window.desktopHost = {
+      ...browserHost,
+      kind: 'electron',
+      isDesktop: true,
+      capabilities: {
+        ...browserHost.capabilities,
+      },
+      adapters: {
+        restartSidecar,
+      },
+    }
+
+    const { useAdapterStore } = await import('./adapterStore')
+
+    await useAdapterStore.getState().updateConfig({ telegram: { botToken: 'token' } })
+
+    await vi.waitFor(() => {
+      expect(restartSidecar).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  it('does not block config changes when desktop sidecar restart fails', async () => {
+    const restartError = new Error('restart failed')
+    const restartSidecar = vi.fn().mockRejectedValue(restartError)
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    window.desktopHost = {
+      ...browserHost,
+      kind: 'electron',
+      isDesktop: true,
+      adapters: {
+        restartSidecar,
+      },
+    }
+
+    const { useAdapterStore } = await import('./adapterStore')
+
+    await useAdapterStore.getState().updateConfig({ telegram: { botToken: 'token' } })
+
+    await vi.waitFor(() => {
+      expect(warn).toHaveBeenCalledWith(
+        '[adapterStore] restart sidecar failed:',
+        restartError,
+      )
+    })
+    expect(adaptersApi.updateConfig).toHaveBeenCalledWith({ telegram: { botToken: 'token' } })
+
+    warn.mockRestore()
   })
 
   it('removes a WeChat paired user without clearing the bound account', async () => {

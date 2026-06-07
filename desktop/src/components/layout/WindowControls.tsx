@@ -1,37 +1,41 @@
 import { useState, useEffect } from 'react'
+import { getDesktopHost, type DesktopHost } from '../../lib/desktopHost'
 
-const isTauri = typeof window !== 'undefined' && ('__TAURI_INTERNALS__' in window || '__TAURI__' in window)
 const isWindows = typeof navigator !== 'undefined' && /Win/.test(navigator.platform)
 
-/** Whether to render custom window controls (Windows + Tauri only) */
-export const showWindowControls = isTauri && isWindows
+/** Whether to render custom window controls (Windows + desktop host only) */
+export const showWindowControls = isWindows && getDesktopHost().capabilities.windowControls
 
 export function WindowControls() {
   const [maximized, setMaximized] = useState(false)
-  const [win, setWin] = useState<{
-    minimize: () => Promise<void>
-    toggleMaximize: () => Promise<void>
-    close: () => Promise<void>
-    isMaximized: () => Promise<boolean>
-    onResized: (handler: () => void) => Promise<() => void>
-  } | null>(null)
+  const [win, setWin] = useState<DesktopHost['window'] | null>(null)
 
   useEffect(() => {
     if (!showWindowControls) return
     let unlisten: (() => void) | undefined
+    let cancelled = false
 
-    import('@tauri-apps/api/window')
-      .then(async ({ getCurrentWindow }) => {
-        const w = getCurrentWindow()
-        setWin(w as any)
-        setMaximized(await w.isMaximized())
-        unlisten = await w.onResized(async () => {
-          setMaximized(await w.isMaximized())
-        })
+    const w = getDesktopHost().window
+    setWin(w)
+    void w.isMaximized()
+      .then((nextMaximized) => {
+        if (!cancelled) setMaximized(nextMaximized)
       })
       .catch(() => {})
+    void w.onResized(() => {
+      void w.isMaximized()
+        .then((nextMaximized) => {
+          if (!cancelled) setMaximized(nextMaximized)
+        })
+        .catch(() => {})
+    })
+      .then((fn) => { unlisten = fn })
+      .catch(() => {})
 
-    return () => { unlisten?.() }
+    return () => {
+      cancelled = true
+      unlisten?.()
+    }
   }, [])
 
   const runWindowAction = (action: () => Promise<void>) => {

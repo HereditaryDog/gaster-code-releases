@@ -20,7 +20,12 @@ import { enableConfigs } from '../utils/config.js'
 import { diagnosticsService } from './services/diagnosticsService.js'
 import { ensurePersistentStorageUpgraded } from './services/persistentStorageMigrations.js'
 import { handleStaticH5Request } from './staticH5.js'
-import { classifyH5Request, shouldBlockDisabledH5Access, shouldRequireH5Token } from './h5AccessPolicy.js'
+import {
+  classifyH5Request,
+  shouldBlockDisabledH5Access,
+  shouldGateUnhandledH5CapabilityPath,
+  shouldRequireH5Token,
+} from './h5AccessPolicy.js'
 import { H5AccessService } from './services/h5AccessService.js'
 
 function readArgValue(flag: string): string | undefined {
@@ -159,6 +164,7 @@ export function startServer(port = PORT, host = HOST) {
       const h5PublicOrigin = originFromUrl(h5Settings.publicBaseUrl)
       const cors = await resolveCors(origin, url.origin, {
         h5Enabled: h5Settings.enabled,
+        clientAddress,
         isOriginAllowed: async (candidateOrigin) =>
           candidateOrigin === h5PublicOrigin ||
           await h5AccessService.isOriginAllowed(candidateOrigin),
@@ -343,6 +349,21 @@ export function startServer(port = PORT, host = HOST) {
             { status: 500 },
           ), cors)
         }
+      }
+
+      if (shouldGateUnhandledH5CapabilityPath(url.pathname)) {
+        if (cors.rejected) {
+          return corsRejectedResponse(cors)
+        }
+
+        if (authRequired) {
+          const authError = await requireH5Token(req, url.searchParams.get('token'))
+          if (authError) {
+            return withCors(authError, cors)
+          }
+        }
+
+        return withCors(new Response('Not Found', { status: 404 }), cors)
       }
 
       // Health check

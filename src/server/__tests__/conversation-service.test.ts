@@ -235,6 +235,53 @@ describe('ConversationService', () => {
     expect(env.CLAUDE_CODE_OAUTH_TOKEN).toBe('haha-fresh-token')
   })
 
+  test('sendMessage updates a running official OAuth CLI token before the user turn', async () => {
+    const { hahaOAuthService } = await import('../services/hahaOAuthService.js')
+    await hahaOAuthService.saveTokens({
+      accessToken: 'fresh-after-wake-token',
+      refreshToken: 'refresh-xxx',
+      expiresAt: Date.now() + 30 * 60_000,
+      scopes: ['user:inference'],
+      subscriptionType: 'max',
+    })
+
+    const service = new ConversationService() as any
+    const sent: string[] = []
+    service.sessions.set('sleep-wake-session', {
+      proc: {},
+      outputCallbacks: [],
+      workDir: tmpDir,
+      permissionMode: 'default',
+      sdkToken: 'sdk-token',
+      sdkSocket: {
+        send(line: string) {
+          sent.push(line)
+        },
+      },
+      pendingOutbound: [],
+      startupPending: false,
+      startupExitCode: null,
+      stdoutLines: [],
+      stderrLines: [],
+      outputDrain: Promise.resolve(),
+      sdkMessages: [],
+      initMessage: null,
+      usesOfficialOAuth: true,
+      officialOAuthToken: 'stale-before-sleep-token',
+      providerId: null,
+      model: null,
+      pendingPermissionRequests: new Map(),
+    })
+
+    const ok = await service.sendMessage('sleep-wake-session', 'hello after wake')
+
+    expect(ok).toBe(true)
+    expect(sent).toHaveLength(2)
+    expect(JSON.parse(sent[0]!).type).toBe('update_environment_variables')
+    expect(JSON.parse(sent[0]!).variables.CLAUDE_CODE_OAUTH_TOKEN).toBe('fresh-after-wake-token')
+    expect(JSON.parse(sent[1]!).type).toBe('user')
+  })
+
   test('buildChildEnv does NOT inject CLAUDE_CODE_OAUTH_TOKEN when not official mode', async () => {
     const gasterDir = path.join(tmpDir, 'gaster-code')
     await fs.mkdir(gasterDir, { recursive: true })

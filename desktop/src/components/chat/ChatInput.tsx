@@ -34,7 +34,7 @@ import {
   resolveSlashUiAction,
 } from './composerUtils'
 import { useMobileViewport } from '../../hooks/useMobileViewport'
-import { isTauriRuntime } from '../../lib/desktopRuntime'
+import { isDesktopRuntime } from '../../lib/desktopRuntime'
 import {
   filesToComposerAttachments,
   selectNativeFileAttachments,
@@ -140,7 +140,7 @@ function workspaceReferenceToAttachment(reference: WorkspaceChatReference): Atta
 
 export function ChatInput({ variant = 'default', compact = false }: ChatInputProps) {
   const t = useTranslation()
-  const isMobileComposer = useMobileViewport() && !isTauriRuntime()
+  const isMobileComposer = useMobileViewport() && !isDesktopRuntime()
   const [input, setInput] = useState('')
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [plusMenuOpen, setPlusMenuOpen] = useState(false)
@@ -181,7 +181,7 @@ export function ChatInput({ variant = 'default', compact = false }: ChatInputPro
       return next
     })
   }, [])
-  const { sendMessage, stopGeneration } = useChatStore()
+  const { sendMessage, stopGeneration, clearComposerPrefill } = useChatStore()
   const activeTabId = useTabStore((s) => s.activeTabId)
   const sessionState = useChatStore((s) => activeTabId ? s.sessions[activeTabId] : undefined)
   const chatState = sessionState?.chatState ?? 'idle'
@@ -311,21 +311,25 @@ export function ChatInput({ variant = 'default', compact = false }: ChatInputPro
   }, [isActive])
 
   useEffect(() => {
-    if (!composerPrefill) return
+    if (!composerPrefill || !activeTabId) return
 
-    setComposerInput(composerPrefill.text)
-    setComposerAttachments(
-      (composerPrefill.attachments ?? [])
-        .filter((attachment) => attachment.type === 'image' || attachment.data)
-        .map((attachment, index) => ({
-          id: `rewind-prefill-${composerPrefill.nonce}-${index}`,
-          name: attachment.name,
-          type: attachment.type,
-          mimeType: attachment.mimeType,
-          previewUrl: attachment.type === 'image' ? attachment.data : undefined,
-          data: attachment.data,
-        })),
-    )
+    const nextAttachments = (composerPrefill.attachments ?? [])
+      .filter((attachment) => attachment.type === 'image' || attachment.data)
+      .map((attachment, index) => ({
+        id: `composer-prefill-${composerPrefill.nonce}-${index}`,
+        name: attachment.name,
+        type: attachment.type,
+        mimeType: attachment.mimeType,
+        previewUrl: attachment.type === 'image' ? attachment.data : undefined,
+        data: attachment.data,
+      }))
+
+    if (composerPrefill.mode === 'append') {
+      setComposerAttachments((previous) => [...previous, ...nextAttachments])
+    } else {
+      setComposerInput(composerPrefill.text)
+      setComposerAttachments(nextAttachments)
+    }
     setPlusMenuOpen(false)
     setSlashMenuOpen(false)
     setFileSearchOpen(false)
@@ -336,10 +340,19 @@ export function ChatInput({ variant = 'default', compact = false }: ChatInputPro
     requestAnimationFrame(() => {
       const el = textareaRef.current
       el?.focus()
-      const cursor = composerPrefill.text.length
-      el?.setSelectionRange(cursor, cursor)
+      if (composerPrefill.mode !== 'append') {
+        const cursor = composerPrefill.text.length
+        el?.setSelectionRange(cursor, cursor)
+      }
     })
-  }, [composerPrefill, setComposerAttachments, setComposerInput])
+    clearComposerPrefill(activeTabId, composerPrefill.nonce)
+  }, [
+    activeTabId,
+    clearComposerPrefill,
+    composerPrefill,
+    setComposerAttachments,
+    setComposerInput,
+  ])
 
   const refreshGitInfo = useCallback(() => {
     if (!activeTabId) {
@@ -871,13 +884,17 @@ export function ChatInput({ variant = 'default', compact = false }: ChatInputPro
   const addFilesLabel = isHeroComposer ? t('empty.addFiles') : t('chat.addFiles')
   const slashCommandsLabel = isHeroComposer ? t('empty.slashCommands') : t('chat.slashCommands')
   const isDefaultDesktopComposer = !isHeroComposer && !compact && !isMobileComposer
+  const isCompactDesktopHeroComposer = isHeroComposer && !isMobileComposer
+  const useCompactDesktopComposer = isDefaultDesktopComposer || isCompactDesktopHeroComposer
 
   return (
     <div
       data-testid="chat-input-shell"
       className={
         isHeroComposer
-          ? `bg-[var(--color-surface)] ${isMobileComposer ? 'px-4 pb-3' : 'px-8 pb-4'}`
+          ? isMobileComposer
+            ? 'bg-[var(--color-surface)] px-4 pb-3'
+            : 'chat-input-shell--blended chat-input-shell--compact px-4 pb-3 pt-2'
           : compact
             ? `border-t border-[var(--color-border)]/70 bg-[var(--color-surface)] ${isMobileComposer ? 'px-3 pb-[calc(env(safe-area-inset-bottom)+10px)] pt-2' : 'px-3 py-3'}`
             : `chat-input-shell--blended ${isMobileComposer ? 'bg-[var(--color-surface)] px-3 pb-[calc(env(safe-area-inset-bottom)+10px)] pt-2' : 'chat-input-shell--compact px-4 pb-3 pt-2'}`
@@ -886,7 +903,7 @@ export function ChatInput({ variant = 'default', compact = false }: ChatInputPro
       <div
         className={
           isHeroComposer
-            ? 'mx-auto flex w-full max-w-3xl flex-col'
+            ? `mx-auto flex w-full flex-col ${isMobileComposer ? 'max-w-3xl' : 'max-w-[860px]'}`
             : compact
               ? 'mx-auto max-w-full'
               : `${isMobileComposer ? 'mx-0 max-w-none' : 'mx-auto max-w-[860px]'}`
@@ -896,9 +913,9 @@ export function ChatInput({ variant = 'default', compact = false }: ChatInputPro
           ref={panelRef}
           data-testid="chat-input-panel"
           style={showComposerGlowPanel ? getComposerGlowStyle(composerGlowControls) : undefined}
-          className={`chat-composer-shell ${isDefaultDesktopComposer ? 'chat-composer-shell--blended chat-composer-shell--compact' : ''} ${isComposerGlowActive ? 'chat-composer-shell--active' : ''} ${
+          className={`chat-composer-shell ${useCompactDesktopComposer ? 'chat-composer-shell--blended chat-composer-shell--compact' : ''} ${isComposerGlowActive ? 'chat-composer-shell--active' : ''} ${
             isHeroComposer
-              ? 'glass-panel relative flex flex-col gap-3 rounded-t-xl rounded-b-none p-4 transition-[background-color,border-color,box-shadow]'
+              ? `glass-panel relative flex flex-col transition-[background-color,border-color,box-shadow] ${isMobileComposer ? 'gap-3 rounded-t-xl rounded-b-none p-4' : 'rounded-xl px-3 py-3'}`
               : compact
                 ? `glass-panel relative p-3 transition-[background-color,border-color,box-shadow] ${isMobileComposer ? 'rounded-2xl shadow-[0_-12px_36px_rgba(54,35,28,0.12)]' : 'rounded-xl'}`
                 : `glass-panel relative transition-[background-color,border-color,box-shadow] ${isMobileComposer ? 'rounded-2xl p-3 shadow-[0_-12px_36px_rgba(54,35,28,0.12)]' : 'rounded-xl px-3 py-3'}`
@@ -1032,7 +1049,7 @@ export function ChatInput({ variant = 'default', compact = false }: ChatInputPro
             )
           )}
 
-          {isHeroComposer ? (
+          {isHeroComposer && isMobileComposer ? (
             <div className="flex items-start gap-3">
               <textarea
                 ref={textareaRef}
@@ -1060,13 +1077,13 @@ export function ChatInput({ variant = 'default', compact = false }: ChatInputPro
               placeholder={composerPlaceholder}
               disabled={isWorkspaceMissing}
               rows={1}
-              className={`w-full resize-none bg-transparent text-sm leading-relaxed text-[var(--color-text-primary)] outline-none placeholder:text-[var(--color-text-tertiary)] disabled:opacity-50 ${isDefaultDesktopComposer ? 'chat-composer-textarea--compact' : ''} ${
+              className={`w-full resize-none bg-transparent text-sm leading-relaxed text-[var(--color-text-primary)] outline-none placeholder:text-[var(--color-text-tertiary)] disabled:opacity-50 ${useCompactDesktopComposer ? 'chat-composer-textarea--compact' : ''} ${
                 useCompactControls ? 'py-1.5 pb-14' : 'py-1.5 pb-10'
               }`}
             />
           )}
 
-          <div className={isHeroComposer
+          <div className={isHeroComposer && isMobileComposer
             ? 'flex items-center justify-between border-t border-[var(--color-border-separator)] pt-3'
             : `chat-composer-toolbar absolute bottom-0 left-0 right-0 flex items-center justify-between border-t border-[var(--color-border-separator)] ${
               useCompactControls ? 'gap-2 px-2.5 py-2' : 'chat-composer-toolbar--compact px-3 py-2'
@@ -1246,6 +1263,7 @@ export function ChatInput({ variant = 'default', compact = false }: ChatInputPro
                 onBranchChange={setLaunchBranch}
                 useWorktree={launchUseWorktree}
                 onUseWorktreeChange={setLaunchUseWorktree}
+                variant={!compact && !isMobileComposer ? 'floating' : 'workbar'}
                 onLaunchReadyChange={setLaunchReady}
                 disabled={isActive || launchTransitioning}
               />
