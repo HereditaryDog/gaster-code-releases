@@ -37,9 +37,9 @@ describe('desktop release updater configuration', () => {
     expect(releaseWorkflowYaml).toContain('bun run scripts/release-update-metadata.ts --metadata-dir artifacts/update-metadata --out-dir artifacts/update-metadata-standard')
     expect(releaseWorkflowYaml).toContain('Validate standard update metadata set')
     expect(releaseWorkflowYaml).toContain('latest-mac.yml')
-    expect(releaseWorkflowYaml).toContain('latest-linux.yml')
-    expect(releaseWorkflowYaml).toContain('latest-linux-arm64.yml')
     expect(releaseWorkflowYaml).toContain('latest.yml')
+    expect(releaseWorkflowYaml).not.toContain('latest-linux.yml')
+    expect(releaseWorkflowYaml).not.toContain('latest-linux-arm64.yml')
   })
 
   it('publishes private and public release assets with updater metadata', () => {

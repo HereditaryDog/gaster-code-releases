@@ -1,6 +1,6 @@
 # Gaster Code 桌面端 — 快速上手
 
-> 当前稳定版本：V 1.1.1。桌面端运行时已从 Tauri 2 迁移到 Electron，统一 macOS、Windows 和 Linux 的 Chromium 渲染、内置浏览器、Workbench、终端、通知、托盘、菜单和窗口行为。本版本修复正式安装包启动资源路径问题，G-Master API 登录、注册、余额充值、订阅管理、官方默认服务商同步、GPT Image 2 异步绘图、可信 H5 手机访问、会话批量整理、Git 感知 `@` 文件引用、Project Memory 管理、`/goal` 目标跟踪、Agent 进度展示、更新代理、便携模式、Windows 终端设置，以及第三方 Skills 与用户 Agents 的安装可见性和刷新重扫均保留。
+> 当前稳定版本：V 1.1.2。桌面端运行时已从 Tauri 2 迁移到 Electron，统一 macOS、Windows 和 Linux 的 Chromium 渲染、内置浏览器、Workbench、终端、通知、托盘、菜单和窗口行为。本版本修复 GPT Image 2 绘图失败后旧预览残留的问题；当前正式安装包构建矩阵暂时只发布 macOS 和 Windows，以节省 GitHub Actions 额度。G-Master API 登录、注册、余额充值、订阅管理、官方默认服务商同步、可信 H5 手机访问、会话批量整理、Git 感知 `@` 文件引用、Project Memory 管理、`/goal` 目标跟踪、Agent 进度展示、更新代理、便携模式、Windows 终端设置，以及第三方 Skills 与用户 Agents 的安装可见性和刷新重扫均保留。
 
 <p align="center">
 <a href="#一界面布局">界面布局</a> · <a href="#二对话操作">对话操作</a> · <a href="#三多标签系统">多标签系统</a> · <a href="#四权限控制">权限控制</a> · <a href="#五项目管理">项目管理</a> · <a href="#六模型与提供商">模型与提供商</a> · <a href="#七绘图">绘图</a> · <a href="#八远程控制适配器">远程控制</a> · <a href="#九定时任务">定时任务</a>

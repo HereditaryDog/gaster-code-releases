@@ -104,10 +104,6 @@ describe('release desktop workflow', () => {
       'Gaster-Code-${APP_VERSION}-mac-x64.dmg.blockmap',
       'Gaster-Code-${APP_VERSION}-mac-x64.zip',
       'Gaster-Code-${APP_VERSION}-mac-x64.zip.blockmap',
-      'Gaster-Code-${APP_VERSION}-linux-x86_64.AppImage',
-      'Gaster-Code-${APP_VERSION}-linux-amd64.deb',
-      'Gaster-Code-${APP_VERSION}-linux-arm64.AppImage',
-      'Gaster-Code-${APP_VERSION}-linux-arm64.deb',
       'Gaster-Code-${APP_VERSION}-win-x64.exe',
       'Gaster-Code-${APP_VERSION}-win-x64.exe.blockmap',
     ]
@@ -116,7 +112,7 @@ describe('release desktop workflow', () => {
       expect(workflow).toContain(file)
       expect(publicJob).toContain(file)
     }
-    for (const metadata of ['latest-mac.yml', 'latest-linux.yml', 'latest-linux-arm64.yml', 'latest.yml']) {
+    for (const metadata of ['latest-mac.yml', 'latest.yml']) {
       expect(publishJob).toContain(metadata)
       expect(publicJob).toContain(metadata)
     }

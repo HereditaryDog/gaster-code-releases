@@ -3,6 +3,13 @@
 本文件汇总公开版本线的主要变化。每个正式发布版本的完整说明保存在
 [`release-notes/`](release-notes/) 目录中。
 
+## V 1.1.2
+
+- 修复 GPT Image 2 绘图页新生成失败或 524 超时后仍显示旧预览和旧 revised prompt 的问题。
+- Generate 和 Enhance prompt 按钮运行中使用统一主题色加载反馈，并尊重 reduced-motion 设置。
+- 正式发布工作流临时收窄为 macOS ARM64、macOS x64 和 Windows x64，减少 GitHub Actions 构建额度消耗。
+- 完整说明：[release-notes/v1.1.2.md](release-notes/v1.1.2.md)
+
 ## V 1.1.1
 
 - 修复 Electron 正式安装包在 `file://` 打包环境下使用 `/assets/...` 绝对资源路径，导致 React 未挂载并显示“Gaster Code 启动失败”的问题。

@@ -78,16 +78,6 @@ jobs:
             builder_args: --mac dmg zip --x64
             label: macOS-x64
             smoke_platform: macos
-          - platform: ubuntu-22.04
-            target_triple: x86_64-unknown-linux-gnu
-            builder_args: --linux AppImage deb --x64
-            label: Linux-x64
-            smoke_platform: linux
-          - platform: ubuntu-22.04-arm
-            target_triple: aarch64-unknown-linux-gnu
-            builder_args: --linux AppImage deb --arm64
-            label: Linux-ARM64
-            smoke_platform: linux
           - platform: windows-latest
             target_triple: x86_64-pc-windows-msvc
             builder_args: --win nsis --x64
@@ -235,20 +225,6 @@ jobs:
                 "latest-mac.yml"
               )
               ;;
-            Linux-x64)
-              expected=(
-                "Gaster-Code-${APP_VERSION}-linux-x86_64.AppImage"
-                "Gaster-Code-${APP_VERSION}-linux-amd64.deb"
-                "latest-linux.yml"
-              )
-              ;;
-            Linux-ARM64)
-              expected=(
-                "Gaster-Code-${APP_VERSION}-linux-arm64.AppImage"
-                "Gaster-Code-${APP_VERSION}-linux-arm64.deb"
-                "latest-linux-arm64.yml"
-              )
-              ;;
             Windows-x64)
               expected=(
                 "Gaster-Code-${APP_VERSION}-win-x64.exe"
@@ -295,8 +271,6 @@ jobs:
             desktop/build-artifacts/electron/*.dmg
             desktop/build-artifacts/electron/*.zip
             desktop/build-artifacts/electron/*.exe
-            desktop/build-artifacts/electron/*.AppImage
-            desktop/build-artifacts/electron/*.deb
             desktop/build-artifacts/electron/*.blockmap
             desktop/build-artifacts/electron/*.yml
           if-no-files-found: error
@@ -372,10 +346,6 @@ jobs:
             "Gaster-Code-${APP_VERSION}-mac-x64.dmg.blockmap"
             "Gaster-Code-${APP_VERSION}-mac-x64.zip"
             "Gaster-Code-${APP_VERSION}-mac-x64.zip.blockmap"
-            "Gaster-Code-${APP_VERSION}-linux-x86_64.AppImage"
-            "Gaster-Code-${APP_VERSION}-linux-amd64.deb"
-            "Gaster-Code-${APP_VERSION}-linux-arm64.AppImage"
-            "Gaster-Code-${APP_VERSION}-linux-arm64.deb"
             "Gaster-Code-${APP_VERSION}-win-x64.exe"
             "Gaster-Code-${APP_VERSION}-win-x64.exe.blockmap"
           )
@@ -404,8 +374,6 @@ jobs:
         run: |
           expected=(
             "latest-mac.yml"
-            "latest-linux.yml"
-            "latest-linux-arm64.yml"
             "latest.yml"
           )
           missing=()
@@ -430,8 +398,6 @@ jobs:
             artifacts/release-assets/**/*.dmg
             artifacts/release-assets/**/*.zip
             artifacts/release-assets/**/*.exe
-            artifacts/release-assets/**/*.AppImage
-            artifacts/release-assets/**/*.deb
             artifacts/release-assets/**/*.blockmap
             artifacts/update-metadata-standard/*.yml
             desktop/scripts/install-macos-unsigned.sh
@@ -515,15 +481,9 @@ jobs:
             "Gaster-Code-${APP_VERSION}-mac-x64.dmg.blockmap"
             "Gaster-Code-${APP_VERSION}-mac-x64.zip"
             "Gaster-Code-${APP_VERSION}-mac-x64.zip.blockmap"
-            "Gaster-Code-${APP_VERSION}-linux-x86_64.AppImage"
-            "Gaster-Code-${APP_VERSION}-linux-amd64.deb"
-            "Gaster-Code-${APP_VERSION}-linux-arm64.AppImage"
-            "Gaster-Code-${APP_VERSION}-linux-arm64.deb"
             "Gaster-Code-${APP_VERSION}-win-x64.exe"
             "Gaster-Code-${APP_VERSION}-win-x64.exe.blockmap"
             "latest-mac.yml"
-            "latest-linux.yml"
-            "latest-linux-arm64.yml"
             "latest.yml"
           )
 
@@ -565,8 +525,6 @@ jobs:
             artifacts/release-assets/*.dmg \
             artifacts/release-assets/*.zip \
             artifacts/release-assets/*.exe \
-            artifacts/release-assets/*.AppImage \
-            artifacts/release-assets/*.deb \
             artifacts/release-assets/*.blockmap \
             artifacts/update-metadata-standard/*.yml \
             desktop/scripts/install-macos-unsigned.sh \
