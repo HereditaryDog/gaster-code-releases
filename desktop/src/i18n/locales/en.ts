@@ -111,6 +111,13 @@ export const en = {
 
   // ─── Settings ──────────────────────────────────────
   'settings.title': 'Settings',
+  'settings.navLabel': 'Settings sections',
+  'settings.searchPlaceholder': 'Search settings...',
+  'settings.navNoMatches': 'No settings match this search.',
+  'settings.navGroup.account': 'ACCOUNT',
+  'settings.navGroup.workspace': 'WORKSPACE',
+  'settings.navGroup.aiSystem': 'AI SYSTEM',
+  'settings.navGroup.observability': 'OBSERVABILITY',
   'settings.tab.account': 'Account',
   'settings.tab.providers': 'Providers',
   'settings.tab.permissions': 'Permission Management',

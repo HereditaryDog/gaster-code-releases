@@ -113,6 +113,13 @@ export const zh: Record<TranslationKey, string> = {
 
   // ─── Settings ──────────────────────────────────────
   'settings.title': '设置',
+  'settings.navLabel': '设置分区',
+  'settings.searchPlaceholder': '搜索设置...',
+  'settings.navNoMatches': '没有匹配的设置。',
+  'settings.navGroup.account': '账户',
+  'settings.navGroup.workspace': '工作区',
+  'settings.navGroup.aiSystem': 'AI 系统',
+  'settings.navGroup.observability': '可观测性',
   'settings.tab.account': '个人设置',
   'settings.tab.providers': '服务商',
   'settings.tab.permissions': '权限管理',
@@ -597,7 +604,7 @@ export const zh: Record<TranslationKey, string> = {
   'settings.mcp.toast.reconnectFailed': '重连 MCP 服务失败',
 
   // Settings > Agents
-  'settings.tab.agents': 'Agents',
+  'settings.tab.agents': '智能体',
   'settings.agents.title': '已安装的 Agents',
   'settings.agents.description': '浏览 Gaster Code 当前可用的 Agents，包括内置、项目、用户和外部仓库来源。可在 TUI 中使用 /agents 查看当前生效项与覆盖关系。',
   'settings.agents.browserTitle': '浏览已安装 Agents',
@@ -825,8 +832,8 @@ export const zh: Record<TranslationKey, string> = {
   'settings.about.originalProjectDesc': '向原项目 NanmiCoder/cc-haha 致敬。Gaster Code 作为独立分支，在本地编程助手体验上继续迭代。',
 
   // Settings > Computer Use
-  'settings.tab.computerUse': 'Computer Use',
-  'settings.computerUse.title': 'Computer Use',
+  'settings.tab.computerUse': '电脑控制',
+  'settings.computerUse.title': '电脑控制',
   'settings.computerUse.description': '允许 Claude 截屏、点击、打字并控制你的电脑。需要 Python 3，macOS 上还需要辅助功能权限。',
   'settings.computerUse.enabledToggle': '启用',
   'settings.computerUse.disabledHint': 'Computer Use 已关闭。新会话不会注入 computer-use MCP，也不会把桌面控制工具暴露给 Coding Agent。',
