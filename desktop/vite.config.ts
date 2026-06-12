@@ -15,6 +15,9 @@ export default defineConfig({
   },
   // Vite options tailored for Tauri development
   clearScreen: false,
+  build: {
+    chunkSizeWarningLimit: 900,
+  },
   server: {
     port: 1420,
     strictPort: true,

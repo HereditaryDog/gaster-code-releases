@@ -1,7 +1,7 @@
 {
   "name": "gaster-code-desktop",
   "private": true,
-  "version": "1.1.2",
+  "version": "1.1.4",
   "description": "Gaster Code desktop app",
   "homepage": "https://github.com/HereditaryDog/gaster-code-releases",
   "author": {
@@ -44,6 +44,28 @@
       "entitlements": "build/entitlements.mac.plist",
       "entitlementsInherit": "build/entitlements.mac.inherit.plist",
       "notarize": true
+    },
+    "dmg": {
+      "title": "Gaster Code ${version}",
+      "background": "build/dmg-background.png",
+      "iconSize": 96,
+      "window": {
+        "width": 660,
+        "height": 400
+      },
+      "contents": [
+        {
+          "x": 158,
+          "y": 200,
+          "type": "file"
+        },
+        {
+          "x": 502,
+          "y": 200,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
     },
     "win": {
       "target": "nsis",

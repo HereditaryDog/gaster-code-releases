@@ -23,7 +23,7 @@ Install root dependencies with `bun install`, then install desktop dependencies 
 - The release workflow is `.github/workflows/release-desktop.yml`; it triggers automatically on `push` of tags matching `v*.*.*`.
 - GitHub Release body is sourced from `release-notes/vX.Y.Z.md` in the tagged commit. Keep the filename aligned with the version/tag exactly.
 - Use `bun run scripts/release.ts <version>` to cut a desktop release. The script updates version files, refreshes `desktop/src-tauri/Cargo.lock`, requires the matching `release-notes/vX.Y.Z.md`, commits it, and creates the annotated tag.
-- The normal release push is `git push origin main --tags`. If the tag, app version, or release-notes filename do not match, the workflow is designed to fail fast instead of publishing the wrong release.
+- The normal release push is `git push origin main vX.Y.Z`. Push only the one release tag that matches the version; if the tag, app version, or release-notes filename do not match, the workflow is designed to fail fast instead of publishing the wrong release.
 - For local macOS test packaging, `desktop/scripts/build-macos-arm64.sh` is the canonical Apple Silicon build entrypoint, and outputs land under `desktop/build-artifacts/macos-arm64/`.
 
 ## Docs Workflow Notes

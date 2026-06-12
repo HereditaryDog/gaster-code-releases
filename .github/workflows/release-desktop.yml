@@ -73,11 +73,6 @@ jobs:
             builder_args: --mac dmg zip --arm64
             label: macOS-ARM64
             smoke_platform: macos
-          - platform: macos-latest
-            target_triple: x86_64-apple-darwin
-            builder_args: --mac dmg zip --x64
-            label: macOS-x64
-            smoke_platform: macos
           - platform: windows-latest
             target_triple: x86_64-pc-windows-msvc
             builder_args: --win nsis --x64
@@ -216,15 +211,6 @@ jobs:
                 "latest-mac.yml"
               )
               ;;
-            macOS-x64)
-              expected=(
-                "Gaster-Code-${APP_VERSION}-mac-x64.dmg"
-                "Gaster-Code-${APP_VERSION}-mac-x64.dmg.blockmap"
-                "Gaster-Code-${APP_VERSION}-mac-x64.zip"
-                "Gaster-Code-${APP_VERSION}-mac-x64.zip.blockmap"
-                "latest-mac.yml"
-              )
-              ;;
             Windows-x64)
               expected=(
                 "Gaster-Code-${APP_VERSION}-win-x64.exe"
@@ -342,10 +328,6 @@ jobs:
             "Gaster-Code-${APP_VERSION}-mac-arm64.dmg.blockmap"
             "Gaster-Code-${APP_VERSION}-mac-arm64.zip"
             "Gaster-Code-${APP_VERSION}-mac-arm64.zip.blockmap"
-            "Gaster-Code-${APP_VERSION}-mac-x64.dmg"
-            "Gaster-Code-${APP_VERSION}-mac-x64.dmg.blockmap"
-            "Gaster-Code-${APP_VERSION}-mac-x64.zip"
-            "Gaster-Code-${APP_VERSION}-mac-x64.zip.blockmap"
             "Gaster-Code-${APP_VERSION}-win-x64.exe"
             "Gaster-Code-${APP_VERSION}-win-x64.exe.blockmap"
           )
@@ -477,10 +459,6 @@ jobs:
             "Gaster-Code-${APP_VERSION}-mac-arm64.dmg.blockmap"
             "Gaster-Code-${APP_VERSION}-mac-arm64.zip"
             "Gaster-Code-${APP_VERSION}-mac-arm64.zip.blockmap"
-            "Gaster-Code-${APP_VERSION}-mac-x64.dmg"
-            "Gaster-Code-${APP_VERSION}-mac-x64.dmg.blockmap"
-            "Gaster-Code-${APP_VERSION}-mac-x64.zip"
-            "Gaster-Code-${APP_VERSION}-mac-x64.zip.blockmap"
             "Gaster-Code-${APP_VERSION}-win-x64.exe"
             "Gaster-Code-${APP_VERSION}-win-x64.exe.blockmap"
             "latest-mac.yml"

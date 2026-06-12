@@ -11,7 +11,7 @@
 [![GitHub Issues](https://img.shields.io/badge/issues-public%20repo-blue?logo=github)](https://github.com/HereditaryDog/gaster-code-releases/issues)
 [![GitHub Pull Requests](https://img.shields.io/badge/pull%20requests-welcome-brightgreen?logo=github)](https://github.com/HereditaryDog/gaster-code-releases/pulls)
 [![License](https://img.shields.io/badge/license-research%20only-red)](LICENSE)
-[![Current Version](https://img.shields.io/badge/version-V%201.1.2-blue)](release-notes/v1.1.2.md)
+[![Current Version](https://img.shields.io/badge/version-V%201.1.4-blue)](release-notes/v1.1.4.md)
 [![中文](https://img.shields.io/badge/中文-Available-green)](README.md)
 [![English](https://img.shields.io/badge/English-Current-blue)](README.en.md)
 
@@ -19,7 +19,7 @@
 
 Gaster Code is an AI coding assistant for local development workflows. It provides a CLI/TUI, a desktop app, multi-session workspaces, MCP integrations, task automation, and remote adapter capabilities for real software projects.
 
-> Current stable version: **V 1.1.2**. This release fixes stale GPT Image 2 drawing previews after failed new generations and temporarily narrows the official release matrix to macOS and Windows to save GitHub Actions minutes.
+> Current stable version: **V 1.1.4**. This release ports the public-repo Settings improvements with a grouped secondary sidebar, settings search, and completed Chinese navigation labels while preserving the V 1.1.3 long-context switching and main-sidebar performance guards. The current installer matrix is narrowed to macOS Apple Silicon and Windows x64.
 
 <p align="center">
   <a href="#features">Features</a> ·
@@ -148,7 +148,7 @@ http://127.0.0.1:2024
 
 ## Packaging And Release
 
-Current desktop version: `V 1.1.2`.
+Current desktop version: `V 1.1.4`.
 
 ### Windows
 
@@ -172,11 +172,10 @@ Public installers:
 
 | Platform | Installer |
 |----------|-----------|
-| macOS Apple Silicon | `Gaster-Code-1.1.2-mac-arm64.dmg` |
-| macOS Intel | `Gaster-Code-1.1.2-mac-x64.dmg` |
-| Windows x64 | `Gaster-Code-1.1.2-win-x64.exe` |
+| macOS Apple Silicon | `Gaster-Code-1.1.4-mac-arm64.dmg` |
+| Windows x64 | `Gaster-Code-1.1.4-win-x64.exe` |
 
-> V 1.1.2 official releases do not build Linux installers for now; restore the Linux release matrix when those artifacts are needed again.
+> V 1.1.4 official releases do not build macOS Intel or Linux installers for now; restore the matching release matrix when those artifacts are needed again.
 
 ### macOS
 
@@ -214,7 +213,7 @@ Desktop releases run through:
 .github/workflows/release-desktop.yml
 ```
 
-The workflow builds macOS ARM64, macOS x64, and Windows x64 desktop artifacts from version tags. The source repository stays private, while installers, blockmaps, and standard `latest*.yml` updater metadata are mirrored to the public `HereditaryDog/gaster-code-releases` release-only repository for the desktop updater. See [release-notes/v1.1.2.md](release-notes/v1.1.2.md) for the current release notes.
+The workflow builds macOS ARM64 and Windows x64 desktop artifacts from version tags. The source repository stays private, while installers, blockmaps, and standard `latest*.yml` updater metadata are mirrored to the public `HereditaryDog/gaster-code-releases` release-only repository for the desktop updater. See [release-notes/v1.1.4.md](release-notes/v1.1.4.md) for the current release notes.
 
 ---
 
@@ -230,6 +229,7 @@ The workflow builds macOS ARM64, macOS x64, and Windows x64 desktop artifacts fr
 - [Multi-agent / Teams](docs/agent/01-usage-guide.md)
 - [Computer Use](docs/features/computer-use.md)
 - [Project structure](docs/reference/project-structure.md)
+- [Release remote hygiene](docs/en/reference/release-remote-hygiene.md)
 
 ## Repository Structure
 

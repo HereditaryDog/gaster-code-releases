@@ -1,7 +1,6 @@
 // desktop/src/stores/providerStore.ts
 
 import { create } from 'zustand'
-import { providersApi } from '../api/providers'
 import { useChatStore } from './chatStore'
 import { useSessionRuntimeStore } from './sessionRuntimeStore'
 import { useSettingsStore } from './settingsStore'
@@ -34,6 +33,15 @@ type ProviderStore = {
   activateOfficial: () => Promise<void>
   testProvider: (id: string, overrides?: { baseUrl?: string; modelId?: string; apiFormat?: string; authStrategy?: string }) => Promise<ProviderTestResult>
   testConfig: (input: TestProviderConfigInput) => Promise<ProviderTestResult>
+}
+
+type ProvidersApi = typeof import('../api/providers').providersApi
+
+let providersApiPromise: Promise<ProvidersApi> | null = null
+
+function getProvidersApi(): Promise<ProvidersApi> {
+  providersApiPromise ??= import('../api/providers').then(({ providersApi }) => providersApi)
+  return providersApiPromise
 }
 
 function providerModelIds(provider: SavedProvider): Set<string> {
@@ -105,6 +113,7 @@ export const useProviderStore = create<ProviderStore>((set, get) => ({
   fetchProviders: async () => {
     set({ isLoading: true, error: null })
     try {
+      const providersApi = await getProvidersApi()
       const { providers, activeId } = await providersApi.list()
       set({ providers, activeId, hasLoadedProviders: true, isLoading: false })
     } catch (err) {
@@ -118,6 +127,7 @@ export const useProviderStore = create<ProviderStore>((set, get) => ({
   fetchPresets: async () => {
     set({ isPresetsLoading: true, error: null })
     try {
+      const providersApi = await getProvidersApi()
       const { presets } = await providersApi.presets()
       set({ presets, isPresetsLoading: false })
     } catch (err) {
@@ -126,12 +136,14 @@ export const useProviderStore = create<ProviderStore>((set, get) => ({
   },
 
   createProvider: async (input) => {
+    const providersApi = await getProvidersApi()
     const { provider } = await providersApi.create(input)
     await get().fetchProviders()
     return provider
   },
 
   updateProvider: async (id, input) => {
+    const providersApi = await getProvidersApi()
     const { provider } = await providersApi.update(id, input)
     await get().fetchProviders()
     refreshConnectedSessionsForProvider(provider, get().activeId)
@@ -139,11 +151,13 @@ export const useProviderStore = create<ProviderStore>((set, get) => ({
   },
 
   deleteProvider: async (id) => {
+    const providersApi = await getProvidersApi()
     await providersApi.delete(id)
     await get().fetchProviders()
   },
 
   activateProvider: async (id) => {
+    const providersApi = await getProvidersApi()
     await providersApi.activate(id)
     await get().fetchProviders()
     // 更新默认 provider 时，同步刷新默认 model，避免 settings.json 里残留
@@ -157,6 +171,7 @@ export const useProviderStore = create<ProviderStore>((set, get) => ({
   },
 
   activateOfficial: async () => {
+    const providersApi = await getProvidersApi()
     await providersApi.activateOfficial()
     await get().fetchProviders()
     // 切回官方默认时同样重置 currentModel，避免残留第三方 model id。
@@ -166,11 +181,13 @@ export const useProviderStore = create<ProviderStore>((set, get) => ({
   },
 
   testProvider: async (id, overrides?) => {
+    const providersApi = await getProvidersApi()
     const { result } = await providersApi.test(id, overrides)
     return result
   },
 
   testConfig: async (input) => {
+    const providersApi = await getProvidersApi()
     const { result } = await providersApi.testConfig(input)
     return result
   },

@@ -167,4 +167,4 @@ await run(['git', 'commit', '-m', `release: v${next}`])
 await run(['git', 'tag', '-a', `v${next}`, '-m', `Release v${next}`])
 
 console.log(`\n  Done! Created commit and tag v${next}`)
-console.log(`\n  To trigger the build:\n    git push origin main --tags\n`)
+console.log(`\n  To trigger the build:\n    git push origin main v${next}\n`)

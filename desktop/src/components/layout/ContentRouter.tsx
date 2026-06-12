@@ -1,11 +1,28 @@
-import type { ReactNode } from 'react'
+import { lazy, Suspense, type ReactNode } from 'react'
 import { useTabStore } from '../../stores/tabStore'
 import { EmptySession } from '../../pages/EmptySession'
-import { ActiveSession } from '../../pages/ActiveSession'
-import { ScheduledTasks } from '../../pages/ScheduledTasks'
-import { Settings } from '../../pages/Settings'
 import { TerminalSettings } from '../../pages/TerminalSettings'
-import { Drawing } from '../../pages/Drawing'
+
+const LazyActiveSession = lazy(() =>
+  import('../../pages/ActiveSession').then(({ ActiveSession }) => ({ default: ActiveSession })),
+)
+const LazyScheduledTasks = lazy(() =>
+  import('../../pages/ScheduledTasks').then(({ ScheduledTasks }) => ({ default: ScheduledTasks })),
+)
+const LazySettings = lazy(() =>
+  import('../../pages/Settings').then(({ Settings }) => ({ default: Settings })),
+)
+const LazyDrawing = lazy(() =>
+  import('../../pages/Drawing').then(({ Drawing }) => ({ default: Drawing })),
+)
+
+function LazyPageShell({ children }: { children: ReactNode }) {
+  return (
+    <Suspense fallback={<div className="min-h-0 flex-1 bg-[var(--color-bg)]" />}>
+      {children}
+    </Suspense>
+  )
+}
 
 export function ContentRouter() {
   const activeTabId = useTabStore((s) => s.activeTabId)
@@ -17,13 +34,13 @@ export function ContentRouter() {
   if (!activeTabId || !activeTabType) {
     page = <EmptySession />
   } else if (activeTabType === 'settings') {
-    page = <Settings />
+    page = <LazyPageShell><LazySettings /></LazyPageShell>
   } else if (activeTabType === 'scheduled') {
-    page = <ScheduledTasks />
+    page = <LazyPageShell><LazyScheduledTasks /></LazyPageShell>
   } else if (activeTabType === 'drawing') {
-    page = <Drawing />
+    page = <LazyPageShell><LazyDrawing /></LazyPageShell>
   } else if (activeTabType !== 'terminal') {
-    page = <ActiveSession />
+    page = <LazyPageShell><LazyActiveSession /></LazyPageShell>
   }
 
   return (

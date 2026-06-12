@@ -2,6 +2,16 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import '@testing-library/jest-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+const {
+  scheduledTasksModuleLoaded,
+  settingsModuleLoaded,
+  drawingModuleLoaded,
+} = vi.hoisted(() => ({
+  scheduledTasksModuleLoaded: vi.fn(),
+  settingsModuleLoaded: vi.fn(),
+  drawingModuleLoaded: vi.fn(),
+}))
+
 vi.mock('../../pages/EmptySession', () => ({
   EmptySession: () => <div data-testid="empty-session" />,
 }))
@@ -10,13 +20,20 @@ vi.mock('../../pages/ActiveSession', () => ({
   ActiveSession: () => <div data-testid="active-session" />,
 }))
 
-vi.mock('../../pages/ScheduledTasks', () => ({
-  ScheduledTasks: () => <div data-testid="scheduled-tasks" />,
-}))
+vi.mock('../../pages/ScheduledTasks', () => {
+  scheduledTasksModuleLoaded()
+  return { ScheduledTasks: () => <div data-testid="scheduled-tasks" /> }
+})
 
-vi.mock('../../pages/Settings', () => ({
-  Settings: () => <div data-testid="settings-page" />,
-}))
+vi.mock('../../pages/Settings', () => {
+  settingsModuleLoaded()
+  return { Settings: () => <div data-testid="settings-page" /> }
+})
+
+vi.mock('../../pages/Drawing', () => {
+  drawingModuleLoaded()
+  return { Drawing: () => <div data-testid="drawing-page" /> }
+})
 
 vi.mock('../../pages/TerminalSettings', () => ({
   TerminalSettings: ({ active, cwd, onNewTerminal, testId }: { active: boolean; cwd?: string; onNewTerminal: () => void; testId: string }) => (
@@ -32,6 +49,23 @@ import { useTabStore } from '../../stores/tabStore'
 describe('ContentRouter terminal tabs', () => {
   afterEach(() => {
     useTabStore.setState({ tabs: [], activeTabId: null })
+    scheduledTasksModuleLoaded.mockClear()
+    settingsModuleLoaded.mockClear()
+    drawingModuleLoaded.mockClear()
+  })
+
+  it('does not load secondary page modules for the active chat route', async () => {
+    useTabStore.setState({
+      tabs: [{ sessionId: 'session-1', title: 'Chat', type: 'session', status: 'idle' }],
+      activeTabId: 'session-1',
+    })
+
+    render(<ContentRouter />)
+
+    expect(await screen.findByTestId('active-session')).toBeInTheDocument()
+    expect(scheduledTasksModuleLoaded).not.toHaveBeenCalled()
+    expect(settingsModuleLoaded).not.toHaveBeenCalled()
+    expect(drawingModuleLoaded).not.toHaveBeenCalled()
   })
 
   it('renders the active terminal tab as main content', () => {
@@ -47,7 +81,7 @@ describe('ContentRouter terminal tabs', () => {
     expect(screen.queryByTestId('active-session')).not.toBeInTheDocument()
   })
 
-  it('keeps terminal tabs mounted while chat content is active', () => {
+  it('keeps terminal tabs mounted while chat content is active', async () => {
     useTabStore.setState({
       tabs: [
         { sessionId: '__terminal__1', title: 'Terminal 1', type: 'terminal', status: 'idle' },
@@ -59,7 +93,7 @@ describe('ContentRouter terminal tabs', () => {
     render(<ContentRouter />)
 
     expect(screen.getByTestId('terminal-host-__terminal__1')).toHaveAttribute('data-active', 'false')
-    expect(screen.getByTestId('active-session')).toBeInTheDocument()
+    expect(await screen.findByTestId('active-session')).toBeInTheDocument()
   })
 
   it('can open another terminal tab from a terminal page', () => {

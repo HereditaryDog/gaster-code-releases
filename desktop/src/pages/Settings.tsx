@@ -9,7 +9,7 @@ import {
   useSettingsStore,
 } from '../stores/settingsStore'
 import { useProviderStore } from '../stores/providerStore'
-import { useTranslation } from '../i18n'
+import { useTranslation, type Locale, type TranslationKey } from '../i18n'
 import { Modal } from '../components/shared/Modal'
 import { ConfirmDialog } from '../components/shared/ConfirmDialog'
 import { Input } from '../components/shared/Input'
@@ -17,7 +17,6 @@ import { Textarea } from '../components/shared/Textarea'
 import { Button } from '../components/shared/Button'
 import { Dropdown } from '../components/shared/Dropdown'
 import type { AppMode, PermissionMode, EffortLevel, ThemeMode, UpdateProxyMode, WebSearchMode } from '../types/settings'
-import type { Locale } from '../i18n'
 import type { SavedProvider, UpdateProviderInput, ProviderTestResult, ModelMapping, ApiFormat, ProviderAuthStrategy } from '../types/provider'
 import type { ProviderPreset } from '../types/providerPreset'
 import { AdapterSettings } from './AdapterSettings'
@@ -50,7 +49,6 @@ import { useGMasterAuthStore } from '../stores/gmasterAuthStore'
 import { GMASTER_API_BASE_URL, GMASTER_DEFAULT_MODELS, GMASTER_MANAGED_PROVIDER_ID, getGMasterModelOptions, isGMasterOfficialProvider } from '../constants/gmasterProvider'
 import { OFFICIAL_MODELS } from '../constants/modelCatalog'
 import { GASTER_CODE_VERSION } from '../version'
-import { GASTER_CODE_APP_NAME, GASTER_CODE_LOGO_SRC } from '../constants/branding'
 import {
   getDesktopNotificationPermission,
   notifyDesktop,
@@ -65,6 +63,61 @@ import {
   stripProviderSettingsJsonEnv,
 } from '../lib/providerSettingsJson'
 import { copyTextToClipboard } from '../components/chat/clipboard'
+
+type SettingsNavItem = {
+  tab: SettingsTab
+  icon: string
+  labelKey: TranslationKey
+}
+
+type SettingsNavGroup = {
+  headingKey: TranslationKey
+  items: SettingsNavItem[]
+}
+
+const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
+  {
+    headingKey: 'settings.navGroup.account',
+    items: [
+      { tab: 'account', icon: 'account_circle', labelKey: 'settings.tab.account' },
+      { tab: 'providers', icon: 'dns', labelKey: 'settings.tab.providers' },
+      { tab: 'permissions', icon: 'shield', labelKey: 'settings.tab.permissions' },
+    ],
+  },
+  {
+    headingKey: 'settings.navGroup.workspace',
+    items: [
+      { tab: 'general', icon: 'tune', labelKey: 'settings.tab.general' },
+      { tab: 'h5Access', icon: 'qr_code_2', labelKey: 'settings.tab.h5Access' },
+      { tab: 'adapters', icon: 'chat', labelKey: 'settings.tab.adapters' },
+      { tab: 'terminal', icon: 'terminal', labelKey: 'settings.tab.terminal' },
+      { tab: 'mcp', icon: 'hub', labelKey: 'settings.tab.mcp' },
+    ],
+  },
+  {
+    headingKey: 'settings.navGroup.aiSystem',
+    items: [
+      { tab: 'agents', icon: 'smart_toy', labelKey: 'settings.tab.agents' },
+      { tab: 'skills', icon: 'auto_awesome', labelKey: 'settings.tab.skills' },
+      { tab: 'memory', icon: 'history_edu', labelKey: 'settings.tab.memory' },
+      { tab: 'plugins', icon: 'extension', labelKey: 'settings.tab.plugins' },
+      { tab: 'computerUse', icon: 'mouse', labelKey: 'settings.tab.computerUse' },
+    ],
+  },
+  {
+    headingKey: 'settings.navGroup.observability',
+    items: [
+      { tab: 'activity', icon: 'monitoring', labelKey: 'settings.tab.activity' },
+      { tab: 'diagnostics', icon: 'monitor_heart', labelKey: 'settings.tab.diagnostics' },
+    ],
+  },
+]
+
+const SETTINGS_ABOUT_NAV_ITEM: SettingsNavItem = {
+  tab: 'about',
+  icon: 'info',
+  labelKey: 'settings.tab.about',
+}
 
 export function buildH5LaunchUrl(baseUrl: string | null, token: string | null): string | null {
   if (!baseUrl) return null
@@ -86,7 +139,8 @@ export function buildH5LaunchUrl(baseUrl: string | null, token: string | null): 
 }
 
 export function Settings() {
-  const [activeTab, setActiveTab] = useState<SettingsTab>('providers')
+  const [activeTab, setActiveTab] = useState<SettingsTab>('account')
+  const [navSearch, setNavSearch] = useState('')
   const pendingSettingsTab = useUIStore((s) => s.pendingSettingsTab)
   const t = useTranslation()
 
@@ -96,32 +150,82 @@ export function Settings() {
     useUIStore.getState().setPendingSettingsTab(null)
   }, [pendingSettingsTab])
 
+  const normalizedNavSearch = navSearch.trim().toLowerCase()
+  const visibleGroups = useMemo(
+    () => SETTINGS_NAV_GROUPS
+      .map((group) => ({
+        ...group,
+        items: group.items.filter((item) => {
+          if (!normalizedNavSearch) return true
+          const heading = t(group.headingKey)
+          return t(item.labelKey).toLowerCase().includes(normalizedNavSearch) ||
+            item.tab.toLowerCase().includes(normalizedNavSearch) ||
+            heading.toLowerCase().includes(normalizedNavSearch)
+        }),
+      }))
+      .filter((group) => group.items.length > 0),
+    [normalizedNavSearch, t],
+  )
+  const aboutMatches = !normalizedNavSearch ||
+    t(SETTINGS_ABOUT_NAV_ITEM.labelKey).toLowerCase().includes(normalizedNavSearch) ||
+    SETTINGS_ABOUT_NAV_ITEM.tab.toLowerCase().includes(normalizedNavSearch)
+
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-[var(--color-surface)]">
       <div className="flex-1 flex overflow-hidden">
-        {/* Tab navigation */}
-        <div className="w-[180px] border-r border-[var(--color-border)] py-3 flex-shrink-0 flex flex-col">
-          <div className="flex-1">
-            <TabButton icon="account_circle" label={t('settings.tab.account')} active={activeTab === 'account'} onClick={() => setActiveTab('account')} />
-            <TabButton icon="dns" label={t('settings.tab.providers')} active={activeTab === 'providers'} onClick={() => setActiveTab('providers')} />
-            <TabButton icon="shield" label={t('settings.tab.permissions')} active={activeTab === 'permissions'} onClick={() => setActiveTab('permissions')} />
-            <TabButton icon="tune" label={t('settings.tab.general')} active={activeTab === 'general'} onClick={() => setActiveTab('general')} />
-            <TabButton icon="qr_code_2" label={t('settings.tab.h5Access')} active={activeTab === 'h5Access'} onClick={() => setActiveTab('h5Access')} />
-            <TabButton icon="chat" label={t('settings.tab.adapters')} active={activeTab === 'adapters'} onClick={() => setActiveTab('adapters')} />
-            <TabButton icon="terminal" label={t('settings.tab.terminal')} active={activeTab === 'terminal'} onClick={() => setActiveTab('terminal')} />
-            <TabButton icon="dns" label={t('settings.tab.mcp')} active={activeTab === 'mcp'} onClick={() => setActiveTab('mcp')} />
-            <TabButton icon="smart_toy" label={t('settings.tab.agents')} active={activeTab === 'agents'} onClick={() => setActiveTab('agents')} />
-            <TabButton icon="auto_awesome" label={t('settings.tab.skills')} active={activeTab === 'skills'} onClick={() => setActiveTab('skills')} />
-            <TabButton icon="history_edu" label={t('settings.tab.memory')} active={activeTab === 'memory'} onClick={() => setActiveTab('memory')} />
-            <TabButton icon="extension" label={t('settings.tab.plugins')} active={activeTab === 'plugins'} onClick={() => setActiveTab('plugins')} />
-            <TabButton icon="mouse" label={t('settings.tab.computerUse')} active={activeTab === 'computerUse'} onClick={() => setActiveTab('computerUse')} />
-            <TabButton icon="monitoring" label={t('settings.tab.activity')} active={activeTab === 'activity'} onClick={() => setActiveTab('activity')} />
-            <TabButton icon="monitor_heart" label={t('settings.tab.diagnostics')} active={activeTab === 'diagnostics'} onClick={() => setActiveTab('diagnostics')} />
+        <nav
+          aria-label={t('settings.navLabel')}
+          className="settings-secondary-sidebar flex w-[220px] shrink-0 flex-col"
+        >
+          <div className="settings-secondary-header">
+            <div className="settings-secondary-title">
+              <span className="material-symbols-outlined settings-secondary-title__icon" aria-hidden="true">settings</span>
+              <span>{t('settings.title')}</span>
+            </div>
+            <label className="settings-secondary-search">
+              <span className="material-symbols-outlined settings-secondary-search__icon" aria-hidden="true">search</span>
+              <input
+                value={navSearch}
+                onChange={(event) => setNavSearch(event.target.value)}
+                placeholder={t('settings.searchPlaceholder')}
+                className="settings-secondary-search__input"
+              />
+            </label>
           </div>
-          <div className="border-t border-[var(--color-border)]/40 pt-1">
-            <TabButton icon="info" label={t('settings.tab.about')} active={activeTab === 'about'} onClick={() => setActiveTab('about')} />
+
+          <div className="settings-secondary-nav-scroll">
+            {visibleGroups.map((group) => (
+              <section key={group.headingKey} className="settings-secondary-nav-group">
+                <div className="settings-secondary-group-title">{t(group.headingKey)}</div>
+                <div className="settings-secondary-group-items">
+                  {group.items.map((item) => (
+                    <SettingsNavButton
+                      key={item.tab}
+                      icon={item.icon}
+                      label={t(item.labelKey)}
+                      active={activeTab === item.tab}
+                      onClick={() => setActiveTab(item.tab)}
+                    />
+                  ))}
+                </div>
+              </section>
+            ))}
+            {visibleGroups.length === 0 && !aboutMatches && (
+              <div className="settings-secondary-empty">{t('settings.navNoMatches')}</div>
+            )}
           </div>
-        </div>
+
+          {aboutMatches && (
+            <div className="settings-secondary-footer">
+              <SettingsNavButton
+                icon={SETTINGS_ABOUT_NAV_ITEM.icon}
+                label={t(SETTINGS_ABOUT_NAV_ITEM.labelKey)}
+                active={activeTab === SETTINGS_ABOUT_NAV_ITEM.tab}
+                onClick={() => setActiveTab(SETTINGS_ABOUT_NAV_ITEM.tab)}
+              />
+            </div>
+          )}
+        </nav>
 
         {/* Tab content */}
         <div className="flex-1 overflow-y-auto px-8 py-6">
@@ -147,18 +251,16 @@ export function Settings() {
   )
 }
 
-function TabButton({ icon, label, active, onClick }: { icon: string; label: string; active: boolean; onClick: () => void }) {
+function SettingsNavButton({ icon, label, active, onClick }: { icon: string; label: string; active: boolean; onClick: () => void }) {
   return (
     <button
+      type="button"
       onClick={onClick}
-      className={`w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-left transition-colors ${
-        active
-          ? 'bg-[var(--color-surface-selected)] text-[var(--color-text-primary)] font-medium'
-          : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)]'
-      }`}
+      aria-current={active ? 'page' : undefined}
+      className={`settings-secondary-nav-item${active ? ' settings-secondary-nav-item--active' : ''}`}
     >
-      <span className="material-symbols-outlined text-[18px]">{icon}</span>
-      {label}
+      <span className="material-symbols-outlined settings-secondary-nav-item__icon" aria-hidden="true">{icon}</span>
+      <span className="settings-secondary-nav-item__label">{label}</span>
     </button>
   )
 }
@@ -3381,8 +3483,8 @@ function PluginSettings() {
 
 // ─── About Settings ──────────────────────────────────────
 
-const APP_NAME = GASTER_CODE_APP_NAME
-const APP_LOGO_PATH = GASTER_CODE_LOGO_SRC
+const APP_NAME = 'Gaster Code'
+const APP_LOGO_PATH = '/app-icon.svg'
 const GITHUB_REPO = 'https://github.com/HereditaryDog/gaster-code'
 const GITHUB_ISSUES = `${GITHUB_REPO}/issues`
 const GITHUB_RELEASES = `${GITHUB_REPO}/releases`

@@ -103,6 +103,7 @@ const zhSidebar = [
     items: [
       { text: '源码修复记录', link: '/reference/fixes' },
       { text: '项目结构', link: '/reference/project-structure' },
+      { text: '发布远端卫生', link: '/reference/release-remote-hygiene' },
     ],
   },
 ]
@@ -180,6 +181,7 @@ const enSidebar = [
     items: [
       { text: 'Source Fixes', link: '/en/reference/fixes' },
       { text: 'Project Structure', link: '/en/reference/project-structure' },
+      { text: 'Release Remote Hygiene', link: '/en/reference/release-remote-hygiene' },
     ],
   },
 ]

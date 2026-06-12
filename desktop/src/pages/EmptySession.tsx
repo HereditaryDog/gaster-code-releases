@@ -27,7 +27,6 @@ import {
 } from '../components/chat/composerUtils'
 import type { AttachmentRef } from '../types/chat'
 import type { SlashCommandOption } from '../components/chat/composerUtils'
-import { GASTER_CODE_LOGO_SRC } from '../constants/branding'
 
 type Attachment = {
   id: string
@@ -519,7 +518,7 @@ export function EmptySession() {
           isMobileComposer ? 'max-w-[300px]' : 'max-w-md'
         }`}>
           <img
-            src={GASTER_CODE_LOGO_SRC}
+            src="/app-icon.svg"
             alt="Gaster Code"
             className={`hero-brand-logo ${isMobileComposer ? 'mb-4 h-16 w-16' : 'mb-6 h-24 w-24'}`}
           />
@@ -544,19 +543,17 @@ export function EmptySession() {
 
       <div
         data-testid="empty-session-composer-shell"
-        className={`absolute left-0 right-0 z-30 ${
+        className={`absolute left-0 right-0 z-30 flex justify-center ${
         isMobileComposer
-          ? 'bottom-0 flex justify-center px-3 pb-[calc(env(safe-area-inset-bottom)+10px)]'
-          : 'bottom-0 chat-input-shell--blended chat-input-shell--compact px-4 pb-3 pt-2'
+          ? 'bottom-0 px-3 pb-[calc(env(safe-area-inset-bottom)+10px)]'
+          : 'bottom-4 px-8'
       }`}
       >
-        <div className={`flex w-full flex-col ${isMobileComposer ? 'max-w-none' : 'mx-auto max-w-[860px]'}`}>
+        <div className={`flex w-full flex-col ${isMobileComposer ? 'max-w-none' : 'max-w-3xl'}`}>
           <div
             data-testid="empty-session-composer-panel"
-            className={`chat-composer-shell glass-panel relative flex flex-col transition-[background-color,border-color,box-shadow] ${
-              isMobileComposer
-                ? 'gap-3 rounded-2xl p-3 shadow-[0_-12px_36px_rgba(54,35,28,0.12)]'
-                : 'chat-composer-shell--blended chat-composer-shell--compact rounded-xl px-3 py-3'
+            className={`glass-panel relative flex flex-col gap-3 ${
+              isMobileComposer ? 'rounded-2xl p-3 shadow-[0_-12px_36px_rgba(54,35,28,0.12)]' : 'rounded-t-xl rounded-b-none p-4'
             }`}
             onDragOver={(event) => event.preventDefault()}
             onDrop={handleDrop}
@@ -657,20 +654,16 @@ export function EmptySession() {
                 onKeyDown={handleKeyDown}
                 onPaste={handlePaste}
                 className={`flex-1 resize-none border-none bg-transparent leading-relaxed text-[var(--color-text-primary)] outline-none placeholder:text-[var(--color-text-tertiary)] ${
-                  isMobileComposer
-                    ? 'max-h-[132px] min-h-[72px] py-1.5 text-base'
-                    : 'chat-composer-textarea--compact min-h-[32px] py-1.5 pb-10 text-sm'
+                  isMobileComposer ? 'max-h-[132px] min-h-[72px] py-1.5 text-base' : 'py-2'
                 }`}
                 style={{ fontFamily: 'var(--font-body)' }}
                 placeholder={t('empty.placeholder')}
-                rows={isMobileComposer ? 2 : 1}
+                rows={2}
               />
             </div>
 
-            <div className={`chat-composer-toolbar border-t border-[var(--color-border-separator)] ${
-              isMobileComposer
-                ? 'flex flex-wrap items-center gap-2 pt-3'
-                : 'chat-composer-toolbar--compact absolute bottom-0 left-0 right-0 flex items-center justify-between px-3 py-2'
+            <div className={`border-t border-[var(--color-border-separator)] pt-3 ${
+              isMobileComposer ? 'flex flex-wrap items-center gap-2' : 'flex items-center justify-between'
             }`}>
               <div className="flex shrink-0 items-center gap-2">
                 <div ref={plusMenuRef} className="relative">
@@ -745,7 +738,6 @@ export function EmptySession() {
             onBranchChange={setSelectedBranch}
             useWorktree={useWorktree}
             onUseWorktreeChange={setUseWorktree}
-            variant={isMobileComposer ? 'workbar' : 'floating'}
             onLaunchReadyChange={setRepositoryLaunchReady}
             disabled={isSubmitting}
           />

@@ -11,7 +11,7 @@
 [![GitHub Issues](https://img.shields.io/badge/issues-public%20repo-blue?logo=github)](https://github.com/HereditaryDog/gaster-code-releases/issues)
 [![GitHub Pull Requests](https://img.shields.io/badge/pull%20requests-welcome-brightgreen?logo=github)](https://github.com/HereditaryDog/gaster-code-releases/pulls)
 [![License](https://img.shields.io/badge/license-research%20only-red)](LICENSE)
-[![Current Version](https://img.shields.io/badge/version-V%201.1.2-blue)](release-notes/v1.1.2.md)
+[![Current Version](https://img.shields.io/badge/version-V%201.1.4-blue)](release-notes/v1.1.4.md)
 [![中文](https://img.shields.io/badge/中文-当前-blue)](README.md)
 [![English](https://img.shields.io/badge/English-Available-green)](README.en.md)
 
@@ -19,7 +19,7 @@
 
 Gaster Code 是一个面向本地开发场景的 AI 编码助手，提供命令行/TUI、图形化桌面端、多会话工作区、MCP 集成、自动化任务和远程适配能力，适合在真实代码仓库里完成修改、调试、审查和日常开发协作。
 
-> 当前稳定版本：**V 1.1.2**。这个版本修复 GPT Image 2 绘图页新生成失败后仍显示旧预览的问题，并把正式发布构建矩阵临时收窄为 macOS 和 Windows，以节省 GitHub Actions 额度。
+> 当前稳定版本：**V 1.1.4**。这个版本移植同事公开仓库设置页改进，新增分组二级侧栏、设置搜索和中文导航补全，同时保留 V 1.1.3 的长上下文会话切换与主侧栏性能保护；当前安装包矩阵收窄为 macOS Apple Silicon 和 Windows x64。
 
 <p align="center">
   <a href="#功能">功能</a> ·
@@ -148,7 +148,7 @@ http://127.0.0.1:2024
 
 ## 打包与发布
 
-当前桌面版本：`V 1.1.2`。
+当前桌面版本：`V 1.1.4`。
 
 ### Windows
 
@@ -172,11 +172,10 @@ powershell -ExecutionPolicy Bypass -File .\scripts\build-windows-x64.ps1
 
 | 平台 | 安装包 |
 |------|--------|
-| macOS Apple Silicon | `Gaster-Code-1.1.2-mac-arm64.dmg` |
-| macOS Intel | `Gaster-Code-1.1.2-mac-x64.dmg` |
-| Windows x64 | `Gaster-Code-1.1.2-win-x64.exe` |
+| macOS Apple Silicon | `Gaster-Code-1.1.4-mac-arm64.dmg` |
+| Windows x64 | `Gaster-Code-1.1.4-win-x64.exe` |
 
-> V 1.1.2 正式发布暂不构建 Linux 安装包；后续需要恢复时再打开 Linux release matrix。
+> V 1.1.4 正式发布暂不构建 macOS Intel 和 Linux 安装包；后续需要恢复时再打开对应 release matrix。
 
 ### macOS
 
@@ -214,7 +213,7 @@ sudo xattr -cr /Applications/Gaster\ Code.app
 .github/workflows/release-desktop.yml
 ```
 
-它会根据 tag 版本构建 macOS ARM64、macOS x64 和 Windows x64 桌面产物，主仓库保持私有，最终安装包、blockmap 和标准 `latest*.yml` updater metadata 会同步到公开的 `HereditaryDog/gaster-code-releases` release-only 仓库，供桌面端 updater 访问。当前版本发布说明见 [release-notes/v1.1.2.md](release-notes/v1.1.2.md)。
+它会根据 tag 版本构建 macOS ARM64 和 Windows x64 桌面产物，主仓库保持私有，最终安装包、blockmap 和标准 `latest*.yml` updater metadata 会同步到公开的 `HereditaryDog/gaster-code-releases` release-only 仓库，供桌面端 updater 访问。当前版本发布说明见 [release-notes/v1.1.4.md](release-notes/v1.1.4.md)。
 
 ---
 
@@ -230,6 +229,7 @@ sudo xattr -cr /Applications/Gaster\ Code.app
 - [多 Agent / Teams](docs/agent/01-usage-guide.md)
 - [Computer Use](docs/features/computer-use.md)
 - [项目结构](docs/reference/project-structure.md)
+- [发布远端卫生](docs/reference/release-remote-hygiene.md)
 
 ## 仓库结构
 

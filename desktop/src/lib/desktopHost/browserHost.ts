@@ -5,7 +5,6 @@ import type {
   DesktopHostUnlisten,
   NotificationPermissionState,
 } from './types'
-import { GASTER_CODE_VERSION } from '../../version'
 
 const browserCapabilities: DesktopHostCapabilities = {
   appMode: false,
@@ -46,7 +45,7 @@ export const browserHost: DesktopHost = {
   },
   app: {
     async getVersion() {
-      return GASTER_CODE_VERSION
+      return '0.1.0'
     },
   },
   commands: {

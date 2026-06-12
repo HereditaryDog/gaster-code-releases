@@ -27,6 +27,10 @@ function isChatTab(tab: Tab | undefined) {
   return tab?.type === 'session'
 }
 
+export function shouldShowDesktopTabBar(isMobileShell: boolean, activeTabType: Tab['type'] | undefined) {
+  return !isMobileShell && activeTabType !== 'settings'
+}
+
 export function AppShell() {
   const fetchSettings = useSettingsStore((s) => s.fetchAll)
   const sidebarOpen = useUIStore((s) => s.sidebarOpen)
@@ -271,7 +275,7 @@ export function AppShell() {
             ) : null}
           </div>
         ) : null}
-        {!isMobileShell ? <TabBar /> : null}
+        {shouldShowDesktopTabBar(isMobileShell, activeTab?.type) ? <TabBar /> : null}
         <ContentRouter />
       </main>
       <ToastContainer />

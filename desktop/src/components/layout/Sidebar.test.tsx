@@ -58,7 +58,7 @@ vi.mock('../../i18n', () => ({
 import { Sidebar } from './Sidebar'
 import { useChatStore, type PerSessionState } from '../../stores/chatStore'
 import { useSessionStore } from '../../stores/sessionStore'
-import { SETTINGS_TAB_ID, useTabStore } from '../../stores/tabStore'
+import { useTabStore } from '../../stores/tabStore'
 import { SIDEBAR_DEFAULT_WIDTH, SIDEBAR_MIN_WIDTH, useUIStore } from '../../stores/uiStore'
 import type { SessionListItem } from '../../types/session'
 
@@ -413,23 +413,6 @@ describe('Sidebar', () => {
     expect(relativeTime).toHaveClass('text-[11px]')
   })
 
-  it('marks active sidebar chrome with macOS-style pill and surface hooks', () => {
-    useTabStore.setState({
-      tabs: [{ sessionId: SETTINGS_TAB_ID, title: 'Settings', type: 'settings', status: 'idle' }],
-      activeTabId: SETTINGS_TAB_ID,
-    })
-
-    render(<Sidebar />)
-
-    expect(screen.getByRole('complementary')).toHaveClass('sidebar-panel--glass')
-    expect(screen.getByRole('button', { name: 'Settings' })).toHaveClass('sidebar-nav-item', 'sidebar-nav-item--active')
-    expect(screen.getByRole('button', { name: 'New Session' })).toHaveClass('sidebar-nav-item', 'sidebar-nav-item--idle')
-    expect(screen.getByPlaceholderText('Search sessions').closest('.sidebar-search-surface')).toHaveClass(
-      'sidebar-control-surface',
-    )
-    expect(screen.getByRole('button', { name: 'Batch manage' })).toHaveClass('sidebar-control-surface')
-  })
-
   it('shows a loading state instead of an empty session list while initial fetch is pending', () => {
     useSessionStore.setState({ isLoading: true, sessions: [] })
 
@@ -656,11 +639,8 @@ describe('Sidebar', () => {
   it('uses the Gaster G mark and wordmark styling for the sidebar brand', () => {
     const { container } = render(<Sidebar />)
 
-    const logo = container.querySelector('.sidebar-brand-logo')
-    const logoSvg = logo?.querySelector('svg')
-    expect(logo).toBeInTheDocument()
-    expect(logoSvg).toHaveAttribute('viewBox', '0 0 1024 1024')
-    expect(logoSvg?.querySelector('path')).toHaveAttribute('d', expect.stringContaining('M512 449.142857'))
+    const logo = container.querySelector('aside img')
+    expect(logo).toHaveAttribute('src', '/app-icon.svg')
     expect(logo).toHaveClass('sidebar-brand-logo')
 
     const wordmark = screen.getByText('Gaster Code')

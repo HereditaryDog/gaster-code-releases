@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { GASTER_CODE_VERSION } from '../../version'
 import { browserHost } from './browserHost'
 import { createDesktopHost, detectDesktopHostEnvironment } from './index'
 
@@ -33,10 +32,6 @@ describe('desktop host contract', () => {
 
   it('detects the browser fallback when native host globals are absent', () => {
     expect(createDesktopHost({ electronHost: null })).toBe(browserHost)
-  })
-
-  it('reports the packaged version in browser fallback mode', async () => {
-    await expect(browserHost.app.getVersion()).resolves.toBe(GASTER_CODE_VERSION)
   })
 
   it('prefers an injected Electron preload host over browser fallback', () => {

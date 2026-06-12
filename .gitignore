@@ -29,6 +29,7 @@ artifacts/quality-runs/
 
 # Desktop build output
 desktop/dist/
+desktop/electron-dist/
 desktop/build-artifacts/
 desktop/src-tauri/binaries/
 desktop/src-tauri/target/

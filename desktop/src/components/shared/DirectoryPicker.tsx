@@ -10,7 +10,7 @@ import { MobileBottomSheet } from './MobileBottomSheet'
 type Props = {
   value: string
   onChange: (path: string) => void
-  variant?: 'chip' | 'workbar' | 'floating'
+  variant?: 'chip' | 'workbar'
   isGitProject?: boolean
 }
 
@@ -150,12 +150,11 @@ export function DirectoryPicker({ value, onChange, variant = 'chip', isGitProjec
 
   const selectedProject = projects.find((p) => p.realPath === value)
   const isWorkbar = variant === 'workbar'
-  const isFloating = variant === 'floating'
   const selectedLabel = selectedProject?.repoName || selectedProject?.projectName || projectNameFromPath(value)
   const showGitIcon = selectedProject?.isGit || isGitProject
   const triggerClassName = isWorkbar
     ? 'inline-flex h-9 max-w-full min-w-0 items-center gap-1.5 rounded-[7px] border border-transparent px-2.5 text-[13px] font-medium leading-none text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-container-lowest)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)]/35'
-    : `project-context-chip project-context-chip--frosted flex items-center gap-2 rounded-full text-xs transition-colors hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)]/35 ${isFloating ? 'px-3 py-2' : 'px-3 py-1.5'}`
+    : 'project-context-chip project-context-chip--frosted flex items-center gap-2 rounded-full px-3 py-1.5 text-xs transition-colors hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)]/35'
   const emptyTriggerClassName = isWorkbar
     ? 'flex h-9 min-w-0 items-center gap-1.5 rounded-[7px] border border-transparent px-2.5 text-[13px] font-medium leading-none text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-container-lowest)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)]/35'
     : 'flex items-center gap-2 text-xs text-[var(--color-text-tertiary)] hover:text-[var(--color-text-secondary)] transition-colors'

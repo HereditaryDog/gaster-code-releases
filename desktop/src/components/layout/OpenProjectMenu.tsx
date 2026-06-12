@@ -119,7 +119,7 @@ export function OpenProjectMenu({ path }: Props) {
           }
           void handleOpenTarget(primaryTarget.id)
         }}
-        className={`sidebar-control-surface inline-flex h-9 items-center justify-center gap-1 rounded-[12px] border border-[var(--color-sidebar-search-border)] bg-[var(--color-sidebar-search-bg)] text-[var(--color-text-secondary)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-border-focus)] ${
+        className={`inline-flex h-9 items-center justify-center gap-1 rounded-[12px] border border-[var(--color-sidebar-search-border)] bg-[var(--color-sidebar-search-bg)] text-[var(--color-text-secondary)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-border-focus)] ${
           hasMenu
             ? 'min-w-[2.75rem] px-2 hover:bg-[var(--color-sidebar-item-hover)] hover:text-[var(--color-text-primary)]'
             : 'w-9 hover:bg-[var(--color-sidebar-item-hover)] hover:text-[var(--color-text-primary)]'

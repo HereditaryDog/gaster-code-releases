@@ -44,6 +44,59 @@ function makeSessionState(overrides: Partial<PerSessionState> = {}): PerSessionS
   }
 }
 
+function makeAssistantTranscript(count: number, prefix = 'assistant transcript line'): UIMessage[] {
+  return Array.from({ length: count }, (_, index) => ({
+    id: `assistant-${index}`,
+    type: 'assistant_text',
+    content: index % 25 === 0
+      ? [
+          `${prefix} ${index}`,
+          '',
+          '```ts',
+          'const value = "this intentionally makes the row much taller"',
+          '```',
+        ].join('\n')
+      : `${prefix} ${index}`,
+    timestamp: index,
+  }))
+}
+
+function stubProgressiveTranscriptIdleCallbacks() {
+  const callbacks: Array<() => void> = []
+  const win = window as typeof window & {
+    requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number
+    cancelIdleCallback?: (handle: number) => void
+  }
+  const originalRequestIdleCallback = win.requestIdleCallback
+  const originalCancelIdleCallback = win.cancelIdleCallback
+
+  Object.defineProperty(win, 'requestIdleCallback', {
+    configurable: true,
+    value: (callback: () => void) => {
+      callbacks.push(callback)
+      return callbacks.length
+    },
+  })
+  Object.defineProperty(win, 'cancelIdleCallback', {
+    configurable: true,
+    value: vi.fn(),
+  })
+
+  return {
+    callbacks,
+    restore: () => {
+      Object.defineProperty(win, 'requestIdleCallback', {
+        configurable: true,
+        value: originalRequestIdleCallback,
+      })
+      Object.defineProperty(win, 'cancelIdleCallback', {
+        configurable: true,
+        value: originalCancelIdleCallback,
+      })
+    },
+  }
+}
+
 function findTextNodeContaining(container: Element, text: string) {
   const walker = document.createTreeWalker(container, 4)
   let current = walker.nextNode()
@@ -119,34 +172,114 @@ describe('MessageList nested tool calls', () => {
     })
   })
 
-  it('keeps full long transcripts mounted so variable-height messages cannot leave spacer gaps', () => {
+  it('renders the tail of long transcripts first, then progressively fills older messages', async () => {
     useChatStore.setState({
       sessions: {
         [ACTIVE_TAB]: makeSessionState({
-          messages: Array.from({ length: 220 }, (_, index) => ({
-            id: `assistant-${index}`,
-            type: 'assistant_text',
-            content: index % 25 === 0
-              ? [
-                  `assistant transcript line ${index}`,
-                  '',
-                  '```ts',
-                  'const value = "this intentionally makes the row much taller"',
-                  '```',
-                ].join('\n')
-              : `assistant transcript line ${index}`,
-            timestamp: index,
-          })),
+          messages: makeAssistantTranscript(220),
         }),
       },
     })
 
     const { container } = render(<MessageList />)
 
-    expect(screen.getByText('assistant transcript line 0')).toBeTruthy()
     expect(screen.getByText('assistant transcript line 219')).toBeTruthy()
-    expect(container.querySelectorAll('[data-message-shell="assistant"]').length).toBe(220)
-    expect(container.querySelector('[data-virtual-message-item]')).toBeNull()
+    expect(screen.queryByText('assistant transcript line 0')).toBeNull()
+    const initialRenderedMessages = container.querySelectorAll('[data-message-shell="assistant"]').length
+    expect(initialRenderedMessages).toBeLessThan(220)
+    expect(container.querySelector('[data-progressive-transcript-spacer]')).toBeTruthy()
+
+    await waitFor(() => {
+      expect(container.querySelectorAll('[data-message-shell="assistant"]').length).toBeGreaterThan(initialRenderedMessages)
+    })
+  })
+
+  it('starts progressive rendering when an active transcript grows past the long-transcript threshold', async () => {
+    const idle = stubProgressiveTranscriptIdleCallbacks()
+    try {
+      useChatStore.setState({
+        sessions: {
+          [ACTIVE_TAB]: makeSessionState({
+            messages: makeAssistantTranscript(90),
+          }),
+        },
+      })
+
+      const { container } = render(<MessageList />)
+
+      expect(screen.getByText('assistant transcript line 0')).toBeTruthy()
+      expect(container.querySelector('[data-progressive-transcript-spacer]')).toBeNull()
+
+      act(() => {
+        useChatStore.setState((state) => ({
+          sessions: {
+            ...state.sessions,
+            [ACTIVE_TAB]: {
+              ...state.sessions[ACTIVE_TAB]!,
+              messages: makeAssistantTranscript(130),
+            },
+          },
+        }))
+      })
+
+      expect(screen.getByText('assistant transcript line 129')).toBeTruthy()
+      expect(screen.queryByText('assistant transcript line 0')).toBeNull()
+      expect(container.querySelector('[data-progressive-transcript-spacer]')).toBeTruthy()
+      expect(container.querySelectorAll('[data-message-shell="assistant"]').length).toBeLessThan(130)
+      expect(idle.callbacks.length).toBeGreaterThan(0)
+    } finally {
+      idle.restore()
+    }
+  })
+
+  it('keeps the bottom anchored when progressive transcript batches hydrate older messages', async () => {
+    const idle = stubProgressiveTranscriptIdleCallbacks()
+    try {
+      useChatStore.setState({
+        sessions: {
+          [ACTIVE_TAB]: makeSessionState({
+            messages: makeAssistantTranscript(180),
+          }),
+        },
+      })
+
+      const { container } = render(<MessageList />)
+      const scroller = container.querySelector('.overflow-y-auto') as HTMLDivElement
+      let scrollHeight = 1000
+      let scrollTop = 600
+      Object.defineProperty(scroller, 'scrollHeight', {
+        configurable: true,
+        get: () => scrollHeight,
+      })
+      Object.defineProperty(scroller, 'clientHeight', { configurable: true, value: 400 })
+      Object.defineProperty(scroller, 'scrollTop', {
+        configurable: true,
+        get: () => scrollTop,
+        set: (value) => {
+          scrollTop = value
+        },
+      })
+
+      await waitForProgrammaticScrollReset()
+      fireEvent.scroll(scroller)
+      const initialRenderedMessages = container.querySelectorAll('[data-message-shell="assistant"]').length
+      await waitFor(() => {
+        expect(idle.callbacks.length).toBeGreaterThan(0)
+      })
+
+      scrollHeight = 1250
+      await act(async () => {
+        idle.callbacks.shift()?.()
+        await Promise.resolve()
+      })
+
+      await waitFor(() => {
+        expect(container.querySelectorAll('[data-message-shell="assistant"]').length).toBeGreaterThan(initialRenderedMessages)
+        expect(scrollTop).toBe(850)
+      })
+    } finally {
+      idle.restore()
+    }
   })
 
   it('adds selected user message text to the chat context', async () => {

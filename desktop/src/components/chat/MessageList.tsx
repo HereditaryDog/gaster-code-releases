@@ -1,4 +1,4 @@
-import { useRef, useEffect, useMemo, memo, useState, useCallback, useLayoutEffect, type ReactNode } from 'react'
+import { useRef, useEffect, useMemo, memo, useState, useCallback, useLayoutEffect, startTransition, type ReactNode } from 'react'
 import { ArrowDown, BookMarked, Bot, CheckCircle2, ChevronDown, ChevronRight, CircleStop, LoaderCircle, MessageCircle, Settings, Target, XCircle } from 'lucide-react'
 import { ApiError } from '../../api/client'
 import { sessionsApi, type SessionTurnCheckpoint } from '../../api/sessions'
@@ -67,6 +67,91 @@ type ChatSelectionState = {
 const CHAT_SELECTION_MENU_OFFSET = 10
 const CHAT_SELECTION_MENU_WIDTH = 158
 const CHAT_SELECTION_MENU_HEIGHT = 44
+const PROGRESSIVE_TRANSCRIPT_THRESHOLD = 96
+const PROGRESSIVE_TRANSCRIPT_INITIAL_TAIL = 64
+const PROGRESSIVE_TRANSCRIPT_BATCH_SIZE = 48
+const PROGRESSIVE_TRANSCRIPT_BOUNDARY_LOOKBACK = 18
+
+type ProgressiveTranscriptState = {
+  key: string
+  startIndex: number
+}
+
+function getProgressiveTranscriptKey(sessionId: string | null, messages: UIMessage[]) {
+  const firstMessageId = messages[0]?.id ?? 'empty'
+  return `${sessionId ?? 'no-session'}:${firstMessageId}`
+}
+
+function shouldProgressivelyRenderTranscript(messages: UIMessage[]) {
+  return messages.length > PROGRESSIVE_TRANSCRIPT_THRESHOLD
+}
+
+function moveStartToNearbyTurnBoundary(messages: UIMessage[], targetIndex: number) {
+  const minIndex = Math.max(0, targetIndex - PROGRESSIVE_TRANSCRIPT_BOUNDARY_LOOKBACK)
+  for (let index = targetIndex; index >= minIndex; index -= 1) {
+    const message = messages[index]
+    if (message?.type === 'user_text' && !message.pending) {
+      return index
+    }
+  }
+  return targetIndex
+}
+
+function getInitialProgressiveTranscriptStart(messages: UIMessage[]) {
+  if (!shouldProgressivelyRenderTranscript(messages)) return 0
+  const targetIndex = Math.max(0, messages.length - PROGRESSIVE_TRANSCRIPT_INITIAL_TAIL)
+  return moveStartToNearbyTurnBoundary(messages, targetIndex)
+}
+
+function getNextProgressiveTranscriptStart(messages: UIMessage[], currentStartIndex: number) {
+  if (currentStartIndex <= 0) return 0
+  const targetIndex = Math.max(0, currentStartIndex - PROGRESSIVE_TRANSCRIPT_BATCH_SIZE)
+  return moveStartToNearbyTurnBoundary(messages, targetIndex)
+}
+
+function estimateHiddenTranscriptHeight(messages: UIMessage[], endIndex: number) {
+  if (endIndex <= 0) return 0
+
+  let sampledTextLength = 0
+  const sampleCount = Math.min(24, endIndex)
+  const sampleStart = Math.max(0, endIndex - sampleCount)
+  for (let index = sampleStart; index < endIndex; index += 1) {
+    const message = messages[index]
+    if (!message) continue
+    if ('content' in message && typeof message.content === 'string') {
+      sampledTextLength += message.content.length
+    } else if (message.type === 'tool_use') {
+      sampledTextLength += message.toolName.length + 120
+    } else {
+      sampledTextLength += 80
+    }
+  }
+
+  const averageTextLength = sampleCount > 0 ? sampledTextLength / sampleCount : 80
+  const textLength = averageTextLength * endIndex
+  const messageHeight = endIndex * 72
+  const textHeight = Math.ceil(textLength / 92) * 18
+  return Math.min(24_000, Math.max(160, messageHeight + textHeight))
+}
+
+function scheduleProgressiveTranscript(callback: () => void): () => void {
+  const win = typeof window === 'undefined'
+    ? undefined
+    : window as typeof window & {
+      requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number
+      cancelIdleCallback?: (handle: number) => void
+    }
+
+  if (win?.requestIdleCallback) {
+    const handle = win.requestIdleCallback(callback, { timeout: 80 })
+    return () => win.cancelIdleCallback?.(handle)
+  }
+
+  if (!win) return () => {}
+
+  const handle = win.setTimeout(callback, 16)
+  return () => win.clearTimeout(handle)
+}
 
 function getElementForNode(node: Node | null): Element | null {
   if (!node) return null
@@ -730,6 +815,28 @@ export function MessageList({ sessionId, compact = false }: MessageListProps = {
   )
   const addToast = useUIStore((s) => s.addToast)
   const messages = sessionState?.messages ?? []
+  const transcriptKey = getProgressiveTranscriptKey(resolvedSessionId ?? null, messages)
+  const initialTranscriptStartIndex = getInitialProgressiveTranscriptStart(messages)
+  const [progressiveTranscript, setProgressiveTranscript] = useState<ProgressiveTranscriptState>({
+    key: transcriptKey,
+    startIndex: initialTranscriptStartIndex,
+  })
+  const normalizedProgressiveStartIndex =
+    progressiveTranscript.startIndex === 0 && initialTranscriptStartIndex > 0
+      ? initialTranscriptStartIndex
+      : progressiveTranscript.startIndex
+  const progressiveStartIndex = progressiveTranscript.key === transcriptKey
+    ? Math.min(normalizedProgressiveStartIndex, messages.length)
+    : initialTranscriptStartIndex
+  const hasHiddenTranscript = progressiveStartIndex > 0
+  const visibleMessages = useMemo(
+    () => hasHiddenTranscript ? messages.slice(progressiveStartIndex) : messages,
+    [hasHiddenTranscript, messages, progressiveStartIndex],
+  )
+  const hiddenTranscriptHeight = useMemo(
+    () => estimateHiddenTranscriptHeight(messages, progressiveStartIndex),
+    [messages, progressiveStartIndex],
+  )
   const chatState = sessionState?.chatState ?? 'idle'
   const streamingText = sessionState?.streamingText ?? ''
   const activeThinkingId = sessionState?.activeThinkingId ?? null
@@ -745,6 +852,10 @@ export function MessageList({ sessionId, compact = false }: MessageListProps = {
   const isProgrammaticScrollingRef = useRef(false)
   const lastSessionIdRef = useRef<string | null | undefined>(resolvedSessionId)
   const lastTailMessageIdBySessionRef = useRef(new Map<string, string | null>())
+  const previousProgressiveTranscriptRef = useRef({
+    key: transcriptKey,
+    startIndex: progressiveStartIndex,
+  })
   const t = useTranslation()
   const [turnChangeCards, setTurnChangeCards] = useState<TurnChangeCardModel[]>([])
   const [turnChangeLoadError, setTurnChangeLoadError] = useState<string | null>(null)
@@ -755,6 +866,39 @@ export function MessageList({ sessionId, compact = false }: MessageListProps = {
   const [showJumpToLatest, setShowJumpToLatest] = useState(false)
   const turnChangeCardCacheRef = useRef(new Map<string, TurnChangeCardCacheEntry>())
   const turnChangeCardRequestsRef = useRef(new Map<string, Promise<TurnChangeCardModel[]>>())
+
+  useEffect(() => {
+    setProgressiveTranscript((current) => {
+      if (current.key !== transcriptKey) {
+        return { key: transcriptKey, startIndex: initialTranscriptStartIndex }
+      }
+      if (current.startIndex === 0 && initialTranscriptStartIndex > 0) {
+        return { key: transcriptKey, startIndex: initialTranscriptStartIndex }
+      }
+      if (current.startIndex > messages.length) {
+        return { key: transcriptKey, startIndex: messages.length }
+      }
+      return current
+    })
+  }, [initialTranscriptStartIndex, messages.length, transcriptKey])
+
+  useEffect(() => {
+    if (!hasHiddenTranscript) return
+
+    return scheduleProgressiveTranscript(() => {
+      startTransition(() => {
+        setProgressiveTranscript((current) => {
+          if (current.key !== transcriptKey) return current
+          const currentStartIndex = current.startIndex === 0 && initialTranscriptStartIndex > 0
+            ? initialTranscriptStartIndex
+            : current.startIndex
+          const nextStartIndex = getNextProgressiveTranscriptStart(messages, currentStartIndex)
+          if (nextStartIndex === currentStartIndex) return current
+          return { key: current.key, startIndex: nextStartIndex }
+        })
+      })
+    })
+  }, [hasHiddenTranscript, initialTranscriptStartIndex, messages, progressiveStartIndex, transcriptKey])
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior) => {
     shouldAutoScrollRef.current = true
@@ -801,6 +945,20 @@ export function MessageList({ sessionId, compact = false }: MessageListProps = {
       isProgrammaticScrollingRef.current = false
     })
   }, [resolvedSessionId])
+
+  useLayoutEffect(() => {
+    const previous = previousProgressiveTranscriptRef.current
+    previousProgressiveTranscriptRef.current = {
+      key: transcriptKey,
+      startIndex: progressiveStartIndex,
+    }
+
+    if (previous.key !== transcriptKey) return
+    if (progressiveStartIndex >= previous.startIndex) return
+    if (!shouldAutoScrollRef.current) return
+
+    scrollToBottom('auto')
+  }, [progressiveStartIndex, scrollToBottom, transcriptKey])
 
   const updateAutoScrollState = useCallback(() => {
     if (isProgrammaticScrollingRef.current) return
@@ -875,10 +1033,10 @@ export function MessageList({ sessionId, compact = false }: MessageListProps = {
   }, [scrollToBottom, shouldFollowContentResize])
 
   const { toolResultMap, childToolCallsByParent, renderItems } = useMemo(
-    () => buildRenderModel(messages),
-    [messages],
+    () => buildRenderModel(visibleMessages),
+    [visibleMessages],
   )
-  const completedTurnTargets = useMemo(() => getCompletedTurnTargets(messages), [messages])
+  const completedTurnTargets = useMemo(() => getCompletedTurnTargets(visibleMessages), [visibleMessages])
   const turnTargetSignature = useMemo(
     () => getTurnTargetSignature(completedTurnTargets),
     [completedTurnTargets],
@@ -897,7 +1055,7 @@ export function MessageList({ sessionId, compact = false }: MessageListProps = {
   )
 
   useEffect(() => {
-    if (!resolvedSessionId || completedTurnTargets.length === 0 || isMemberSession) {
+    if (!resolvedSessionId || hasHiddenTranscript || completedTurnTargets.length === 0 || isMemberSession) {
       setTurnChangeCards([])
       setTurnChangeLoadError(null)
       setIsLoadingTurnChangeCards(false)
@@ -979,7 +1137,7 @@ export function MessageList({ sessionId, compact = false }: MessageListProps = {
     return () => {
       cancelled = true
     }
-  }, [chatState, completedTurnTargets, isMemberSession, latestCompletedTurnId, resolvedSessionId, turnTargetSignature])
+  }, [chatState, completedTurnTargets, hasHiddenTranscript, isMemberSession, latestCompletedTurnId, resolvedSessionId, turnTargetSignature])
 
   const handleUndoCurrentTurn = useCallback(async () => {
     if (!resolvedSessionId || !confirmTurnCard || rewindingTurnId) return
@@ -1054,6 +1212,15 @@ export function MessageList({ sessionId, compact = false }: MessageListProps = {
           ref={scrollContentRef}
           className={compact ? 'mx-auto max-w-full' : 'mx-auto max-w-[860px]'}
         >
+          {hasHiddenTranscript && (
+            <div
+              data-progressive-transcript-spacer
+              aria-hidden="true"
+              className="pointer-events-none"
+              style={{ height: hiddenTranscriptHeight }}
+            />
+          )}
+
           {renderItems.map((item, index) => {
             const itemKey = item.kind === 'tool_group' ? item.id : item.message.id
             const cardsForItem = turnCardsByRenderIndex.get(index) ?? []

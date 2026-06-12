@@ -3,6 +3,24 @@
 本文件汇总公开版本线的主要变化。每个正式发布版本的完整说明保存在
 [`release-notes/`](release-notes/) 目录中。
 
+## V 1.1.4
+
+- 移植并修正同事公开仓库 PR #10，设置页改为分组二级侧栏，支持搜索设置项。
+- 设置页成为当前页面时隐藏全局 TabBar，避免设置二级导航和顶部标签栏重复显示。
+- 设置页默认进入账号页，并补齐“智能体”“电脑控制”等中文设置导航标签。
+- 审查 PR #9 后未原样合入旧公开仓库补丁，保留 `v1.1.3` 当前源码主线的主侧栏性能保护。
+- 推进桌面版本、README、安装指南和发布说明到 `1.1.4`。
+- 完整说明：[release-notes/v1.1.4.md](release-notes/v1.1.4.md)
+
+## V 1.1.3
+
+- 合入项目审计修复，优化长上下文会话切换时的首屏切换、渐进 hydration 和滚动锚定体验。
+- 将桌面内容路由和 Provider 设置加载路径拆分为懒加载，降低启动和切换时的主线程压力。
+- 复核同事 PR #8；其 TabBar、Markdown 和 WorkspacePanel 性能优化已经在当前主线覆盖，避免重复合入旧基底造成 Electron 迁移文件回退。
+- macOS DMG 增加品牌化拖拽安装背景，并将正式发布矩阵收窄为 macOS Apple Silicon 和 Windows x64。
+- 补齐历史 release notes、发布远端卫生文档和 release 脚本推送提示。
+- 完整说明：[release-notes/v1.1.3.md](release-notes/v1.1.3.md)
+
 ## V 1.1.2
 
 - 修复 GPT Image 2 绘图页新生成失败或 524 超时后仍显示旧预览和旧 revised prompt 的问题。
@@ -75,6 +93,30 @@
 - 新增 H5 局域网诊断、过期 host 检测、桌面对话分支、AI 请求超时和手动代理设置。
 - 修复 release workflow 签名密钥传递、macOS x64 runner 选择和公开发布资产同步问题。
 - 完整说明：[release-notes/v1.0.4.md](release-notes/v1.0.4.md)
+
+## V 1.0.3
+
+- 在 `1.0.2` 公开源码状态基础上执行 release metadata 和版本对齐。
+- 保留 `1.0.1` 的 Drawing 复杂提示词异步图片生成修复。
+- 保留 `1.0.2` 的长对话切换性能改进。
+- 对齐 root package、desktop package、Tauri、Rust、lockfile 和 About 页面显示版本到 `1.0.3`。
+- 完整说明：[release-notes/v1.0.3.md](release-notes/v1.0.3.md)
+
+## V 1.0.2
+
+- 优化桌面端长 transcript 会话切换性能：先切换活跃对话，再延后 hydrate 完整 transcript。
+- 长 transcript 挂载改为轻量加载状态后的渐进 hydration，降低同一交互帧内的渲染压力。
+- Tauri native runtime 使用更小的渐进 transcript hydration 批次，H5/浏览器路径保持较大的批次。
+- 避免从侧边栏点击处理器同步启动历史会话 WebSocket 连接。
+- 完整说明：[release-notes/v1.0.2.md](release-notes/v1.0.2.md)
+
+## V 1.0.1
+
+- 修复复杂 GPT Image 2 提示词下 Drawing 生成可靠性问题。
+- Drawing 改为创建 G-Master API 异步图片任务并轮询结果，避免单个长图片生成请求持续占用连接。
+- 图片生成等待窗口延长到 15 分钟，并保持用户提示词原样提交。
+- 上游 504/524 和图片通道中断失败改为稳定错误提示。
+- 完整说明：[release-notes/v1.0.1.md](release-notes/v1.0.1.md)
 
 ## V 1.0.0
 

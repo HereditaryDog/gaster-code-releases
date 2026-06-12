@@ -100,6 +100,10 @@ vi.mock('../version', () => ({
   GASTER_CODE_DISPLAY_VERSION: 'V test-gaster-version',
 }))
 
+function openSettingsTab(name: string | RegExp) {
+  fireEvent.click(screen.getByRole('button', { name }))
+}
+
 describe('Settings > General tab', () => {
   beforeEach(() => {
     MOCK_DELETE_PROVIDER.mockReset()
@@ -220,6 +224,45 @@ describe('Settings > General tab', () => {
 
     const toggle = screen.getByLabelText('Skip WebFetch domain preflight')
     expect(toggle).toBeChecked()
+  })
+
+  it('renders a grouped dark-material secondary settings sidebar with searchable items', () => {
+    render(<Settings />)
+
+    const navigation = screen.getByRole('navigation', { name: 'Settings sections' })
+    expect(navigation).toHaveClass('settings-secondary-sidebar')
+    expect(within(navigation).getByText('ACCOUNT')).toBeInTheDocument()
+    expect(within(navigation).getByText('WORKSPACE')).toBeInTheDocument()
+    expect(within(navigation).getByText('AI SYSTEM')).toBeInTheDocument()
+    expect(within(navigation).getByText('OBSERVABILITY')).toBeInTheDocument()
+
+    const accountButton = within(navigation).getByRole('button', { name: 'Account' })
+    expect(accountButton).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByRole('heading', { name: 'Account' })).toBeInTheDocument()
+
+    const search = within(navigation).getByPlaceholderText('Search settings...')
+    expect(search).toHaveClass('settings-secondary-search__input')
+    fireEvent.change(search, { target: { value: 'mcp' } })
+
+    expect(within(navigation).getByRole('button', { name: 'MCP' })).toBeInTheDocument()
+    expect(within(navigation).queryByRole('button', { name: 'Account' })).not.toBeInTheDocument()
+  })
+
+  it('localizes settings secondary sidebar groups and labels in Chinese', () => {
+    useSettingsStore.setState({ locale: 'zh' })
+    render(<Settings />)
+
+    const navigation = screen.getByRole('navigation', { name: '设置分区' })
+    expect(within(navigation).getByText('账户')).toBeInTheDocument()
+    expect(within(navigation).getByText('工作区')).toBeInTheDocument()
+    expect(within(navigation).getByText('AI 系统')).toBeInTheDocument()
+    expect(within(navigation).getByText('可观测性')).toBeInTheDocument()
+    expect(within(navigation).getByRole('button', { name: '智能体' })).toBeInTheDocument()
+    expect(within(navigation).getByRole('button', { name: '电脑控制' })).toBeInTheDocument()
+
+    expect(within(navigation).queryByText('ACCOUNT')).not.toBeInTheDocument()
+    expect(within(navigation).queryByRole('button', { name: 'Agents' })).not.toBeInTheDocument()
+    expect(within(navigation).queryByRole('button', { name: 'Computer Use' })).not.toBeInTheDocument()
   })
 
   it('lets the user disable WebFetch preflight skipping', () => {
@@ -453,6 +496,7 @@ describe('Settings > Providers tab', () => {
 
   it('keeps the G-Master API official provider visible before sign-in', () => {
     render(<Settings />)
+    openSettingsTab('Providers')
 
     const panel = screen.getByTestId('official-gmaster-provider-panel')
     expect(within(panel).getByText('G-Master API')).toBeInTheDocument()
@@ -497,6 +541,7 @@ describe('Settings > Providers tab', () => {
     })
 
     render(<Settings />)
+    openSettingsTab('Providers')
 
     const panel = screen.getByTestId('official-gmaster-provider-panel')
     expect(panel.className).toContain('border-[var(--color-brand)]')
@@ -510,6 +555,7 @@ describe('Settings > Providers tab', () => {
     providerStoreState.hasLoadedProviders = false
 
     render(<Settings />)
+    openSettingsTab('Providers')
 
     expect(screen.queryByTestId('claude-official-login')).not.toBeInTheDocument()
   })
@@ -520,12 +566,14 @@ describe('Settings > Providers tab', () => {
     providerStoreState.hasLoadedProviders = true
 
     render(<Settings />)
+    openSettingsTab('Providers')
 
     expect(screen.getByTestId('claude-official-login')).toBeInTheDocument()
   })
 
   it('requires confirmation before deleting a provider', async () => {
     render(<Settings />)
+    openSettingsTab('Providers')
 
     fireEvent.click(screen.getAllByText('Delete')[0]!)
 
@@ -558,6 +606,7 @@ describe('Settings > Providers tab', () => {
     ]
 
     render(<Settings />)
+    openSettingsTab('Providers')
 
     fireEvent.click(screen.getByRole('button', { name: /Add Provider/i }))
 
@@ -604,6 +653,7 @@ describe('Settings > Providers tab', () => {
     ]
 
     render(<Settings />)
+    openSettingsTab('Providers')
 
     fireEvent.click(screen.getByRole('button', { name: /Add Provider|添加服务商/i }))
     const dialog = screen.getByRole('dialog')
@@ -642,6 +692,7 @@ describe('Settings > Providers tab', () => {
     ]
 
     render(<Settings />)
+    openSettingsTab('Providers')
 
     fireEvent.click(screen.getByRole('button', { name: /Add Provider/i }))
 
@@ -706,7 +757,7 @@ describe('Settings > About tab', () => {
     render(<Settings />)
 
     const logo = await screen.findByRole('img', { name: 'Gaster Code' })
-    expect(logo).toHaveAttribute('src', './app-icon.svg')
+    expect(logo).toHaveAttribute('src', '/app-icon.svg')
     expect(logo).toHaveClass('hero-brand-logo')
 
     expect(screen.getByText('HereditaryDog')).toBeInTheDocument()

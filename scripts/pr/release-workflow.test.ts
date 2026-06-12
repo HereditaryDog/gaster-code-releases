@@ -100,10 +100,6 @@ describe('release desktop workflow', () => {
       'Gaster-Code-${APP_VERSION}-mac-arm64.dmg.blockmap',
       'Gaster-Code-${APP_VERSION}-mac-arm64.zip',
       'Gaster-Code-${APP_VERSION}-mac-arm64.zip.blockmap',
-      'Gaster-Code-${APP_VERSION}-mac-x64.dmg',
-      'Gaster-Code-${APP_VERSION}-mac-x64.dmg.blockmap',
-      'Gaster-Code-${APP_VERSION}-mac-x64.zip',
-      'Gaster-Code-${APP_VERSION}-mac-x64.zip.blockmap',
       'Gaster-Code-${APP_VERSION}-win-x64.exe',
       'Gaster-Code-${APP_VERSION}-win-x64.exe.blockmap',
     ]
@@ -121,6 +117,8 @@ describe('release desktop workflow', () => {
     expect(publicJob).toContain('artifacts/release-assets/*.zip')
     expect(publicJob).toContain('artifacts/release-assets/*.blockmap')
     expect(workflow).toContain('bun run scripts/release-update-metadata.ts --metadata-dir artifacts/update-metadata --out-dir artifacts/update-metadata-standard')
+    expect(workflow).not.toContain('macOS-x64')
+    expect(workflow).not.toContain('Gaster-Code-${APP_VERSION}-mac-x64')
   })
 
   test('development desktop workflow uses Electron Builder artifacts', () => {
@@ -145,6 +143,13 @@ describe('release desktop workflow', () => {
       build?: {
         productName?: string
         artifactName?: string
+        dmg?: {
+          title?: string
+          background?: string
+          iconSize?: number
+          window?: { width?: number, height?: number }
+          contents?: Array<{ x?: number, y?: number, type?: string, path?: string }>
+        }
         linux?: { maintainer?: string }
         publish?: Array<{ provider?: string, owner?: string, repo?: string }>
       }
@@ -156,6 +161,16 @@ describe('release desktop workflow', () => {
     expect(desktopPackage.author?.name).toBe('HereditaryDog')
     expect(desktopPackage.build?.productName).toBe('Gaster Code')
     expect(desktopPackage.build?.artifactName).toBe('Gaster-Code-${version}-${os}-${arch}.${ext}')
+    expect(desktopPackage.build?.dmg).toMatchObject({
+      title: 'Gaster Code ${version}',
+      background: 'build/dmg-background.png',
+      iconSize: 96,
+      window: { width: 660, height: 400 },
+      contents: [
+        { x: 158, y: 200, type: 'file' },
+        { x: 502, y: 200, type: 'link', path: '/Applications' },
+      ],
+    })
     expect(desktopPackage.build?.linux?.maintainer).toBe('HereditaryDog')
     expect(desktopPackage.build?.publish).toEqual([
       {
@@ -175,6 +190,8 @@ describe('release desktop workflow', () => {
     expect(releaseScript).toContain("path.join(root, 'desktop/src-tauri/Cargo.toml')")
     expect(releaseScript).toContain("path.join(root, 'desktop/src-tauri/Cargo.lock')")
     expect(releaseScript).toContain("path.join(root, 'desktop/src/version.ts')")
+    expect(releaseScript).toContain('git push origin main v${next}')
+    expect(releaseScript).not.toContain('git push origin main --tags')
     expect(releaseScript).not.toContain("await run(['cargo', 'generate-lockfile']")
     expect(releaseScript).not.toContain('CHANGELOG.md')
   })
