@@ -754,11 +754,12 @@ describe('Settings > About tab', () => {
   })
 
   it('shows Gaster owner info, removes upstream social links, and credits the original project', async () => {
-    render(<Settings />)
+    const { container } = render(<Settings />)
 
-    const logo = await screen.findByRole('img', { name: 'Gaster Code' })
-    expect(logo).toHaveAttribute('src', '/app-icon.svg')
+    const logo = await screen.findByTestId('settings-about-brand-mark')
     expect(logo).toHaveClass('hero-brand-logo')
+    expect(logo).toHaveClass('gaster-brand-mark')
+    expect(container.querySelector('img[src="/app-icon.svg"]')).not.toBeInTheDocument()
 
     expect(screen.getByText('HereditaryDog')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /HereditaryDog.*GitHub/ })).toBeInTheDocument()

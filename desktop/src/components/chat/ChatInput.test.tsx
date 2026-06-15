@@ -556,6 +556,40 @@ describe('ChatInput file mentions', () => {
     await waitFor(() => expect(mocks.getGitInfo).toHaveBeenCalled())
   })
 
+  it('uses the floating material composer for the default desktop input', async () => {
+    const { container } = render(<ChatInput />)
+
+    expect(screen.getByTestId('chat-input-panel')).toHaveClass('chat-composer-shell--floating')
+    expect(container.querySelector('.chat-composer-toolbar')).toHaveClass('chat-composer-toolbar--floating')
+    expect(screen.getByRole('button', { name: /Run/i })).toHaveClass('chat-composer-send-button')
+    await waitFor(() => expect(mocks.getGitInfo).toHaveBeenCalled())
+  })
+
+  it('uses the floating material composer for the hero desktop input', async () => {
+    const { container } = render(<ChatInput variant="hero" />)
+
+    expect(screen.getByTestId('chat-input-panel')).toHaveClass('chat-composer-shell--floating')
+    expect(container.querySelector('.chat-composer-toolbar')).toHaveClass('chat-composer-toolbar--floating')
+    expect(screen.getByRole('button', { name: /Run/i })).toHaveClass('chat-composer-send-button')
+    await waitFor(() => expect(mocks.getGitInfo).toHaveBeenCalled())
+  })
+
+  it('returns to the expanded composer when workspace attachment previews are visible', async () => {
+    useWorkspaceChatContextStore.getState().addReference(sessionId, {
+      kind: 'file',
+      path: '/repo/src/App.tsx',
+      absolutePath: '/repo/src/App.tsx',
+      name: 'App.tsx',
+    })
+
+    const { container } = render(<ChatInput />)
+
+    expect(screen.getByTestId('chat-input-panel')).not.toHaveClass('chat-composer-shell--floating')
+    expect(container.querySelector('.chat-composer-toolbar')).not.toHaveClass('chat-composer-toolbar--floating')
+    expect(screen.getByText('App.tsx')).toBeInTheDocument()
+    await waitFor(() => expect(mocks.getGitInfo).toHaveBeenCalled())
+  })
+
   it('hides local composer glow controls in dev by default', async () => {
     render(<ChatInput compact />)
 

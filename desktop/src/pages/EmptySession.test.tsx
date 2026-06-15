@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import '@testing-library/jest-dom'
 
@@ -335,6 +335,17 @@ describe('EmptySession', () => {
     })
   })
 
+  it('shows the compact Gaster Code brand lockup instead of a standalone app icon image', () => {
+    const { container } = render(<EmptySession />)
+
+    const lockup = screen.getByTestId('empty-session-brand-lockup')
+    expect(lockup).toHaveClass('hero-brand-lockup')
+    expect(lockup).toHaveTextContent('Gaster')
+    expect(lockup).toHaveTextContent('Code')
+    expect(within(lockup).getByTestId('gaster-brand-mark')).toHaveClass('hero-brand-logo')
+    expect(container.querySelector('img[src="/app-icon.svg"]')).not.toBeInTheDocument()
+  })
+
   it('keeps the repository launch context on one row and truncates long branch names', async () => {
     const longBranch = 'feature/super-long-branch-name-for-repository-launch-controls-e2e'
     mocks.getRepositoryContext.mockResolvedValueOnce(okRepositoryContext({
@@ -366,9 +377,17 @@ describe('EmptySession', () => {
     const branchClasses = branchButton.className.split(/\s+/)
     expect(branchButton.parentElement?.className).toContain('flex-nowrap')
     expect(branchButton.parentElement?.className).not.toContain('flex-wrap')
-    expect(branchClasses).toContain('max-w-[260px]')
+    expect(branchClasses).toContain('max-w-[220px]')
     expect(branchClasses).not.toContain('max-w-full')
     expect(branchButton.querySelector('span')?.className).toContain('truncate')
+  })
+
+  it('uses the floating material composer before attachments are added', () => {
+    render(<EmptySession />)
+
+    expect(screen.getByTestId('empty-session-composer-panel')).toHaveClass('chat-composer-shell--floating')
+    expect(screen.getByTestId('empty-session-composer-toolbar')).toHaveClass('chat-composer-toolbar--floating')
+    expect(screen.getByRole('button', { name: /Run/i })).toHaveClass('chat-composer-send-button')
   })
 
   it('keeps current worktree selectable when the fallback branch is checked out elsewhere', async () => {

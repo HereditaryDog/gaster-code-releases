@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { sessionsApi, type SessionContextSnapshot } from '../../api/sessions'
 import { useTranslation } from '../../i18n'
+import { useMobileViewport } from '../../hooks/useMobileViewport'
+import { isDesktopRuntime } from '../../lib/desktopRuntime'
 import type { ChatState } from '../../types/chat'
 import { MobileBottomSheet } from '../shared/MobileBottomSheet'
 
@@ -64,6 +66,8 @@ export function ContextUsageIndicator({
   compact = false,
 }: Props) {
   const t = useTranslation()
+  const useMobileDetailsSheet = compact && useMobileViewport() && !isDesktopRuntime()
+  const showInlinePopover = !useMobileDetailsSheet
   const [context, setContext] = useState<SessionContextSnapshot | null>(null)
   const [contextSource, setContextSource] = useState<'live' | 'estimate' | null>(null)
   const [loading, setLoading] = useState(() => shouldFetchContext(sessionId, draft))
@@ -71,8 +75,10 @@ export function ContextUsageIndicator({
   const [updatedAt, setUpdatedAt] = useState<number | null>(null)
   const [inspectionModel, setInspectionModel] = useState<string | null>(null)
   const [mobileDetailsOpen, setMobileDetailsOpen] = useState(false)
+  const [inlineDetailsOpen, setInlineDetailsOpen] = useState(false)
   const requestSeq = useRef(0)
   const contextIdentityRef = useRef('')
+  const rootRef = useRef<HTMLDivElement>(null)
 
   const refresh = useCallback(async () => {
     if (!sessionId || draft) {
@@ -135,6 +141,26 @@ export function ContextUsageIndicator({
     return () => clearInterval(timer)
   }, [chatState, messageCount, refresh])
 
+  useEffect(() => {
+    if (!inlineDetailsOpen) return
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) {
+        setInlineDetailsOpen(false)
+      }
+    }
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setInlineDetailsOpen(false)
+    }
+
+    document.addEventListener('pointerdown', handlePointerDown)
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [inlineDetailsOpen])
+
   const details = useMemo(() => {
     if (!context) return []
     return pickUsedContextCategory(context)
@@ -170,13 +196,15 @@ export function ContextUsageIndicator({
       : t('contextIndicator.unavailableAria')
 
   return (
-    <div className="group/context relative pointer-events-auto">
+    <div ref={rootRef} className="group/context relative pointer-events-auto">
       <button
         type="button"
         aria-label={ariaLabel}
         onClick={() => {
-          if (compact) {
+          if (useMobileDetailsSheet) {
             setMobileDetailsOpen(true)
+          } else if (compact) {
+            setInlineDetailsOpen((open) => !open)
           }
           void refresh()
         }}
@@ -207,8 +235,12 @@ export function ContextUsageIndicator({
         </span>
       </button>
 
-      <div className={`pointer-events-none absolute bottom-full right-0 z-40 mb-2 w-[320px] max-w-[calc(100vw-2rem)] translate-y-1 rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface-container-lowest)] p-4 text-left opacity-0 shadow-[var(--shadow-dropdown)] transition-all duration-150 group-hover/context:translate-y-0 group-hover/context:opacity-100 group-focus-within/context:translate-y-0 group-focus-within/context:opacity-100 ${
-        compact ? 'hidden' : ''
+      <div data-testid="context-usage-popover" className={`context-usage-popover absolute bottom-full right-0 z-40 mb-2 w-[320px] max-w-[calc(100vw-2rem)] rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface-container-lowest)] p-4 text-left shadow-[var(--shadow-dropdown)] transition-all duration-150 group-hover/context:translate-y-0 group-hover/context:opacity-100 group-focus-within/context:translate-y-0 group-focus-within/context:opacity-100 ${
+        inlineDetailsOpen ? 'context-usage-popover--open pointer-events-auto translate-y-0 opacity-100' : 'pointer-events-none translate-y-1 opacity-0'
+      } ${
+        compact ? 'context-usage-popover--compact' : ''
+      } ${
+        showInlinePopover ? '' : 'hidden'
       }`}>
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
@@ -278,7 +310,7 @@ export function ContextUsageIndicator({
         )}
       </div>
 
-      {compact && (
+      {useMobileDetailsSheet && (
         <MobileBottomSheet
           open={mobileDetailsOpen}
           onClose={() => setMobileDetailsOpen(false)}

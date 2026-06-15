@@ -517,11 +517,11 @@ export function ModelSelector({
         onClick={() => !disabled && setOpen(!open)}
         disabled={disabled}
         className={`flex items-center gap-2 rounded-full bg-[var(--color-surface-container-low)] text-xs font-medium text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] disabled:cursor-not-allowed disabled:opacity-50 ${
-          compact ? 'max-w-[112px] px-2.5 py-1.5' : 'max-w-[280px] px-3 py-1.5'
+          compact ? 'min-w-[168px] px-2.5 py-1.5' : 'max-w-[280px] px-3 py-1.5'
         }`}
       >
         <div className="flex min-w-0 flex-1 items-center gap-2">
-          <span className={`${compact ? 'text-xs' : 'text-sm'} min-w-0 flex-1 truncate font-semibold text-[var(--color-text-primary)]`}>
+          <span className={`${compact ? 'text-xs whitespace-nowrap' : 'text-sm truncate'} min-w-0 flex-1 font-semibold text-[var(--color-text-primary)]`}>
             {buttonModelLabel}
           </span>
           {!compact && buttonProviderLabel && (

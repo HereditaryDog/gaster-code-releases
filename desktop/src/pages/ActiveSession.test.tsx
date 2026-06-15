@@ -23,6 +23,16 @@ vi.mock('../components/chat/SessionTaskBar', () => ({
   SessionTaskBar: () => <div data-testid="session-task-bar" />,
 }))
 
+vi.mock('../api/websocket', () => ({
+  wsManager: {
+    clearHandlers: vi.fn(),
+    connect: vi.fn(),
+    onMessage: vi.fn(),
+    send: vi.fn(),
+    disconnect: vi.fn(),
+  },
+}))
+
 vi.mock('../components/workspace/WorkspacePanel', () => ({
   WorkspacePanel: ({ sessionId }: { sessionId: string }) => (
     <div data-testid="workspace-panel">workspace:{sessionId}</div>
@@ -74,6 +84,61 @@ afterEach(() => {
 })
 
 describe('ActiveSession task polling', () => {
+  it('shows the compact Gaster Code brand lockup for an empty session', () => {
+    const sessionId = 'empty-brand-session'
+
+    useSessionStore.setState({
+      sessions: [{
+        id: sessionId,
+        title: 'Empty Brand Session',
+        createdAt: '2026-05-07T00:00:00.000Z',
+        modifiedAt: '2026-05-07T00:00:00.000Z',
+        messageCount: 0,
+        projectPath: '/workspace/project',
+        workDir: '/workspace/project',
+        workDirExists: true,
+      }],
+      activeSessionId: sessionId,
+      isLoading: false,
+      error: null,
+    })
+    useTabStore.setState({
+      tabs: [{ sessionId, title: 'Empty Brand Session', type: 'session', status: 'idle' }],
+      activeTabId: sessionId,
+    })
+    useChatStore.setState({
+      sessions: {
+        [sessionId]: {
+          messages: [],
+          chatState: 'idle',
+          connectionState: 'connected',
+          streamingText: '',
+          streamingToolInput: '',
+          activeToolUseId: null,
+          activeToolName: null,
+          activeThinkingId: null,
+          pendingPermission: null,
+          pendingComputerUsePermission: null,
+          tokenUsage: { input_tokens: 0, output_tokens: 0 },
+          elapsedSeconds: 0,
+          statusVerb: '',
+          slashCommands: [],
+          agentTaskNotifications: {},
+          elapsedTimer: null,
+        },
+      },
+    })
+
+    const { container } = render(<ActiveSession />)
+
+    const lockup = screen.getByTestId('active-session-brand-lockup')
+    expect(lockup).toHaveClass('hero-brand-lockup')
+    expect(lockup).toHaveTextContent('Gaster')
+    expect(lockup).toHaveTextContent('Code')
+    expect(within(lockup).getByTestId('gaster-brand-mark')).toHaveClass('hero-brand-logo')
+    expect(container.querySelector('img[src="/app-icon.svg"]')).not.toBeInTheDocument()
+  })
+
   it('treats a persisted historical session as non-empty before messages finish loading', () => {
     const sessionId = 'history-loading-session'
 

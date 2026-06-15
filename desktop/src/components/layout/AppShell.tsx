@@ -31,6 +31,14 @@ export function shouldShowDesktopTabBar(isMobileShell: boolean, activeTabType: T
   return !isMobileShell && activeTabType !== 'settings'
 }
 
+export function getAppShellChromeClassName(isMobileShell: boolean, desktopRuntime: boolean) {
+  return [
+    'app-shell app-shell-viewport flex overflow-hidden bg-[var(--color-surface)]',
+    desktopRuntime ? 'app-shell--desktop' : '',
+    isMobileShell ? 'app-shell--mobile' : '',
+  ].filter(Boolean).join(' ')
+}
+
 export function AppShell() {
   const fetchSettings = useSettingsStore((s) => s.fetchAll)
   const sidebarOpen = useUIStore((s) => s.sidebarOpen)
@@ -199,7 +207,7 @@ export function AppShell() {
   }
 
   return (
-    <div className={`app-shell app-shell-viewport flex overflow-hidden bg-[var(--color-surface)]${isMobileShell ? ' app-shell--mobile' : ''}`}>
+    <div className={getAppShellChromeClassName(isMobileShell, desktopRuntime)}>
       {isMobileShell && effectiveSidebarOpen ? (
         <button
           type="button"
