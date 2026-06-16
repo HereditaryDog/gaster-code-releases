@@ -66,7 +66,8 @@ export function ContextUsageIndicator({
   compact = false,
 }: Props) {
   const t = useTranslation()
-  const useMobileDetailsSheet = compact && useMobileViewport() && !isDesktopRuntime()
+  const isMobileViewport = useMobileViewport()
+  const useMobileDetailsSheet = compact && isMobileViewport && !isDesktopRuntime()
   const showInlinePopover = !useMobileDetailsSheet
   const [context, setContext] = useState<SessionContextSnapshot | null>(null)
   const [contextSource, setContextSource] = useState<'live' | 'estimate' | null>(null)

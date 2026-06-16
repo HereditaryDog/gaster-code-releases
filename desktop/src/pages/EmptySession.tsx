@@ -113,8 +113,9 @@ export function EmptySession() {
     : undefined
   const draftModelLabel = draftRuntimeSelection?.modelId ?? currentModel?.name ?? currentModel?.id
   const isMobileComposer = useMobileViewport() && !isDesktopRuntime()
-  const useFloatingComposer = !isMobileComposer && attachments.length === 0
-  const useComposerCompactControls = isMobileComposer || useFloatingComposer
+  const useAttachmentComposer = !isMobileComposer && attachments.length > 0
+  const useFloatingComposer = !isMobileComposer && !useAttachmentComposer
+  const useComposerCompactControls = isMobileComposer || useFloatingComposer || useAttachmentComposer
 
   useEffect(() => {
     textareaRef.current?.focus()
@@ -555,9 +556,11 @@ export function EmptySession() {
         <div className={`flex w-full flex-col ${isMobileComposer ? 'max-w-none' : 'max-w-3xl'}`}>
           <div
             data-testid="empty-session-composer-panel"
-            className={`chat-composer-shell ${!isMobileComposer ? `chat-composer-shell--blended chat-composer-shell--compact ${useFloatingComposer ? 'chat-composer-shell--floating' : ''}` : ''} glass-panel relative transition-[background-color,border-color,box-shadow] ${
+            className={`chat-composer-shell ${!isMobileComposer ? `chat-composer-shell--blended chat-composer-shell--compact ${useFloatingComposer ? 'chat-composer-shell--floating' : ''} ${useAttachmentComposer ? 'chat-composer-shell--attachment-stage' : ''}` : ''} glass-panel relative transition-[background-color,border-color,box-shadow] ${
               useFloatingComposer
                 ? 'rounded-xl px-3 py-3'
+                : useAttachmentComposer
+                  ? 'flex flex-col gap-2 rounded-[20px] px-3 py-3'
                 : `flex flex-col gap-3 ${isMobileComposer ? 'rounded-2xl p-3 shadow-[0_-12px_36px_rgba(54,35,28,0.12)]' : 'rounded-t-xl rounded-b-none p-4'}`
             }`}
             onDragOver={(event) => event.preventDefault()}
@@ -648,7 +651,9 @@ export function EmptySession() {
             )}
 
             {attachments.length > 0 && (
-              <AttachmentGallery attachments={attachments} variant="composer" onRemove={removeAttachment} />
+              <div className={useAttachmentComposer ? 'chat-composer-stage-attachments' : undefined}>
+                <AttachmentGallery attachments={attachments} variant="composer" onRemove={removeAttachment} />
+              </div>
             )}
 
             <div className="flex items-start gap-3">
@@ -659,18 +664,20 @@ export function EmptySession() {
                 onKeyDown={handleKeyDown}
                 onPaste={handlePaste}
                 className={`flex-1 resize-none border-none bg-transparent leading-relaxed text-[var(--color-text-primary)] outline-none placeholder:text-[var(--color-text-tertiary)] ${useFloatingComposer ? 'chat-composer-textarea--compact' : ''} ${
+                  useAttachmentComposer ? 'chat-composer-textarea--attachment-stage' : ''
+                } ${
                   isMobileComposer ? 'max-h-[132px] min-h-[72px] py-1.5 text-base' : 'py-2'
                 }`}
                 style={{ fontFamily: 'var(--font-body)' }}
                 placeholder={t('empty.placeholder')}
-                rows={useFloatingComposer ? 1 : 2}
+                rows={useFloatingComposer || useAttachmentComposer ? 1 : 2}
               />
             </div>
 
             <div
               data-testid="empty-session-composer-toolbar"
               className={`chat-composer-toolbar ${
-                useFloatingComposer
+                useFloatingComposer || useAttachmentComposer
                   ? 'chat-composer-toolbar--compact chat-composer-toolbar--floating absolute bottom-0 left-0 right-0 flex items-center justify-between border-t border-[var(--color-border-separator)] px-3 py-2'
                   : `border-t border-[var(--color-border-separator)] pt-3 ${isMobileComposer ? 'flex flex-wrap items-center gap-2' : 'flex items-center justify-between'}`
               }`}
@@ -750,7 +757,7 @@ export function EmptySession() {
             onUseWorktreeChange={setUseWorktree}
             onLaunchReadyChange={setRepositoryLaunchReady}
             disabled={isSubmitting}
-            variant={useFloatingComposer ? 'floating' : 'default'}
+            variant={useFloatingComposer || useAttachmentComposer ? 'floating' : 'default'}
           />
         </div>
       </div>

@@ -1042,6 +1042,23 @@ button, input, textarea, select, a, [role="button"] {
   -webkit-backdrop-filter: blur(24px) saturate(1.22);
 }
 
+.chat-composer-shell.chat-composer-shell--attachment-stage {
+  min-height: 180px;
+  overflow: visible;
+  padding: 12px 12px 52px;
+  border-radius: 20px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.018) 54%, rgba(255, 255, 255, 0.012)),
+    color-mix(in srgb, var(--color-chat-composer-shell) 88%, rgba(40, 40, 40, 0.72));
+  border-color: color-mix(in srgb, var(--color-chat-composer-shell-border) 88%, rgba(255, 255, 255, 0.08));
+  box-shadow:
+    var(--shadow-chat-composer),
+    inset 0 1px 0 rgba(255, 255, 255, 0.085),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.34);
+  backdrop-filter: blur(24px) saturate(1.16);
+  -webkit-backdrop-filter: blur(24px) saturate(1.16);
+}
+
 .chat-composer-shell--floating .chat-composer-textarea--compact {
   height: 36px;
   min-height: 36px;
@@ -1052,7 +1069,52 @@ button, input, textarea, select, a, [role="button"] {
   line-height: 20px;
 }
 
-.chat-composer-shell--floating .chat-composer-toolbar {
+.chat-composer-shell--attachment-stage .chat-composer-textarea--attachment-stage {
+  height: 28px;
+  min-height: 28px;
+  padding: 0 4px;
+  color: color-mix(in srgb, var(--color-text-primary) 80%, transparent);
+  font-size: 15px;
+  line-height: 22px;
+}
+
+.chat-composer-stage-attachments {
+  position: relative;
+  z-index: 2;
+  width: fit-content;
+  max-width: 100%;
+}
+
+.chat-composer-stage-attachments > div {
+  flex-wrap: nowrap;
+}
+
+.chat-composer-stage-attachments button:first-child {
+  border-radius: 14px;
+  border-color: rgba(255, 255, 255, 0.13);
+  background: rgba(255, 255, 255, 0.045);
+  box-shadow:
+    0 8px 22px rgba(0, 0, 0, 0.24),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+.chat-composer-stage-attachments img {
+  border-radius: 13px;
+}
+
+.chat-composer-stage-attachments [aria-label^="Remove"] {
+  top: 4px;
+  right: 4px;
+  width: 18px;
+  height: 18px;
+  background: rgba(255, 255, 255, 0.94);
+  color: rgba(20, 20, 22, 0.9);
+  opacity: 1;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.28);
+}
+
+.chat-composer-shell--floating .chat-composer-toolbar,
+.chat-composer-shell--attachment-stage .chat-composer-toolbar {
   top: 8px;
   right: 8px;
   bottom: auto;
@@ -1063,11 +1125,21 @@ button, input, textarea, select, a, [role="button"] {
   pointer-events: none;
 }
 
-.chat-composer-shell--floating .chat-composer-toolbar > * {
+.chat-composer-shell--attachment-stage .chat-composer-toolbar {
+  top: auto;
+  right: 8px;
+  bottom: 8px;
+  left: 8px;
+  height: 36px;
+}
+
+.chat-composer-shell--floating .chat-composer-toolbar > *,
+.chat-composer-shell--attachment-stage .chat-composer-toolbar > * {
   pointer-events: auto;
 }
 
-.chat-composer-shell--floating .chat-composer-toolbar button:not(.chat-composer-send-button) {
+.chat-composer-shell--floating .chat-composer-toolbar button:not(.chat-composer-send-button),
+.chat-composer-shell--attachment-stage .chat-composer-toolbar button:not(.chat-composer-send-button) {
   border-color: transparent;
   border-radius: 999px;
   background: transparent;
@@ -1075,13 +1147,15 @@ button, input, textarea, select, a, [role="button"] {
   box-shadow: none;
 }
 
-.chat-composer-shell--floating .chat-composer-toolbar button:not(.chat-composer-send-button):hover {
+.chat-composer-shell--floating .chat-composer-toolbar button:not(.chat-composer-send-button):hover,
+.chat-composer-shell--attachment-stage .chat-composer-toolbar button:not(.chat-composer-send-button):hover {
   border-color: rgba(255, 255, 255, 0.075);
   background: rgba(255, 255, 255, 0.082);
   color: color-mix(in srgb, var(--color-text-primary) 72%, transparent);
 }
 
-.chat-composer-shell--floating .chat-composer-send-button {
+.chat-composer-shell--floating .chat-composer-send-button,
+.chat-composer-shell--attachment-stage .chat-composer-send-button {
   width: 36px;
   height: 36px;
   border-radius: 999px;
@@ -1095,7 +1169,8 @@ button, input, textarea, select, a, [role="button"] {
     0 8px 18px rgba(0, 0, 0, 0.24);
 }
 
-.chat-composer-shell--floating .chat-composer-send-button:hover {
+.chat-composer-shell--floating .chat-composer-send-button:hover,
+.chat-composer-shell--attachment-stage .chat-composer-send-button:hover {
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.11), rgba(255, 255, 255, 0.04)),
     rgba(96, 101, 112, 0.86);

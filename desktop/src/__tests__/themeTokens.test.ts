@@ -85,8 +85,8 @@ describe('theme tokens', () => {
   it('styles the desktop chat composer as a restrained floating material pill', () => {
     const floatingComposerRule = themeCss.match(/\.chat-composer-shell\.chat-composer-shell--floating\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? ''
     const floatingTextareaRule = themeCss.match(/\.chat-composer-shell--floating\s+\.chat-composer-textarea--compact\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? ''
-    const floatingToolbarRule = themeCss.match(/\.chat-composer-shell--floating\s+\.chat-composer-toolbar\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? ''
-    const floatingSendRule = themeCss.match(/\.chat-composer-shell--floating\s+\.chat-composer-send-button\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? ''
+    const floatingToolbarRule = themeCss.match(/\.chat-composer-shell--floating\s+\.chat-composer-toolbar,\s*\.chat-composer-shell--attachment-stage\s+\.chat-composer-toolbar\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? ''
+    const floatingSendRule = themeCss.match(/\.chat-composer-shell--floating\s+\.chat-composer-send-button,\s*\.chat-composer-shell--attachment-stage\s+\.chat-composer-send-button\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? ''
 
     expect(floatingComposerRule).toContain('border-radius: 999px;')
     expect(floatingComposerRule).toContain('overflow: visible;')

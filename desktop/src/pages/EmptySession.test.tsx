@@ -390,6 +390,24 @@ describe('EmptySession', () => {
     expect(screen.getByRole('button', { name: /Run/i })).toHaveClass('chat-composer-send-button')
   })
 
+  it('uses the attachment-stage composer after an image attachment is added', async () => {
+    const { container } = render(<EmptySession />)
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement
+
+    fireEvent.change(input, {
+      target: {
+        files: [new File(['image'], 'screenshot.png', { type: 'image/png' })],
+      },
+    })
+
+    const preview = await screen.findByAltText('screenshot.png')
+
+    expect(screen.getByTestId('empty-session-composer-panel')).toHaveClass('chat-composer-shell--attachment-stage')
+    expect(screen.getByTestId('empty-session-composer-toolbar')).toHaveClass('chat-composer-toolbar--floating')
+    expect(preview).toHaveClass('h-20')
+    expect(preview).toHaveClass('w-20')
+  })
+
   it('keeps current worktree selectable when the fallback branch is checked out elsewhere', async () => {
     mocks.getRepositoryContext.mockResolvedValueOnce(okRepositoryContext({
       currentBranch: null,

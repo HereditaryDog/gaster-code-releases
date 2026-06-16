@@ -64,7 +64,7 @@ export function AttachmentGallery({ attachments, variant = 'message', onRemove }
                     alt={attachment.name}
                     className={
                       isComposer
-                        ? 'h-16 w-16 object-cover'
+                        ? 'h-20 w-20 object-cover'
                         : 'max-h-[520px] max-w-[min(360px,80vw)] object-contain'
                     }
                   />
