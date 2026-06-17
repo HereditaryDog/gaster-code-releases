@@ -17,6 +17,7 @@ import { FileSearchMenu, type FileSearchMenuHandle } from '../components/chat/Fi
 import { LocalSlashCommandPanel, type LocalSlashCommandName } from '../components/chat/LocalSlashCommandPanel'
 import { useMobileViewport } from '../hooks/useMobileViewport'
 import { isDesktopRuntime } from '../lib/desktopRuntime'
+import { GasterBrandLockup } from '../components/brand/GasterBrand'
 import {
   FALLBACK_SLASH_COMMANDS,
   findSlashToken,
@@ -112,6 +113,9 @@ export function EmptySession() {
     : undefined
   const draftModelLabel = draftRuntimeSelection?.modelId ?? currentModel?.name ?? currentModel?.id
   const isMobileComposer = useMobileViewport() && !isDesktopRuntime()
+  const useAttachmentComposer = !isMobileComposer && attachments.length > 0
+  const useFloatingComposer = !isMobileComposer && !useAttachmentComposer
+  const useComposerCompactControls = isMobileComposer || useFloatingComposer || useAttachmentComposer
 
   useEffect(() => {
     textareaRef.current?.focus()
@@ -517,10 +521,10 @@ export function EmptySession() {
         <div className={`flex flex-col items-center text-center ${
           isMobileComposer ? 'max-w-[300px]' : 'max-w-md'
         }`}>
-          <img
-            src="/app-icon.svg"
-            alt="Gaster Code"
-            className={`hero-brand-logo ${isMobileComposer ? 'mb-4 h-16 w-16' : 'mb-6 h-24 w-24'}`}
+          <GasterBrandLockup
+            testId="empty-session-brand-lockup"
+            className={isMobileComposer ? 'mb-4' : 'mb-6'}
+            markClassName={isMobileComposer ? 'h-4 w-4' : 'h-5 w-5'}
           />
           <h1
             className={`mb-2 font-extrabold tracking-tight text-[var(--color-text-primary)] ${
@@ -552,8 +556,12 @@ export function EmptySession() {
         <div className={`flex w-full flex-col ${isMobileComposer ? 'max-w-none' : 'max-w-3xl'}`}>
           <div
             data-testid="empty-session-composer-panel"
-            className={`glass-panel relative flex flex-col gap-3 ${
-              isMobileComposer ? 'rounded-2xl p-3 shadow-[0_-12px_36px_rgba(54,35,28,0.12)]' : 'rounded-t-xl rounded-b-none p-4'
+            className={`chat-composer-shell ${!isMobileComposer ? `chat-composer-shell--blended chat-composer-shell--compact ${useFloatingComposer ? 'chat-composer-shell--floating' : ''} ${useAttachmentComposer ? 'chat-composer-shell--attachment-stage' : ''}` : ''} glass-panel relative transition-[background-color,border-color,box-shadow] ${
+              useFloatingComposer
+                ? 'rounded-xl px-3 py-3'
+                : useAttachmentComposer
+                  ? 'flex flex-col gap-2 rounded-[20px] px-3 py-3'
+                : `flex flex-col gap-3 ${isMobileComposer ? 'rounded-2xl p-3 shadow-[0_-12px_36px_rgba(54,35,28,0.12)]' : 'rounded-t-xl rounded-b-none p-4'}`
             }`}
             onDragOver={(event) => event.preventDefault()}
             onDrop={handleDrop}
@@ -643,7 +651,9 @@ export function EmptySession() {
             )}
 
             {attachments.length > 0 && (
-              <AttachmentGallery attachments={attachments} variant="composer" onRemove={removeAttachment} />
+              <div className={useAttachmentComposer ? 'chat-composer-stage-attachments' : undefined}>
+                <AttachmentGallery attachments={attachments} variant="composer" onRemove={removeAttachment} />
+              </div>
             )}
 
             <div className="flex items-start gap-3">
@@ -653,24 +663,31 @@ export function EmptySession() {
                 onChange={(event) => handleInputChange(event.target.value, event.target.selectionStart ?? event.target.value.length)}
                 onKeyDown={handleKeyDown}
                 onPaste={handlePaste}
-                className={`flex-1 resize-none border-none bg-transparent leading-relaxed text-[var(--color-text-primary)] outline-none placeholder:text-[var(--color-text-tertiary)] ${
+                className={`flex-1 resize-none border-none bg-transparent leading-relaxed text-[var(--color-text-primary)] outline-none placeholder:text-[var(--color-text-tertiary)] ${useFloatingComposer ? 'chat-composer-textarea--compact' : ''} ${
+                  useAttachmentComposer ? 'chat-composer-textarea--attachment-stage' : ''
+                } ${
                   isMobileComposer ? 'max-h-[132px] min-h-[72px] py-1.5 text-base' : 'py-2'
                 }`}
                 style={{ fontFamily: 'var(--font-body)' }}
                 placeholder={t('empty.placeholder')}
-                rows={2}
+                rows={useFloatingComposer || useAttachmentComposer ? 1 : 2}
               />
             </div>
 
-            <div className={`border-t border-[var(--color-border-separator)] pt-3 ${
-              isMobileComposer ? 'flex flex-wrap items-center gap-2' : 'flex items-center justify-between'
-            }`}>
+            <div
+              data-testid="empty-session-composer-toolbar"
+              className={`chat-composer-toolbar ${
+                useFloatingComposer || useAttachmentComposer
+                  ? 'chat-composer-toolbar--compact chat-composer-toolbar--floating absolute bottom-0 left-0 right-0 flex items-center justify-between border-t border-[var(--color-border-separator)] px-3 py-2'
+                  : `border-t border-[var(--color-border-separator)] pt-3 ${isMobileComposer ? 'flex flex-wrap items-center gap-2' : 'flex items-center justify-between'}`
+              }`}
+            >
               <div className="flex shrink-0 items-center gap-2">
                 <div ref={plusMenuRef} className="relative">
                   <button
                     onClick={() => setPlusMenuOpen((prev) => !prev)}
                     aria-label="Open composer tools"
-                    className={`text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] ${
+                    className={`chat-composer-icon-button text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] ${
                       isMobileComposer ? 'inline-flex h-11 w-11 items-center justify-center rounded-xl' : 'rounded-lg p-1.5'
                     }`}
                   >
@@ -702,7 +719,7 @@ export function EmptySession() {
                   )}
                 </div>
 
-                <PermissionModeSelector workDir={workDir} compact={isMobileComposer} />
+                <PermissionModeSelector workDir={workDir} compact={useComposerCompactControls} />
               </div>
 
               <div className={`${isMobileComposer ? 'flex min-w-0 flex-1 items-center justify-end gap-2' : 'flex items-center gap-3'}`}>
@@ -712,19 +729,19 @@ export function EmptySession() {
                   runtimeSelectionKey={draftRuntimeSelectionKey}
                   fallbackModelLabel={draftModelLabel}
                   draft
-                  compact={isMobileComposer}
+                  compact={useComposerCompactControls}
                 />
-                <ModelSelector runtimeKey={DRAFT_RUNTIME_SELECTION_KEY} disabled={isSubmitting} compact={isMobileComposer} />
+                <ModelSelector runtimeKey={DRAFT_RUNTIME_SELECTION_KEY} disabled={isSubmitting} compact={useComposerCompactControls} />
                 <button
                   onClick={handleSubmit}
                   disabled={!canSubmit}
                   aria-label={t('common.run')}
-                  title={isMobileComposer ? t('common.run') : undefined}
-                  className={`flex shrink-0 items-center justify-center gap-1 rounded-lg bg-[image:var(--gradient-btn-primary)] text-xs font-semibold text-[var(--color-btn-primary-fg)] shadow-[var(--shadow-button-primary)] transition-all hover:brightness-105 disabled:opacity-30 ${
+                  title={useComposerCompactControls ? t('common.run') : undefined}
+                  className={`chat-composer-send-button flex shrink-0 items-center justify-center gap-1 rounded-lg bg-[image:var(--gradient-btn-primary)] text-xs font-semibold text-[var(--color-btn-primary-fg)] shadow-[var(--shadow-button-primary)] transition-all hover:brightness-105 disabled:opacity-30 ${
                     isMobileComposer ? 'h-11 w-11 rounded-xl px-0 py-0' : 'w-[112px] px-3 py-1.5'
                   }`}
                 >
-                  {!isMobileComposer && t('common.run')}
+                  {!useComposerCompactControls && t('common.run')}
                   <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
                 </button>
               </div>
@@ -740,6 +757,7 @@ export function EmptySession() {
             onUseWorktreeChange={setUseWorktree}
             onLaunchReadyChange={setRepositoryLaunchReady}
             disabled={isSubmitting}
+            variant={useFloatingComposer || useAttachmentComposer ? 'floating' : 'default'}
           />
         </div>
       </div>

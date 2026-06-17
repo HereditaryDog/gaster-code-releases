@@ -639,9 +639,11 @@ describe('Sidebar', () => {
   it('uses the Gaster G mark and wordmark styling for the sidebar brand', () => {
     const { container } = render(<Sidebar />)
 
-    const logo = container.querySelector('aside img')
-    expect(logo).toHaveAttribute('src', '/app-icon.svg')
+    const logo = screen.getByTestId('sidebar-brand-mark')
     expect(logo).toHaveClass('sidebar-brand-logo')
+    expect(logo).toHaveClass('gaster-brand-mark')
+    expect(logo.querySelector('svg path')).toHaveAttribute('fill', 'currentColor')
+    expect(container.querySelector('aside img[src="/app-icon.svg"]')).not.toBeInTheDocument()
 
     const wordmark = screen.getByText('Gaster Code')
     expect(wordmark).toHaveClass('uppercase', 'tracking-[0.145em]')

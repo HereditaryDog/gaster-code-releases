@@ -3,6 +3,14 @@
 本文件汇总公开版本线的主要变化。每个正式发布版本的完整说明保存在
 [`release-notes/`](release-notes/) 目录中。
 
+## V 1.1.5
+
+- 移植并验证同事公开仓库 PR #12，将桌面壳层、侧边栏材质、Gaster 品牌标识和输入框附件态打磨合入源码主线。
+- 聊天输入框新增浮动紧凑样式和图片附件 attachment-stage 展示态。
+- 修复 `ContextUsageIndicator` 在紧凑模式与移动视口切换时可能触发的 React hook 顺序崩溃。
+- 推进桌面版本、README、安装指南和发布说明到 `1.1.5`。
+- 完整说明：[release-notes/v1.1.5.md](release-notes/v1.1.5.md)
+
 ## V 1.1.4
 
 - 移植并修正同事公开仓库 PR #10，设置页改为分组二级侧栏，支持搜索设置项。

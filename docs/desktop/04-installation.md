@@ -1,8 +1,8 @@
 # 安装指南
 
-当前稳定版本：**V 1.1.4**。
+当前稳定版本：**V 1.1.5**。
 
-V 1.1.4 移植同事公开仓库设置页改进，新增分组二级侧栏、设置搜索和中文导航补全，并保留 V 1.1.3 的长上下文会话切换、桌面端渲染路径、发布远端卫生和 macOS DMG 拖拽安装界面修复。1.0.x Tauri 用户和已经安装 V 1.1.x 的用户都可以直接下载并覆盖安装。覆盖安装不会删除本地配置、G-Master 登录状态、会话记录或自定义服务商配置。安装本版本之后，后续更新会通过公开 release-only 仓库中的标准 `latest*.yml` updater metadata 获取。
+V 1.1.5 移植并验证同事公开仓库 PR #12 的桌面前端打磨，更新 Gaster 品牌标识、侧边栏材质、浮动输入框和图片附件展示态，并修复上下文用量指示器 hook 顺序崩溃。1.0.x Tauri 用户和已经安装 V 1.1.x 的用户都可以直接下载并覆盖安装。覆盖安装不会删除本地配置、G-Master 登录状态、会话记录或自定义服务商配置。安装本版本之后，后续更新会通过公开 release-only 仓库中的标准 `latest*.yml` updater metadata 获取。
 
 ## 下载
 
@@ -10,10 +10,10 @@ V 1.1.4 移植同事公开仓库设置页改进，新增分组二级侧栏、设
 
 | 平台 | 文件 |
 |------|------|
-| macOS (Apple Silicon) | `Gaster-Code-1.1.4-mac-arm64.dmg` |
-| Windows x64 | `Gaster-Code-1.1.4-win-x64.exe` |
+| macOS (Apple Silicon) | `Gaster-Code-1.1.5-mac-arm64.dmg` |
+| Windows x64 | `Gaster-Code-1.1.5-win-x64.exe` |
 
-> V 1.1.4 正式发布暂不构建 macOS Intel 和 Linux 安装包；需要恢复这些产物时再打开 release workflow 的对应 matrix。
+> V 1.1.5 正式发布暂不构建 macOS Intel 和 Linux 安装包；需要恢复这些产物时再打开 release workflow 的对应 matrix。
 
 > 不确定 Mac 架构？点击左上角 Apple 菜单 → 关于本机，芯片为 Apple M 开头选 Apple Silicon，Intel 选 x64。
 
@@ -77,6 +77,6 @@ bun run dev --host 127.0.0.1 --port 2024
 
 不需要。V 1.1.0 开始桌面端使用 Electron 内置 Chromium，Windows 不再依赖系统 WebView2 运行时。
 
-**Q: 从 1.0.x 或 1.1.x 升级到 1.1.4 会清空本地数据吗？**
+**Q: 从 1.0.x 或 1.1.x 升级到 1.1.5 会清空本地数据吗？**
 
 不会。覆盖安装不会删除本地配置、G-Master 登录状态、会话记录、自定义服务商配置或本地项目文件。

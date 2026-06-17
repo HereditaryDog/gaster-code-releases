@@ -27,8 +27,8 @@ vi.mock('../../api/sessions', () => ({
 }))
 
 vi.mock('./DirectoryPicker', () => ({
-  DirectoryPicker: ({ value }: { value: string }) => (
-    <button type="button">Project {value}</button>
+  DirectoryPicker: ({ value, variant }: { value: string; variant?: string }) => (
+    <button type="button" data-variant={variant}>Project {value}</button>
   ),
 }))
 
@@ -162,5 +162,18 @@ describe('RepositoryLaunchControls', () => {
     await waitFor(() => {
       expect(onBranchChange).toHaveBeenCalledWith('feature/h5')
     })
+  })
+
+  it('uses compact frosted chips in the floating composer variant', async () => {
+    renderControls({ variant: 'floating' })
+
+    const row = await screen.findByTestId('repository-launch-controls-row')
+    const branchButton = await screen.findByRole('button', { name: 'Select branch: main' })
+
+    expect(row).toHaveClass('repository-launch-controls__row--floating')
+    expect(screen.getByRole('button', { name: /Project/ })).toHaveAttribute('data-variant', 'chip')
+    expect(branchButton).toHaveClass('project-context-chip')
+    expect(branchButton).toHaveClass('project-context-chip--frosted')
+    expect(branchButton).toHaveClass('max-w-[220px]')
   })
 })

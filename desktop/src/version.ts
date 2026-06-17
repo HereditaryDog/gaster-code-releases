@@ -1,2 +1,2 @@
-export const GASTER_CODE_VERSION = '1.1.4'
+export const GASTER_CODE_VERSION = '1.1.5'
 export const GASTER_CODE_DISPLAY_VERSION = `V ${GASTER_CODE_VERSION}`

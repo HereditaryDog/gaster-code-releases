@@ -48,7 +48,9 @@ import { isDesktopRuntime } from '../lib/desktopRuntime'
 import { useGMasterAuthStore } from '../stores/gmasterAuthStore'
 import { GMASTER_API_BASE_URL, GMASTER_DEFAULT_MODELS, GMASTER_MANAGED_PROVIDER_ID, getGMasterModelOptions, isGMasterOfficialProvider } from '../constants/gmasterProvider'
 import { OFFICIAL_MODELS } from '../constants/modelCatalog'
+import { GASTER_CODE_APP_NAME } from '../constants/branding'
 import { GASTER_CODE_VERSION } from '../version'
+import { GasterBrandMark } from '../components/brand/GasterBrand'
 import {
   getDesktopNotificationPermission,
   notifyDesktop,
@@ -3483,8 +3485,7 @@ function PluginSettings() {
 
 // ─── About Settings ──────────────────────────────────────
 
-const APP_NAME = 'Gaster Code'
-const APP_LOGO_PATH = '/app-icon.svg'
+const APP_NAME = GASTER_CODE_APP_NAME
 const GITHUB_REPO = 'https://github.com/HereditaryDog/gaster-code'
 const GITHUB_ISSUES = `${GITHUB_REPO}/issues`
 const GITHUB_RELEASES = `${GITHUB_REPO}/releases`
@@ -3629,7 +3630,11 @@ function AboutSettings() {
   return (
     <div className="w-full min-w-0 max-w-lg mx-auto flex flex-col items-center py-6">
       {/* Logo + App Name + Version */}
-      <img src={APP_LOGO_PATH} alt={APP_NAME} className="hero-brand-logo w-20 h-20 mb-4" />
+      <GasterBrandMark
+        ariaLabel={APP_NAME}
+        testId="settings-about-brand-mark"
+        className="hero-brand-logo w-20 h-20 mb-4"
+      />
       <h1 className="text-xl font-bold text-[var(--color-text-primary)]">{APP_NAME}</h1>
       {version && (
         <div className="mt-1 flex items-center gap-2 text-xs text-[var(--color-text-tertiary)]">

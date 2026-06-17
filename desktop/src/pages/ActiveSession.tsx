@@ -30,6 +30,7 @@ import type { SessionListItem } from '../types/session'
 import type { ActiveGoalState } from '../types/chat'
 import { useMobileViewport } from '../hooks/useMobileViewport'
 import { isDesktopRuntime } from '../lib/desktopRuntime'
+import { GasterBrandLockup } from '../components/brand/GasterBrand'
 
 const TASK_POLL_INTERVAL_MS = 1000
 const WORKSPACE_RESIZE_STEP = 32
@@ -407,7 +408,7 @@ export function ActiveSession() {
                   </>
                 ) : (
                   <>
-                    <img src="/app-icon.svg" alt="Gaster Code" className="hero-brand-logo mb-6 h-24 w-24" />
+                    <GasterBrandLockup testId="active-session-brand-lockup" className="mb-6" />
                     <h1 className="mb-2 text-3xl font-extrabold tracking-tight text-[var(--color-text-primary)]" style={{ fontFamily: 'var(--font-headline)' }}>
                       {t('empty.title')}
                     </h1>

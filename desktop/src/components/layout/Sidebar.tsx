@@ -11,11 +11,12 @@ import { useChatStore } from '../../stores/chatStore'
 import { SessionStatusMarker, type SidebarSessionActivityState } from './SessionStatusMarker'
 import { SIDEBAR_COLLAPSE_THRESHOLD, SIDEBAR_MAX_WIDTH, SIDEBAR_MIN_WIDTH } from '../../stores/uiStore'
 import { getDesktopHost } from '../../lib/desktopHost'
+import { GasterBrandMark } from '../brand/GasterBrand'
+import { GASTER_CODE_APP_NAME } from '../../constants/branding'
 
 const isDesktop = getDesktopHost().isDesktop
 const isWindows = typeof navigator !== 'undefined' && /Win/.test(navigator.platform)
-const APP_NAME = 'Gaster Code'
-const APP_LOGO_PATH = '/app-icon.svg'
+const APP_NAME = GASTER_CODE_APP_NAME
 
 
 type TimeGroup = 'today' | 'yesterday' | 'last7days' | 'last30days' | 'older'
@@ -316,7 +317,7 @@ export function Sidebar({ isMobile = false, onRequestClose }: SidebarProps) {
       <div className={`px-3 pb-2 ${isDesktop && !isWindows ? 'pt-[44px]' : 'pt-3'}`}>
         <div className={`flex ${expanded ? 'items-center justify-between gap-3' : 'flex-col items-center gap-2'}`}>
           <div className={`flex min-w-0 ${expanded ? 'items-end gap-2.5' : 'items-center justify-center'}`}>
-            <img src={APP_LOGO_PATH} alt="" className="sidebar-brand-logo h-7 w-7 flex-shrink-0" />
+            <GasterBrandMark testId="sidebar-brand-mark" className="sidebar-brand-logo h-7 w-7 flex-shrink-0" />
             <span
               className={`sidebar-copy ${expanded ? 'sidebar-copy--visible' : 'sidebar-copy--hidden'} text-[13px] font-semibold tracking-tight text-[var(--color-text-primary)]`}
             >
@@ -594,9 +595,9 @@ export function Sidebar({ isMobile = false, onRequestClose }: SidebarProps) {
                               className={`
                                 group w-full rounded-[12px] border px-3 ${isMobile ? 'py-3' : 'py-2.5'} text-left text-sm transition-[background,border-color,box-shadow,filter,color] duration-200
                                 ${selectedSessionIds.has(session.id)
-                                  ? 'sidebar-session-row--selected border-[var(--color-sidebar-item-active-border)] bg-[var(--color-sidebar-item-active)] text-[var(--color-text-primary)] shadow-[inset_0_1px_0_rgba(255,255,255,0.72),0_3px_10px_rgba(143,72,47,0.07)] hover:brightness-[0.995]'
+                                  ? 'sidebar-session-row--selected border-[var(--color-sidebar-item-active-border)] bg-[var(--color-sidebar-item-active)] text-[var(--color-text-primary)] shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_6px_16px_rgba(0,0,0,0.08)] hover:brightness-[0.995]'
                                   : isActiveSession
-                                  ? 'sidebar-session-row--active border-transparent bg-[var(--color-sidebar-item-active)] text-[var(--color-text-primary)]'
+                                  ? 'sidebar-session-row--active border-[var(--color-sidebar-item-active-border)] bg-[var(--color-sidebar-item-active)] text-[var(--color-text-primary)] shadow-[inset_0_1px_0_rgba(255,255,255,0.09),inset_0_-1px_0_rgba(0,0,0,0.18)]'
                                   : 'sidebar-session-row--idle border-transparent text-[var(--color-text-secondary)] hover:bg-[var(--color-sidebar-item-hover)]'
                                 }
                               `}
@@ -815,11 +816,11 @@ function NavItem({
       aria-label={label}
       title={collapsed ? label : undefined}
       className={`
-        flex items-center transition-colors duration-200
+        sidebar-nav-item flex items-center transition-colors duration-200
         ${collapsed ? 'h-10 w-10 justify-center rounded-[var(--radius-md)] px-0 py-0' : `w-full gap-2.5 rounded-[12px] px-3 ${touchFriendly ? 'py-3' : 'py-2.5'} text-sm`}
         ${active
-          ? 'bg-[var(--color-sidebar-item-active)] font-medium text-[var(--color-text-primary)]'
-          : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-sidebar-item-hover)] hover:text-[var(--color-text-primary)]'
+          ? 'sidebar-nav-item--active bg-[var(--color-sidebar-item-active)] font-medium text-[var(--color-text-primary)]'
+          : 'sidebar-nav-item--idle text-[var(--color-text-secondary)] hover:bg-[var(--color-sidebar-item-hover)] hover:text-[var(--color-text-primary)]'
         }
       `}
     >

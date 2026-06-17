@@ -29,6 +29,7 @@ type Props = {
   onUseWorktreeChange: (enabled: boolean) => void
   onLaunchReadyChange?: (ready: boolean) => void
   disabled?: boolean
+  variant?: 'default' | 'floating'
 }
 
 const BRANCH_MENU_HEIGHT = 360
@@ -55,9 +56,11 @@ export function RepositoryLaunchControls({
   onUseWorktreeChange,
   onLaunchReadyChange,
   disabled = false,
+  variant = 'default',
 }: Props) {
   const t = useTranslation()
   const isMobileBrowser = useMobileViewport() && !isDesktopRuntime()
+  const useFloatingLayout = variant === 'floating' && !isMobileBrowser
   const [context, setContext] = useState<RepositoryContextResult | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -289,7 +292,9 @@ export function RepositoryLaunchControls({
   }, [isLaunchReady, onLaunchReadyChange])
 
   const worktreeLabel = useWorktree ? t('repoLaunch.worktreeIsolated') : t('repoLaunch.worktreeCurrent')
-  const workbarButtonClassName = 'group inline-flex h-9 min-w-0 items-center gap-1.5 rounded-[7px] border border-transparent px-2.5 text-[13px] font-medium leading-none text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-container-lowest)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)]/35 disabled:cursor-not-allowed disabled:opacity-50'
+  const workbarButtonClassName = useFloatingLayout
+    ? 'project-context-chip project-context-chip--frosted group inline-flex h-8 min-w-0 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium leading-none text-[var(--color-text-secondary)] transition-colors hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)]/35 disabled:cursor-not-allowed disabled:opacity-50'
+    : 'group inline-flex h-9 min-w-0 items-center gap-1.5 rounded-[7px] border border-transparent px-2.5 text-[13px] font-medium leading-none text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-container-lowest)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)]/35 disabled:cursor-not-allowed disabled:opacity-50'
 
   const branchMenuClassName = isMobileBrowser
     ? 'max-h-[72dvh] overflow-hidden rounded-t-2xl border border-[var(--color-border)] bg-[var(--color-surface-container-lowest)] shadow-[0_-18px_48px_rgba(54,35,28,0.2)]'
@@ -331,13 +336,23 @@ export function RepositoryLaunchControls({
       }
 
   return (
-    <div ref={rootRef} className={`flex min-w-0 flex-col ${isMobileBrowser ? 'gap-0' : 'gap-2'}`}>
-      <div className={`flex min-w-0 items-center justify-start gap-x-1.5 gap-y-1 overflow-hidden border-t border-[var(--color-border-separator)] ${
-        isMobileBrowser
-          ? 'min-h-[52px] flex-wrap rounded-none bg-[var(--color-surface-container-lowest)] px-3 py-2 shadow-none'
-          : 'min-h-[48px] flex-nowrap rounded-b-xl bg-[var(--color-surface-container-low)] px-4 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.45)]'
-      }`}>
-        <DirectoryPicker value={workDir} onChange={onWorkDirChange} variant="workbar" isGitProject={isGitReady} />
+    <div ref={rootRef} data-testid="repository-launch-controls" className={`flex min-w-0 flex-col ${isMobileBrowser ? 'gap-0' : useFloatingLayout ? 'gap-1' : 'gap-2'}`}>
+      <div
+        data-testid="repository-launch-controls-row"
+        className={`repository-launch-controls__row flex min-w-0 items-center justify-start gap-x-1.5 gap-y-1 overflow-hidden ${
+          isMobileBrowser
+            ? 'min-h-[52px] flex-wrap rounded-none border-t border-[var(--color-border-separator)] bg-[var(--color-surface-container-lowest)] px-3 py-2 shadow-none'
+            : useFloatingLayout
+              ? 'repository-launch-controls__row--floating min-h-0 flex-nowrap bg-transparent px-0 py-0 shadow-none'
+              : 'min-h-[48px] flex-nowrap rounded-b-xl border-t border-[var(--color-border-separator)] bg-[var(--color-surface-container-low)] px-4 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.45)]'
+        }`}
+      >
+        <DirectoryPicker
+          value={workDir}
+          onChange={onWorkDirChange}
+          variant={useFloatingLayout ? 'chip' : 'workbar'}
+          isGitProject={isGitReady}
+        />
 
         {loading && workDir && !isMobileBrowser && (
           <div className="inline-flex h-9 items-center gap-1.5 rounded-[7px] px-2.5 text-[13px] text-[var(--color-text-secondary)]">
@@ -360,7 +375,7 @@ export function RepositoryLaunchControls({
                 setWorktreeMenuOpen(false)
                 setBranchFilter('')
               }}
-              className={`${workbarButtonClassName} ${isMobileBrowser ? 'max-w-[160px] shrink-0 bg-[var(--color-surface-container)]' : 'max-w-[260px] shrink'}`}
+              className={`${workbarButtonClassName} ${isMobileBrowser ? 'max-w-[160px] shrink-0 bg-[var(--color-surface-container)]' : useFloatingLayout ? 'max-w-[220px] shrink' : 'max-w-[260px] shrink'}`}
             >
               <GitBranch size={15} className="shrink-0" />
               <span className="truncate font-medium text-[var(--color-text-primary)]">
@@ -384,7 +399,9 @@ export function RepositoryLaunchControls({
               }}
               className={`${workbarButtonClassName} shrink-0 ${isMobileBrowser ? 'bg-[var(--color-surface-container)]' : ''} ${
                 useWorktree
-                  ? 'bg-[var(--color-surface-container-lowest)] text-[var(--color-text-primary)]'
+                  ? useFloatingLayout
+                    ? 'text-[var(--color-text-primary)] brightness-110'
+                    : 'bg-[var(--color-surface-container-lowest)] text-[var(--color-text-primary)]'
                   : ''
               }`}
             >

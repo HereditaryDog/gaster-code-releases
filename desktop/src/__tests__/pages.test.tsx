@@ -66,6 +66,16 @@ vi.mock('../api/sessions', async (importOriginal) => {
   }
 })
 
+vi.mock('../api/websocket', () => ({
+  wsManager: {
+    clearHandlers: vi.fn(),
+    connect: vi.fn(),
+    onMessage: vi.fn(() => () => {}),
+    send: vi.fn(),
+    disconnect: vi.fn(),
+  },
+}))
+
 // Import all pages
 import { EmptySession } from '../pages/EmptySession'
 import { ActiveSession } from '../pages/ActiveSession'
@@ -161,6 +171,28 @@ describe('Content-only pages render without errors', () => {
     expect(html).not.toContain('animate-spin')
   })
 
+  it('ContextUsageIndicator keeps hook order stable when compact mode changes', () => {
+    const { rerender } = render(
+      <ContextUsageIndicator
+        sessionId="context-indicator-session"
+        chatState="idle"
+        messageCount={0}
+        compact={false}
+      />,
+    )
+
+    expect(() => {
+      rerender(
+        <ContextUsageIndicator
+          sessionId="context-indicator-session"
+          chatState="idle"
+          messageCount={0}
+          compact
+        />,
+      )
+    }).not.toThrow()
+  })
+
   it('EmptySession plus menu exposes uploads and slash commands before chat starts', () => {
     render(<EmptySession />)
     fireEvent.click(screen.getByRole('button', { name: 'Open composer tools' }))
@@ -200,7 +232,7 @@ describe('Content-only pages render without errors', () => {
     const textarea = container.querySelector('textarea')
     expect(textarea).toBeInTheDocument()
     expect(textarea).toHaveAttribute('placeholder', 'Ask anything...')
-    expect(textarea).toHaveAttribute('rows', '2')
+    expect(textarea).toHaveAttribute('rows', '1')
     expect(container.innerHTML).not.toContain('Preview')
     // Cleanup
     useTabStore.setState({ tabs: [], activeTabId: null })

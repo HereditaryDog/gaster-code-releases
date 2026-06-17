@@ -111,4 +111,16 @@ describe('ModelSelector', () => {
 
     expect(screen.getByText('claude-sonnet-4-6')).toBeInTheDocument()
   })
+
+  it('keeps the compact trigger wide enough to show the full model name', () => {
+    render(<ModelSelector runtimeKey="session-1" compact />)
+
+    const trigger = screen.getByRole('button', { name: /deepseek-v4-pro/i })
+    expect(trigger.className).toContain('min-w-[168px]')
+    expect(trigger.className).not.toContain('max-w-[112px]')
+
+    const modelLabel = screen.getByText('deepseek-v4-pro')
+    expect(modelLabel.className).not.toContain('truncate')
+    expect(modelLabel.className).toContain('whitespace-nowrap')
+  })
 })

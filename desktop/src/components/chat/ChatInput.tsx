@@ -235,8 +235,14 @@ export function ChatInput({ variant = 'default', compact = false }: ChatInputPro
   const isHeroComposer = variant === 'hero' && !isMemberSession && !compact
   const resolvedWorkDir = activeSession?.workDir || gitInfo?.workDir || undefined
   const showLaunchControls = !isMemberSession && messageCount === 0
+  const isDefaultDesktopComposer = !isHeroComposer && !compact && !isMobileComposer
+  const useAttachmentComposer = !compact && !isMobileComposer && attachments.length > 0 && !hasWorkspaceReferences
+  const useFloatingComposer = !compact && !isMobileComposer && !hasWorkspaceReferences && attachments.length === 0
+  const useHeroExpandedComposer = isHeroComposer && !useFloatingComposer && !useAttachmentComposer
+  const useDesktopComposerChrome = isDefaultDesktopComposer || useFloatingComposer || useAttachmentComposer
   const useCompactControls = compact || isMobileComposer
-  const iconOnlyAction = compact || isMobileComposer
+  const useComposerCompactControls = useCompactControls || useFloatingComposer || useAttachmentComposer
+  const iconOnlyAction = compact || isMobileComposer || useFloatingComposer || useAttachmentComposer
   const activeLaunchWorkDir = showLaunchControls ? (launchWorkDir || resolvedWorkDir || '') : (resolvedWorkDir || '')
   const pendingSlashUiAction = !isMemberSession && input.trim().startsWith('/')
     ? resolveSlashUiAction(input.trim().slice(1))
@@ -883,7 +889,6 @@ export function ChatInput({ variant = 'default', compact = false }: ChatInputPro
 
   const addFilesLabel = isHeroComposer ? t('empty.addFiles') : t('chat.addFiles')
   const slashCommandsLabel = isHeroComposer ? t('empty.slashCommands') : t('chat.slashCommands')
-  const isDefaultDesktopComposer = !isHeroComposer && !compact && !isMobileComposer
 
   return (
     <div
@@ -909,9 +914,11 @@ export function ChatInput({ variant = 'default', compact = false }: ChatInputPro
           ref={panelRef}
           data-testid="chat-input-panel"
           style={showComposerGlowPanel ? getComposerGlowStyle(composerGlowControls) : undefined}
-          className={`chat-composer-shell ${isDefaultDesktopComposer ? 'chat-composer-shell--blended chat-composer-shell--compact' : ''} ${isComposerGlowActive ? 'chat-composer-shell--active' : ''} ${
-            isHeroComposer
+          className={`chat-composer-shell ${useDesktopComposerChrome ? `chat-composer-shell--blended chat-composer-shell--compact ${useFloatingComposer ? 'chat-composer-shell--floating' : ''} ${useAttachmentComposer ? 'chat-composer-shell--attachment-stage' : ''}` : ''} ${isComposerGlowActive ? 'chat-composer-shell--active' : ''} ${
+            useHeroExpandedComposer
               ? 'glass-panel relative flex flex-col gap-3 rounded-t-xl rounded-b-none p-4 transition-[background-color,border-color,box-shadow]'
+              : useAttachmentComposer
+                ? 'glass-panel relative flex flex-col gap-2 rounded-[20px] px-3 py-3 transition-[background-color,border-color,box-shadow]'
               : compact
                 ? `glass-panel relative p-3 transition-[background-color,border-color,box-shadow] ${isMobileComposer ? 'rounded-2xl shadow-[0_-12px_36px_rgba(54,35,28,0.12)]' : 'rounded-xl'}`
                 : `glass-panel relative transition-[background-color,border-color,box-shadow] ${isMobileComposer ? 'rounded-2xl p-3 shadow-[0_-12px_36px_rgba(54,35,28,0.12)]' : 'rounded-xl px-3 py-3'}`
@@ -1036,7 +1043,11 @@ export function ChatInput({ variant = 'default', compact = false }: ChatInputPro
           )}
 
           {composerAttachments.length > 0 && (
-            isHeroComposer ? (
+            useAttachmentComposer ? (
+              <div className="chat-composer-stage-attachments">
+                <AttachmentGallery attachments={composerAttachments} variant="composer" onRemove={removeAttachment} />
+              </div>
+            ) : isHeroComposer ? (
               <AttachmentGallery attachments={composerAttachments} variant="composer" onRemove={removeAttachment} />
             ) : (
               <div className="px-3 pt-3">
@@ -1045,7 +1056,7 @@ export function ChatInput({ variant = 'default', compact = false }: ChatInputPro
             )
           )}
 
-          {isHeroComposer ? (
+          {useHeroExpandedComposer ? (
             <div className="flex items-start gap-3">
               <textarea
                 ref={textareaRef}
@@ -1073,16 +1084,18 @@ export function ChatInput({ variant = 'default', compact = false }: ChatInputPro
               placeholder={composerPlaceholder}
               disabled={isWorkspaceMissing}
               rows={1}
-              className={`w-full resize-none bg-transparent text-sm leading-relaxed text-[var(--color-text-primary)] outline-none placeholder:text-[var(--color-text-tertiary)] disabled:opacity-50 ${isDefaultDesktopComposer ? 'chat-composer-textarea--compact' : ''} ${
+              className={`w-full resize-none bg-transparent text-sm leading-relaxed text-[var(--color-text-primary)] outline-none placeholder:text-[var(--color-text-tertiary)] disabled:opacity-50 ${useFloatingComposer ? 'chat-composer-textarea--compact' : ''} ${
+                useAttachmentComposer ? 'chat-composer-textarea--attachment-stage' : ''
+              } ${
                 useCompactControls ? 'py-1.5 pb-14' : 'py-1.5 pb-10'
               }`}
             />
           )}
 
-          <div className={isHeroComposer
+          <div className={useHeroExpandedComposer
             ? 'flex items-center justify-between border-t border-[var(--color-border-separator)] pt-3'
             : `chat-composer-toolbar absolute bottom-0 left-0 right-0 flex items-center justify-between border-t border-[var(--color-border-separator)] ${
-              useCompactControls ? 'gap-2 px-2.5 py-2' : 'chat-composer-toolbar--compact px-3 py-2'
+              useCompactControls ? 'gap-2 px-2.5 py-2' : `chat-composer-toolbar--compact ${(useFloatingComposer || useAttachmentComposer) ? 'chat-composer-toolbar--floating' : ''} px-3 py-2`
             }`}>
             <div className="flex min-w-0 items-center gap-2">
               {!isMemberSession && (
@@ -1091,7 +1104,7 @@ export function ChatInput({ variant = 'default', compact = false }: ChatInputPro
                     <button
                       onClick={() => setPlusMenuOpen((value) => !value)}
                       aria-label="Open composer tools"
-                      className={`text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] ${isMobileComposer ? 'inline-flex h-11 w-11 items-center justify-center rounded-xl' : 'rounded-[var(--radius-md)] p-1.5'}`}
+                      className={`chat-composer-icon-button text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] ${isMobileComposer ? 'inline-flex h-11 w-11 items-center justify-center rounded-xl' : 'rounded-[var(--radius-md)] p-1.5'}`}
                     >
                       <span className="material-symbols-outlined text-[18px]">add</span>
                     </button>
@@ -1119,7 +1132,7 @@ export function ChatInput({ variant = 'default', compact = false }: ChatInputPro
                     )}
                   </div>
 
-                  <PermissionModeSelector compact={useCompactControls} />
+                  <PermissionModeSelector compact={useComposerCompactControls} />
                 </>
               )}
             </div>
@@ -1132,11 +1145,11 @@ export function ChatInput({ variant = 'default', compact = false }: ChatInputPro
                   messageCount={messageCount}
                   runtimeSelectionKey={runtimeSelectionKey}
                   fallbackModelLabel={runtimeModelLabel}
-                  compact={useCompactControls}
+                  compact={useComposerCompactControls}
                 />
               )}
               {!isMemberSession && activeTabId && (
-                <ModelSelector runtimeKey={activeTabId} disabled={isActive} compact={useCompactControls} />
+                <ModelSelector runtimeKey={activeTabId} disabled={isActive} compact={useComposerCompactControls} />
               )}
               <button
                 onClick={!isMemberSession && isActive ? () => stopGeneration(activeTabId!) : handleSubmit}
@@ -1151,7 +1164,7 @@ export function ChatInput({ variant = 'default', compact = false }: ChatInputPro
                         : t('common.run')
                       : undefined
                 }
-                className={`flex shrink-0 items-center justify-center gap-1 rounded-lg text-xs font-semibold transition-all hover:brightness-105 disabled:opacity-30 ${
+                className={`chat-composer-send-button flex shrink-0 items-center justify-center gap-1 rounded-lg text-xs font-semibold transition-all hover:brightness-105 disabled:opacity-30 ${
                   iconOnlyAction ? `${isMobileComposer ? 'h-11 w-11 rounded-xl px-0 py-0' : 'h-8 w-8 px-0 py-0'}` : 'w-[112px] px-3 py-1.5'
                 } ${
                   !isMemberSession && isActive
@@ -1261,6 +1274,7 @@ export function ChatInput({ variant = 'default', compact = false }: ChatInputPro
                 onUseWorktreeChange={setLaunchUseWorktree}
                 onLaunchReadyChange={setLaunchReady}
                 disabled={isActive || launchTransitioning}
+                variant={useFloatingComposer || useAttachmentComposer ? 'floating' : 'default'}
               />
             )}
           </div>
